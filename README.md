@@ -360,6 +360,7 @@ Kizuna provides different methods for configuring services depending on your use
 Use `fromType()` when you want to register a concrete class by its constructor.
 
 **When to use:**
+
 - You have a concrete class with a constructor
 - You want type safety and IntelliSense support
 - Dependencies are injected via constructor parameters
@@ -370,18 +371,26 @@ Use `fromType()` when you want to register a concrete class by its constructor.
 ```typescript
 class DatabaseService {
   constructor(private config: ConfigService) {}
-  connect() { /* implementation */ }
+  connect() {
+    /* implementation */
+  }
 }
 
 class UserService {
   constructor(private db: DatabaseService, private logger: LoggerService) {}
-  getUser(id: string) { /* implementation */ }
+  getUser(id: string) {
+    /* implementation */
+  }
 }
 
 // Configure concrete classes
-builder.addSingleton(r => r.fromType(ConfigService));
-builder.addSingleton(r => r.fromType(DatabaseService).withDependencies(ConfigService));
-builder.addScoped(r => r.fromType(UserService).withDependencies(DatabaseService, LoggerService));
+builder.addSingleton((r) => r.fromType(ConfigService));
+builder.addSingleton((r) =>
+  r.fromType(DatabaseService).withDependencies(ConfigService)
+);
+builder.addScoped((r) =>
+  r.fromType(UserService).withDependencies(DatabaseService, LoggerService)
+);
 
 // Resolve by constructor
 const userService = container.get(UserService);
@@ -392,6 +401,7 @@ const userService = container.get(UserService);
 Use `fromName()` when you need to register services by string identifiers.
 
 **When to use:**
+
 - Implementing interfaces or abstract types
 - Multiple implementations of the same interface
 - Cross-module dependencies where you don't want to import types
@@ -411,29 +421,37 @@ interface IRepository<T> {
 }
 
 class ConsoleLogger implements ILogger {
-  log(message: string) { console.log(message); }
+  log(message: string) {
+    console.log(message);
+  }
 }
 
 class FileLogger implements ILogger {
-  log(message: string) { /* write to file */ }
+  log(message: string) {
+    /* write to file */
+  }
 }
 
 class UserRepository implements IRepository<User> {
-  findById(id: string): User { /* implementation */ }
-  save(user: User): void { /* implementation */ }
+  findById(id: string): User {
+    /* implementation */
+  }
+  save(user: User): void {
+    /* implementation */
+  }
 }
 
 // Configure by interface name
-builder.addSingleton(r => r.fromName('ILogger').useType(ConsoleLogger));
-builder.addScoped(r => r.fromName('IUserRepository').useType(UserRepository));
+builder.addSingleton((r) => r.fromName("ILogger").useType(ConsoleLogger));
+builder.addScoped((r) => r.fromName("IUserRepository").useType(UserRepository));
 
 // Multiple implementations
-builder.addSingleton(r => r.fromName('ConsoleLogger').useType(ConsoleLogger));
-builder.addSingleton(r => r.fromName('FileLogger').useType(FileLogger));
+builder.addSingleton((r) => r.fromName("ConsoleLogger").useType(ConsoleLogger));
+builder.addSingleton((r) => r.fromName("FileLogger").useType(FileLogger));
 
 // Resolve by string key
-const logger = container.get<ILogger>('ILogger');
-const userRepo = container.get<IRepository<User>>('IUserRepository');
+const logger = container.get<ILogger>("ILogger");
+const userRepo = container.get<IRepository<User>>("IUserRepository");
 ```
 
 ### `useType()` vs `useFactory()` - Implementation Methods
@@ -446,11 +464,14 @@ Use when you want the container to call the constructor directly.
 
 ```typescript
 // Simple instantiation - no dependencies
-builder.addSingleton(r => r.fromName('Logger').useType(ConsoleLogger));
+builder.addSingleton((r) => r.fromName("Logger").useType(ConsoleLogger));
 
 // With dependencies
-builder.addScoped(r => 
-  r.fromName('IUserService').useType(UserService).withDependencies(DatabaseService, 'Logger')
+builder.addScoped((r) =>
+  r
+    .fromName("IUserService")
+    .useType(UserService)
+    .withDependencies(DatabaseService, "Logger")
 );
 ```
 
@@ -459,6 +480,7 @@ builder.addScoped(r =>
 Use when you need custom logic for creating the service.
 
 **When to use `useFactory()`:**
+
 - Complex initialization logic
 - Conditional service creation
 - Async initialization (loading config, establishing connections)
@@ -468,28 +490,28 @@ Use when you need custom logic for creating the service.
 
 ```typescript
 // Simple factory
-builder.addSingleton(r => 
-  r.fromName('ApiClient').useFactory(() => 
-    new ApiClient(process.env.API_URL, { timeout: 5000 })
-  )
+builder.addSingleton((r) =>
+  r
+    .fromName("ApiClient")
+    .useFactory(() => new ApiClient(process.env.API_URL, { timeout: 5000 }))
 );
 
 // Factory with dependencies
-builder.addScoped(r => 
-  r.fromName('UserService').useFactory(provider => {
+builder.addScoped((r) =>
+  r.fromName("UserService").useFactory((provider) => {
     const db = provider.get(DatabaseService);
-    const logger = provider.get<ILogger>('Logger');
+    const logger = provider.get<ILogger>("Logger");
     const config = provider.get(ConfigService);
-    
+
     return new UserService(db, logger, config.getUserServiceOptions());
   })
 );
 
 // Conditional factory
-builder.addTransient(r => 
-  r.fromName('Storage').useFactory(provider => {
+builder.addTransient((r) =>
+  r.fromName("Storage").useFactory((provider) => {
     const config = provider.get(ConfigService);
-    
+
     if (config.isDevelopment) {
       return new InMemoryStorage();
     } else if (config.useRedis) {
@@ -501,8 +523,8 @@ builder.addTransient(r =>
 );
 
 // Async initialization factory
-builder.addSingleton(r => 
-  r.fromName('DatabaseConnection').useFactory(async provider => {
+builder.addSingleton((r) =>
+  r.fromName("DatabaseConnection").useFactory(async (provider) => {
     const config = provider.get(ConfigService);
     const connection = new DatabaseConnection(config.connectionString);
     await connection.connect();
@@ -538,23 +560,31 @@ Do you have a concrete class?
 ### Common Patterns
 
 #### Repository Pattern
+
 ```typescript
 // Interface-based registration
-builder.addScoped(r => r.fromName('IUserRepository').useType(DatabaseUserRepository));
-builder.addScoped(r => r.fromName('IOrderRepository').useType(DatabaseOrderRepository));
+builder.addScoped((r) =>
+  r.fromName("IUserRepository").useType(DatabaseUserRepository)
+);
+builder.addScoped((r) =>
+  r.fromName("IOrderRepository").useType(DatabaseOrderRepository)
+);
 
 // Service depends on interfaces
-builder.addScoped(r => 
-  r.fromType(OrderService).withDependencies('IUserRepository', 'IOrderRepository')
+builder.addScoped((r) =>
+  r
+    .fromType(OrderService)
+    .withDependencies("IUserRepository", "IOrderRepository")
 );
 ```
 
 #### Environment-specific Services
+
 ```typescript
-builder.addSingleton(r => 
-  r.fromName('IEmailService').useFactory(provider => {
+builder.addSingleton((r) =>
+  r.fromName("IEmailService").useFactory((provider) => {
     const config = provider.get(ConfigService);
-    return config.isDevelopment 
+    return config.isDevelopment
       ? new MockEmailService()
       : new SmtpEmailService(config.smtpSettings);
   })
@@ -562,15 +592,16 @@ builder.addSingleton(r =>
 ```
 
 #### Plugin Architecture
+
 ```typescript
 // Register multiple implementations
-builder.addTransient(r => r.fromName('JsonParser').useType(JsonParser));
-builder.addTransient(r => r.fromName('XmlParser').useType(XmlParser));
-builder.addTransient(r => r.fromName('CsvParser').useType(CsvParser));
+builder.addTransient((r) => r.fromName("JsonParser").useType(JsonParser));
+builder.addTransient((r) => r.fromName("XmlParser").useType(XmlParser));
+builder.addTransient((r) => r.fromName("CsvParser").useType(CsvParser));
 
 // Factory that chooses implementation
-builder.addTransient(r => 
-  r.fromName('IParser').useFactory(provider => {
+builder.addTransient((r) =>
+  r.fromName("IParser").useFactory((provider) => {
     const fileType = getCurrentFileType(); // Your logic
     return provider.get<IParser>(`${fileType}Parser`);
   })
@@ -760,3 +791,7 @@ MIT
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Credits
+
+This project was inspired by the foundational work of Remi Henache on the [injected-ts](https://github.com/remihenache/injected-ts) library.
