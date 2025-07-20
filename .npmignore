@@ -20,3 +20,7 @@ coverage/
 .github/
 .gitignore
 .husky/
+
+# Tooling
+biome.json
+vite.config.ts
