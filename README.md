@@ -46,7 +46,7 @@ pnpm add kizuna
 
 ### Synchronous Services
 
-Here's a quick example with synchronous services:
+Simple example with synchronous services:
 
 ```typescript
 import { ContainerBuilder } from "kizuna";
