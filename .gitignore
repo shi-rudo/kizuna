@@ -1,0 +1,94 @@
+# ────────────────
+# Environment files
+# ────────────────
+.env*
+!.env.example
+!.env.template
+
+# ────────────────
+# OS miscellany
+# ────────────────
+*~
+*#
+.DS_Store
+Thumbs.db
+
+# ────────────────
+# Histories & locks
+# ────────────────
+.node_history
+.lock-wscript
+
+# ────────────────
+# IDE & editor data
+# ────────────────
+.idea
+.sublime-*
+.vscode/
+.claude
+.cursor
+.netbeans
+nbproject
+*.iml
+
+# ────────────────
+# Dependency caches
+# ────────────────
+/node_modules
+.npm
+.pnp.*
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+
+# ────────────────
+# Build output
+# ────────────────
+/dist
+/build
+/out
+/lib
+.next          # Next.js
+.turbo         # Turborepo / Turbopack
+
+# ────────────────
+# Test & coverage
+# ────────────────
+/.nyc_output
+/coverage
+coverage-final.json
+
+# ────────────────
+# Lint & tooling
+# ────────────────
+.eslintcache
+.stylelintcache
+.tsbuildinfo
+
+# ────────────────
+# Logs
+# ────────────────
+/logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ────────────────
+# Runtime data
+# ────────────────
+pids
+*.pid
+*.seed
+
+# ────────────────
+# Temporary files
+# ────────────────
+.tmp
+.temp
+.grunt
+
+# ────────────────
+# Repomix packaging output
+# ────────────────
+repomix-output.* 

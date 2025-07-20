@@ -1,0 +1,33 @@
+{
+  "name": "@shirudo/kizuna",
+  "version": "1.0.0",
+  "description": "A TypeScript dependency injection library.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest"
+  },
+  "keywords": [
+    "typescript",
+    "dependency-injection"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.13.1",
+  "devDependencies": {
+    "@biomejs/biome": "2.1.2",
+    "@types/node": "^24.0.15",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.5",
+    "vitest": "^3.2.4"
+  }
+}
