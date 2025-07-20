@@ -1,1 +1,21 @@
+# Development sources
+src/
+test/
 docs/
+examples/
+
+# Build reports and logs
+coverage/
+*.log
+
+# Editor and linting configs
+.vscode/
+.idea/
+.eslint*
+.prettier*
+
+# VCS and CI folders
+.git/
+.github/
+.gitignore
+.husky/
