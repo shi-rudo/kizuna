@@ -1,6 +1,7 @@
 # Development sources
 src/
 test/
+tests/
 docs/
 examples/
 
