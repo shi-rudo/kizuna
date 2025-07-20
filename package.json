@@ -1,7 +1,8 @@
 {
   "name": "@shirudo/kizuna",
   "version": "1.0.0",
-  "description": "A TypeScript dependency injection library.",
+  "description": "A powerful and flexible dependency injection library for TypeScript and JavaScript.",
+  "keywords": ["Dependency Injection", "DI", "IoC", "Inversion of Control", "TypeScript", "JavaScript"],
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -16,10 +17,6 @@
     "build": "tsc",
     "test": "vitest"
   },
-  "keywords": [
-    "typescript",
-    "dependency-injection"
-  ],
   "author": "",
   "license": "MIT",
   "packageManager": "pnpm@10.13.1",
