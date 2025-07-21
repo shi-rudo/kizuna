@@ -3,6 +3,7 @@ src/
 test/
 tests/
 docs/
+images/
 examples/
 
 # Build reports and logs
