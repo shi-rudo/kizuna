@@ -25,12 +25,9 @@
 // Core container building and service resolution
 export * from "./container-builder";
 
-<<<<<<< HEAD
-=======
 // Type-safe service provider
 export { TypeSafeServiceProvider } from "./type-safe-service-provider";
 
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 // Contracts and interfaces
 export {
     Container,
@@ -38,10 +35,7 @@ export {
     ServiceBuilder,
     ServiceLocator,
     ServiceRegistration,
-<<<<<<< HEAD
-=======
     TypeSafeServiceLocator,
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 } from "./contracts/interfaces";
 
 // Type definitions

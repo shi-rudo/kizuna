@@ -42,13 +42,6 @@ yarn add kizuna
 pnpm add kizuna
 ```
 
-<<<<<<< HEAD
-## Example
-
-### Synchronous Services
-
-Simple example with synchronous services:
-=======
 ## API Overview
 
 Kizuna provides two APIs for different use cases:
@@ -56,61 +49,27 @@ Kizuna provides two APIs for different use cases:
 ### 🎯 **Type-Safe API (Recommended)**
 
 The new type-safe API provides perfect IDE autocompletion, type inference, and compile-time safety:
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 
 ```typescript
 import { ContainerBuilder } from "kizuna";
 
-<<<<<<< HEAD
-// Define your services
-class ConfigService {
-  getDbUrl() {
-    return "postgresql://localhost:5432/myapp";
-  }
-=======
 class ConfigService {
   getDbUrl() { return "postgresql://localhost:5432/myapp"; }
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 }
 
 class DatabaseService {
   constructor(private config: ConfigService) {}
-<<<<<<< HEAD
-
-  connect() {
-    const url = this.config.getDbUrl();
-    return `Connected to database at ${url}`;
-  }
-=======
   connect() { return `Connected to ${this.config.getDbUrl()}`; }
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 }
 
 class UserService {
   constructor(private db: DatabaseService) {}
-<<<<<<< HEAD
-
-=======
->>>>>>> 90d0f39 (Initial commit with type safety changes)
   getUser(id: string) {
     this.db.connect();
     return { id, name: "John Doe", email: "john@example.com" };
   }
 }
 
-<<<<<<< HEAD
-// Build your container
-const builder = new ContainerBuilder();
-
-// Configure services
-builder.addSingleton((r) => r.fromType(ConfigService));
-builder.addSingleton((r) =>
-  r.fromType(DatabaseService).withDependencies(ConfigService)
-);
-builder.addScoped((r) =>
-  r.fromType(UserService).withDependencies(DatabaseService)
-);
-=======
 // ✨ Type-safe registration with perfect autocompletion
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)           // Type inferred: ConfigService
@@ -133,15 +92,11 @@ const builder = new ContainerBuilder();
 builder.addSingleton((r) => r.fromType(ConfigService));
 builder.addSingleton((r) => r.fromType(DatabaseService).withDependencies(ConfigService));
 builder.addScoped((r) => r.fromType(UserService).withDependencies(DatabaseService));
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 
 // Build and use
 const container = builder.build();
 const userService = container.get(UserService);
 const user = userService.getUser("123");
-<<<<<<< HEAD
-console.log(user); // { id: "123", name: "John Doe", email: "john@example.com" }
-=======
 ```
 
 ## 🆚 **API Comparison**
@@ -200,7 +155,6 @@ console.log(logger1 === logger2);          // true (same singleton instance)
 
 // 🔥 Compile-time error prevention
 // const invalid = container.get('NonExistent');  // ❌ TypeScript Error!
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 ```
 
 ### Asynchronous Services

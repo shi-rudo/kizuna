@@ -93,8 +93,6 @@ export type Factory<T> = (serviceProvider: ServiceLocator) => T;
  */
 export type ServiceKey<T = any> = string | (new (...args: any[]) => T);
 
-<<<<<<< HEAD
-=======
 /**
  * Represents a service registry mapping string keys to their service types.
  * This is used to track registered services at the type level for compile-time safety.
@@ -140,5 +138,3 @@ export interface TypeSafeRegistrar<T> {
      */
     useInstance(instance: T): void;
 }
-
->>>>>>> 90d0f39 (Initial commit with type safety changes)

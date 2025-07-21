@@ -1,8 +1,5 @@
 import { ServiceBuilderFactory } from "../core/builders/service-builder-factory";
-<<<<<<< HEAD
-=======
 import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar";
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 import { ScopedLifecycle } from "../core/scopes/scoped";
 import { SingletonLifecycle } from "../core/scopes/singleton";
 import { TransientLifecycle } from "../core/scopes/transient";
@@ -10,16 +7,11 @@ import type { ServiceWrapper } from "../core/services/service-wrapper";
 import type {
     Container,
     ServiceLocator as IServiceLocator,
-<<<<<<< HEAD
-} from "./contracts/interfaces";
-import { ServiceProvider } from "./service-provider";
-=======
     TypeSafeServiceLocator,
 } from "./contracts/interfaces";
 import type { ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
 import { ServiceProvider } from "./service-provider";
 import { TypeSafeServiceProvider } from "./type-safe-service-provider";
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 
 /**
  * Environment detection utility for cross-platform compatibility.
@@ -91,11 +83,8 @@ type ServiceBuilderCallback<T = unknown> = (
  * - **Scoped**: One instance per scope (useful for request-scoped services)
  * - **Transient**: New instance every time the service is requested
  *
-<<<<<<< HEAD
-=======
  * @template TRegistry - The service registry type tracking registered services
  *
->>>>>>> 90d0f39 (Initial commit with type safety changes)
  * @example
  * ```typescript
  * // Basic usage
@@ -115,36 +104,20 @@ type ServiceBuilderCallback<T = unknown> = (
  *
  * @example
  * ```typescript
-<<<<<<< HEAD
- * // Using factory functions
- * builder.addSingleton(r =>
- *   r.fromName('ApiClient').useFactory(() => new ApiClient(process.env.API_URL))
- * );
- *
- * // Using interface-based registration
- * builder.addScoped(r =>
- *   r.fromName('IRepository').useType(DatabaseRepository).withDependencies('IDatabase')
- * );
-=======
  * // Type-safe registration (new API)
  * const builder = new ContainerBuilder()
- *   .registerSingleton("Logger", r => r.useType(ConsoleLogger))
- *   .registerScoped("UserService", r => r.useType(UserService, "Logger"));
+ *   .registerSingleton("Logger", ConsoleLogger)
+ *   .registerScoped("UserService", UserService, "Logger");
  * 
- * const container = builder.build();
+ * const container = builder.buildTypeSafe();
  * const logger = container.get("Logger"); // Type inferred as ConsoleLogger
->>>>>>> 90d0f39 (Initial commit with type safety changes)
  * ```
  *
  * @throws {Error} When attempting to modify the builder after it has been built
  * @throws {Error} When registering services with invalid parameters
  * @throws {Error} When circular dependencies are detected during validation
  */
-<<<<<<< HEAD
-export class ContainerBuilder {
-=======
 export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> {
->>>>>>> 90d0f39 (Initial commit with type safety changes)
     private readonly registrations: Map<string, ServiceWrapper> = new Map();
     private readonly registrationNames: Set<string> = new Set();
     private isBuilt: boolean = false;
@@ -336,87 +309,6 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> {
     }
 
     /**
-     * Checks if a service is registered.
-     * @param serviceName The name of the service or constructor function
-     * @returns true if the service is registered, false otherwise
-     */
-    /**
-     * Checks if a service is registered.
-     * @template T - The service type
-     * @param {string | T} serviceName - The name of the service or its constructor
-     * @returns {boolean} True if the service is registered, false otherwise
-     */
-    isRegistered<T extends new (...args: any[]) => any>(
-        serviceName: string | T,
-    ): boolean {
-        const name =
-            typeof serviceName === "string" ? serviceName : serviceName.name;
-        return this.registrationNames.has(name);
-    }
-
-    /**
-     * Gets the number of registered services.
-     * @returns The count of registered services
-     */
-    /**
-     * Gets the number of registered services.
-     * @returns {number} The count of registered services
-     */
-    get count(): number {
-        return this.registrationNames.size;
-    }
-
-    /**
-     * Gets all registered service names.
-     * @returns Array of registered service names
-     */
-    /**
-     * Gets all registered service names.
-     * @returns {string[]} Array of registered service names
-     */
-    getRegisteredServiceNames(): string[] {
-        return Array.from(this.registrationNames);
-    }
-
-    /**
-     * Removes a service registration.
-     * @param serviceName The name of the service or constructor function
-     * @returns true if the service was removed, false if it wasn't registered
-     */
-    /**
-     * Removes a service registration.
-     * @template T - The service type
-     * @param {string | T} serviceName - The name of the service or its constructor
-     * @returns {boolean} True if the service was removed, false if it wasn't registered
-     */
-    remove<T extends new (...args: any[]) => any>(
-        serviceName: string | T,
-    ): boolean {
-        this.ensureNotBuilt();
-
-        const name =
-            typeof serviceName === "string" ? serviceName : serviceName.name;
-
-        if (!this.registrationNames.has(name)) {
-            return false;
-        }
-
-        try {
-            const resolver = this.registrations.get(name);
-            resolver?.dispose?.();
-
-            this.registrations.delete(name);
-            this.registrationNames.delete(name);
-            return true;
-        } catch (error) {
-            this.logError(`Error removing service '${name}':`, error);
-            return false;
-        }
-    }
-
-    /**
-<<<<<<< HEAD
-=======
      * Type-safe singleton service registration with constructor and dependencies.
      * 
      * @template K - The string key for the service
@@ -519,7 +411,85 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> {
     }
 
     /**
->>>>>>> 90d0f39 (Initial commit with type safety changes)
+     * Checks if a service is registered.
+     * @param serviceName The name of the service or constructor function
+     * @returns true if the service is registered, false otherwise
+     */
+    /**
+     * Checks if a service is registered.
+     * @template T - The service type
+     * @param {string | T} serviceName - The name of the service or its constructor
+     * @returns {boolean} True if the service is registered, false otherwise
+     */
+    isRegistered<T extends new (...args: any[]) => any>(
+        serviceName: string | T,
+    ): boolean {
+        const name =
+            typeof serviceName === "string" ? serviceName : serviceName.name;
+        return this.registrationNames.has(name);
+    }
+
+    /**
+     * Gets the number of registered services.
+     * @returns The count of registered services
+     */
+    /**
+     * Gets the number of registered services.
+     * @returns {number} The count of registered services
+     */
+    get count(): number {
+        return this.registrationNames.size;
+    }
+
+    /**
+     * Gets all registered service names.
+     * @returns Array of registered service names
+     */
+    /**
+     * Gets all registered service names.
+     * @returns {string[]} Array of registered service names
+     */
+    getRegisteredServiceNames(): string[] {
+        return Array.from(this.registrationNames);
+    }
+
+    /**
+     * Removes a service registration.
+     * @param serviceName The name of the service or constructor function
+     * @returns true if the service was removed, false if it wasn't registered
+     */
+    /**
+     * Removes a service registration.
+     * @template T - The service type
+     * @param {string | T} serviceName - The name of the service or its constructor
+     * @returns {boolean} True if the service was removed, false if it wasn't registered
+     */
+    remove<T extends new (...args: any[]) => any>(
+        serviceName: string | T,
+    ): boolean {
+        this.ensureNotBuilt();
+
+        const name =
+            typeof serviceName === "string" ? serviceName : serviceName.name;
+
+        if (!this.registrationNames.has(name)) {
+            return false;
+        }
+
+        try {
+            const resolver = this.registrations.get(name);
+            resolver?.dispose?.();
+
+            this.registrations.delete(name);
+            this.registrationNames.delete(name);
+            return true;
+        } catch (error) {
+            this.logError(`Error removing service '${name}':`, error);
+            return false;
+        }
+    }
+
+    /**
      * Builds the service provider from the registered services.
      * @returns The configured service provider
      */
@@ -650,19 +620,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> {
         };
 
         // Check each service for cycles
-<<<<<<< HEAD
-        for (const serviceName of dependencyGraph.keys()) {
-            if (!visited.has(serviceName)) {
-                hasCycle(serviceName, []);
-            }
-        }
-=======
         dependencyGraph.forEach((_, serviceName) => {
             if (!visited.has(serviceName)) {
                 hasCycle(serviceName, []);
             }
         });
->>>>>>> 90d0f39 (Initial commit with type safety changes)
 
         return issues;
     }

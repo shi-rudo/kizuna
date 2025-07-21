@@ -188,8 +188,6 @@ export interface ServiceLocator {
      */
     dispose(): void;
 }
-<<<<<<< HEAD
-=======
 
 /**
  * Type-safe ServiceLocator that provides compile-time safety and IDE autocompletion.
@@ -227,4 +225,3 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
      */
     dispose(): void;
 }
->>>>>>> 90d0f39 (Initial commit with type safety changes)
