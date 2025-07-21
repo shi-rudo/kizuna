@@ -46,9 +46,9 @@ pnpm add kizuna
 
 Kizuna provides two APIs for different use cases:
 
-### 🎯 **Type-Safe API (Recommended)**
+### 🎯 **Type-Safe API**
 
-The new type-safe API provides perfect IDE autocompletion, type inference, and compile-time safety:
+The type-safe API provides perfect IDE autocompletion, type inference, and compile-time safety:
 
 ```typescript
 import { ContainerBuilder } from "kizuna";
@@ -82,9 +82,9 @@ const userService = container.get('UserService');  // Type: UserService (auto-in
 const user = userService.getUser("123");           // Full IntelliSense support
 ```
 
-### ⚡ **Classic API (Backward Compatible)**
+### ⚡ **Classic API**
 
-The original callback-based API for maximum flexibility:
+The callback-based API for maximum flexibility:
 
 ```typescript
 // Configure services with callback API
@@ -125,7 +125,7 @@ const user = userService.getUser("123");
   - Complex factory functions with custom logic
   - Interface-based registrations (`fromName()`)
   - Maximum flexibility in service configuration
-  - Backward compatibility with existing code
+  - Full control over service creation lifecycle
 
 ### 🚀 **Type-Safe API Advanced Usage**
 
@@ -412,6 +412,337 @@ const scopedService = requestScope.get(RequestService);
 // Clean up when done
 requestScope.dispose();
 ```
+
+## When to Use Scopes (`startScope()`)
+
+Scopes create isolated containers where scoped services have separate instances, while singletons remain shared. Understanding when and how to use scopes is crucial for proper resource management and service isolation.
+
+### 🎯 **When to Use Scopes**
+
+#### 1. **HTTP Request Processing**
+Each HTTP request should have its own scope to isolate request-specific services:
+
+```typescript
+// Express.js example
+app.use((req, res, next) => {
+  // Create a scope for this request
+  req.scope = container.startScope();
+  
+  // Store request-specific data
+  req.scope.registerInstance('RequestContext', {
+    requestId: uuid.v4(),
+    userId: req.user?.id,
+    startTime: Date.now()
+  });
+  
+  next();
+});
+
+app.get('/users/:id', async (req, res) => {
+  // Each request gets its own UserService instance
+  const userService = req.scope.get(UserService);
+  const user = await userService.findById(req.params.id);
+  res.json(user);
+});
+
+// Cleanup middleware
+app.use((req, res, next) => {
+  res.on('finish', () => {
+    req.scope.dispose(); // Clean up request scope
+  });
+  next();
+});
+```
+
+#### 2. **Database Transaction Management**
+Scopes ensure each transaction has its own connection and context:
+
+```typescript
+class DatabaseService {
+  private connection: Connection;
+  
+  async withTransaction<T>(work: (scope: ServiceLocator) => Promise<T>): Promise<T> {
+    const transactionScope = this.container.startScope();
+    const connection = await this.createConnection();
+    
+    try {
+      // Register transaction-specific connection
+      transactionScope.registerInstance('DatabaseConnection', connection);
+      await connection.beginTransaction();
+      
+      const result = await work(transactionScope);
+      
+      await connection.commit();
+      return result;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      await connection.close();
+      transactionScope.dispose();
+    }
+  }
+}
+
+// Usage
+await databaseService.withTransaction(async (txScope) => {
+  const userRepo = txScope.get(UserRepository); // Uses transaction connection
+  const orderRepo = txScope.get(OrderRepository); // Uses same transaction connection
+  
+  const user = await userRepo.create({...});
+  const order = await orderRepo.create({ userId: user.id, ... });
+  
+  return order;
+});
+```
+
+#### 3. **Batch Processing**
+Process each batch item in isolation:
+
+```typescript
+class BatchProcessor {
+  constructor(private container: ServiceLocator) {}
+  
+  async processBatch(items: BatchItem[]): Promise<void> {
+    const results = await Promise.all(
+      items.map(async (item) => {
+        // Each item gets its own scope
+        const itemScope = this.container.startScope();
+        
+        try {
+          // Register item-specific context
+          itemScope.registerInstance('CurrentItem', item);
+          
+          const processor = itemScope.get(ItemProcessor);
+          return await processor.process();
+        } finally {
+          itemScope.dispose(); // Always clean up
+        }
+      })
+    );
+  }
+}
+```
+
+#### 4. **Multi-Tenant Applications**
+Isolate tenant-specific services and data:
+
+```typescript
+class TenantScopeFactory {
+  constructor(private container: ServiceLocator) {}
+  
+  createTenantScope(tenantId: string): ServiceLocator {
+    const tenantScope = this.container.startScope();
+    
+    // Register tenant-specific services
+    tenantScope.registerInstance('TenantContext', { tenantId });
+    
+    // Tenant-specific database connection
+    tenantScope.registerSingleton(r => 
+      r.fromName('TenantDatabase')
+       .useFactory(provider => {
+         const context = provider.get('TenantContext');
+         return new TenantDatabase(context.tenantId);
+       })
+    );
+    
+    return tenantScope;
+  }
+}
+
+// Usage in request handler
+const tenantScope = tenantScopeFactory.createTenantScope(req.headers['tenant-id']);
+const userService = tenantScope.get(UserService); // Tenant-specific instance
+```
+
+#### 5. **Test Isolation**
+Isolate test scenarios with different configurations:
+
+```typescript
+describe('UserService', () => {
+  let testScope: ServiceLocator;
+  
+  beforeEach(() => {
+    testScope = container.startScope();
+    
+    // Override services for testing
+    testScope.registerInstance('DatabaseService', mockDatabase);
+    testScope.registerInstance('Logger', testLogger);
+  });
+  
+  afterEach(() => {
+    testScope.dispose();
+  });
+  
+  it('should create user', async () => {
+    const userService = testScope.get(UserService); // Uses mock dependencies
+    const user = await userService.create({ name: 'John' });
+    expect(user.id).toBeDefined();
+  });
+});
+```
+
+## Multiple Containers for Domain Separation
+
+For complex applications with multiple domains or bounded contexts, you can create separate containers to maintain clear boundaries and prevent cross-domain dependencies.
+
+### 🏗️ **Domain-Specific Containers**
+
+This pattern allows you to:
+- **Isolate domains** - Each business domain has its own container
+- **Share infrastructure** - Common services (logging, database, email) are shared
+- **Prevent coupling** - Domains cannot accidentally depend on each other
+- **Enable testing** - Test each domain in isolation
+
+### Basic Pattern
+
+```typescript
+// 1. Create shared infrastructure container
+const sharedContainer = createSharedContainer(); // Logger, EmailService, etc.
+
+// 2. Create domain-specific containers that import shared services  
+const userDomainContainer = createUserDomainContainer(sharedContainer);
+const orderDomainContainer = createOrderDomainContainer(sharedContainer);
+
+// 3. Use domain containers with scopes for request processing
+const userScope = userDomainContainer.startScope();
+const userService = userScope.get(UserService); // Domain-specific service
+```
+
+### 🎯 **When to Use Multiple Containers**
+
+**✅ Use Multiple Containers When:**
+- You have distinct business domains or bounded contexts
+- You want to prevent cross-domain dependencies  
+- You're planning to eventually split into microservices
+- You want to enforce architectural boundaries at the dependency level
+
+**❌ Use Single Container When:**
+- Your application is small with tightly coupled features
+- You don't have clear domain boundaries
+- The overhead of managing multiple containers outweighs benefits
+
+### 📖 **Complete Example**
+
+See [`examples/multiple-containers-domain-separation.ts`](./examples/multiple-containers-domain-separation.ts) for a comprehensive e-commerce application example demonstrating:
+- User domain (UserService, UserNotificationService) 
+- Order domain (OrderService, PaymentService)
+- Shared infrastructure (Logger, EmailService, DatabaseConfig)
+- Express.js integration with scoped request handling
+- Cross-domain workflows and testing isolation
+
+### ❌ **When NOT to Use Scopes**
+
+#### 1. **Long-Lived Operations**
+Don't create scopes for operations that run for extended periods:
+
+```typescript
+// ❌ BAD: Long-lived scope holds resources
+const longScope = container.startScope();
+setInterval(() => {
+  const service = longScope.get(SomeService);
+  service.doWork();
+}, 1000); // Never disposed - memory leak!
+
+// ✅ GOOD: Create scope per operation
+setInterval(() => {
+  const scope = container.startScope();
+  try {
+    const service = scope.get(SomeService);
+    service.doWork();
+  } finally {
+    scope.dispose();
+  }
+}, 1000);
+```
+
+#### 2. **Singleton-Only Services**
+If all your services are singletons, scopes provide no benefit:
+
+```typescript
+// All singletons - scoping is unnecessary
+builder.addSingleton(r => r.fromType(ConfigService));
+builder.addSingleton(r => r.fromType(Logger));
+builder.addSingleton(r => r.fromType(DatabaseService));
+
+// Scope doesn't change behavior - all services are shared anyway
+const scope = container.startScope();
+```
+
+#### 3. **Simple, Stateless Operations**
+For simple operations without resource management needs:
+
+```typescript
+// ❌ UNNECESSARY: Simple calculation doesn't need scope
+const scope = container.startScope();
+const mathService = scope.get(MathService);
+const result = mathService.add(2, 3);
+scope.dispose();
+
+// ✅ BETTER: Use root container
+const mathService = container.get(MathService);
+const result = mathService.add(2, 3);
+```
+
+### 🔧 **Scope Best Practices**
+
+#### 1. **Always Dispose Scopes**
+```typescript
+// ✅ GOOD: Try-finally ensures cleanup
+const scope = container.startScope();
+try {
+  const service = scope.get(ServiceType);
+  return await service.doWork();
+} finally {
+  scope.dispose();
+}
+
+// ✅ GOOD: Using pattern
+async function withScope<T>(container: ServiceLocator, work: (scope: ServiceLocator) => Promise<T>): Promise<T> {
+  const scope = container.startScope();
+  try {
+    return await work(scope);
+  } finally {
+    scope.dispose();
+  }
+}
+```
+
+#### 2. **Scope Lifetime Should Match Operation Lifetime**
+```typescript
+// ✅ GOOD: Request scope matches request lifetime
+app.use((req, res, next) => {
+  req.scope = container.startScope();
+  res.on('finish', () => req.scope.dispose());
+  next();
+});
+
+// ✅ GOOD: Transaction scope matches transaction lifetime
+await db.withTransaction(async (txScope) => {
+  // Work with txScope
+  // Scope disposed when transaction ends
+});
+```
+
+#### 3. **Register Scoped Services Appropriately**
+```typescript
+// Configure services with appropriate lifetimes
+builder.addSingleton(r => r.fromType(ConfigService));     // Shared across all scopes
+builder.addSingleton(r => r.fromType(Logger));            // Shared across all scopes
+builder.addScoped(r => r.fromType(DatabaseConnection));   // One per scope
+builder.addScoped(r => r.fromType(UserContext));          // One per scope
+builder.addTransient(r => r.fromType(EmailService));      // New instance every time
+```
+
+### 🎭 **Scope vs Lifecycle Summary**
+
+| Lifecycle | Root Container | Scoped Container | Use Case |
+|-----------|---------------|------------------|----------|
+| **Singleton** | Same instance | Same instance | Global services (config, logging) |
+| **Scoped** | New each time | Same within scope | Request/transaction context |
+| **Transient** | New each time | New each time | Stateless utilities |
+
+Understanding scopes helps you build applications with proper resource management, service isolation, and predictable behavior across different execution contexts.
 
 ## Service Configuration Methods
 
