@@ -1,4 +1,8 @@
 import { ServiceBuilderFactory } from "../core/builders/service-builder-factory";
+<<<<<<< HEAD
+=======
+import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar";
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
 import { ScopedLifecycle } from "../core/scopes/scoped";
 import { SingletonLifecycle } from "../core/scopes/singleton";
 import { TransientLifecycle } from "../core/scopes/transient";
@@ -6,8 +10,16 @@ import type { ServiceWrapper } from "../core/services/service-wrapper";
 import type {
     Container,
     ServiceLocator as IServiceLocator,
+<<<<<<< HEAD
 } from "./contracts/interfaces";
 import { ServiceProvider } from "./service-provider";
+=======
+    TypeSafeServiceLocator,
+} from "./contracts/interfaces";
+import type { ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
+import { ServiceProvider } from "./service-provider";
+import { TypeSafeServiceProvider } from "./type-safe-service-provider";
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
 
 /**
  * Environment detection utility for cross-platform compatibility.
@@ -79,6 +91,11 @@ type ServiceBuilderCallback<T = unknown> = (
  * - **Scoped**: One instance per scope (useful for request-scoped services)
  * - **Transient**: New instance every time the service is requested
  *
+<<<<<<< HEAD
+=======
+ * @template TRegistry - The service registry type tracking registered services
+ *
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
  * @example
  * ```typescript
  * // Basic usage
@@ -98,6 +115,7 @@ type ServiceBuilderCallback<T = unknown> = (
  *
  * @example
  * ```typescript
+<<<<<<< HEAD
  * // Using factory functions
  * builder.addSingleton(r =>
  *   r.fromName('ApiClient').useFactory(() => new ApiClient(process.env.API_URL))
@@ -107,13 +125,26 @@ type ServiceBuilderCallback<T = unknown> = (
  * builder.addScoped(r =>
  *   r.fromName('IRepository').useType(DatabaseRepository).withDependencies('IDatabase')
  * );
+=======
+ * // Type-safe registration (new API)
+ * const builder = new ContainerBuilder()
+ *   .registerSingleton("Logger", r => r.useType(ConsoleLogger))
+ *   .registerScoped("UserService", r => r.useType(UserService, "Logger"));
+ * 
+ * const container = builder.build();
+ * const logger = container.get("Logger"); // Type inferred as ConsoleLogger
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
  * ```
  *
  * @throws {Error} When attempting to modify the builder after it has been built
  * @throws {Error} When registering services with invalid parameters
  * @throws {Error} When circular dependencies are detected during validation
  */
+<<<<<<< HEAD
 export class ContainerBuilder {
+=======
+export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> {
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
     private readonly registrations: Map<string, ServiceWrapper> = new Map();
     private readonly registrationNames: Set<string> = new Set();
     private isBuilt: boolean = false;
@@ -384,6 +415,111 @@ export class ContainerBuilder {
     }
 
     /**
+<<<<<<< HEAD
+=======
+     * Type-safe singleton service registration with constructor and dependencies.
+     * 
+     * @template K - The string key for the service
+     * @template T - The service type (inferred from constructor)
+     * @param key - The string key used to identify the service
+     * @param serviceType - The service constructor
+     * @param dependencies - Optional dependency keys
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    registerSingleton<K extends string, T>(
+        key: K,
+        serviceType: new (...args: any[]) => T,
+        ...dependencies: string[]
+    ): ContainerBuilder<TRegistry & Record<K, T>> {
+        const configurator = (registrar: TypeSafeRegistrar<T>) => {
+            registrar.useType(serviceType, ...dependencies);
+        };
+        return this.registerTypeSafe(key, configurator, new SingletonLifecycle());
+    }
+
+    /**
+     * Type-safe scoped service registration with constructor and dependencies.
+     * 
+     * @template K - The string key for the service
+     * @template T - The service type (inferred from constructor)
+     * @param key - The string key used to identify the service
+     * @param serviceType - The service constructor
+     * @param dependencies - Optional dependency keys
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    registerScoped<K extends string, T>(
+        key: K,
+        serviceType: new (...args: any[]) => T,
+        ...dependencies: string[]
+    ): ContainerBuilder<TRegistry & Record<K, T>> {
+        const configurator = (registrar: TypeSafeRegistrar<T>) => {
+            registrar.useType(serviceType, ...dependencies);
+        };
+        return this.registerTypeSafe(key, configurator, new ScopedLifecycle());
+    }
+
+    /**
+     * Type-safe transient service registration with constructor and dependencies.
+     * 
+     * @template K - The string key for the service
+     * @template T - The service type (inferred from constructor)
+     * @param key - The string key used to identify the service
+     * @param serviceType - The service constructor
+     * @param dependencies - Optional dependency keys
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    registerTransient<K extends string, T>(
+        key: K,
+        serviceType: new (...args: any[]) => T,
+        ...dependencies: string[]
+    ): ContainerBuilder<TRegistry & Record<K, T>> {
+        const configurator = (registrar: TypeSafeRegistrar<T>) => {
+            registrar.useType(serviceType, ...dependencies);
+        };
+        return this.registerTypeSafe(key, configurator, new TransientLifecycle());
+    }
+
+    /**
+     * Internal method to handle type-safe service registration.
+     * 
+     * @private
+     */
+    private registerTypeSafe<K extends string, T>(
+        key: K,
+        configurator: (registrar: TypeSafeRegistrar<T>) => void,
+        lifecycle: Container
+    ): ContainerBuilder<TRegistry & Record<K, T>> {
+        this.ensureNotBuilt();
+
+        const registrar = new TypeSafeRegistrarImpl<T>(key);
+        configurator(registrar);
+        
+        const serviceWrapper = registrar.build(lifecycle);
+        this.validateServiceName(key);
+        this.registerService(key, serviceWrapper);
+
+        // Return this instance with updated type (cast)
+        return this as unknown as ContainerBuilder<TRegistry & Record<K, T>>;
+    }
+
+    /**
+     * Builds a type-safe service provider from the registered services.
+     * @returns The configured type-safe service provider
+     */
+    buildTypeSafe(): TypeSafeServiceLocator<TRegistry> {
+        this.ensureNotBuilt();
+        this.isBuilt = true;
+
+        if (this.registrations.size === 0) {
+            this.logWarning("Building ServiceProvider with no registered services");
+        }
+
+        const registrationsObject = Object.fromEntries(this.registrations);
+        return new TypeSafeServiceProvider<TRegistry>(registrationsObject);
+    }
+
+    /**
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
      * Builds the service provider from the registered services.
      * @returns The configured service provider
      */
@@ -514,11 +650,19 @@ export class ContainerBuilder {
         };
 
         // Check each service for cycles
+<<<<<<< HEAD
         for (const serviceName of dependencyGraph.keys()) {
             if (!visited.has(serviceName)) {
                 hasCycle(serviceName, []);
             }
         }
+=======
+        dependencyGraph.forEach((_, serviceName) => {
+            if (!visited.has(serviceName)) {
+                hasCycle(serviceName, []);
+            }
+        });
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
 
         return issues;
     }

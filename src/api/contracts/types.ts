@@ -93,3 +93,52 @@ export type Factory<T> = (serviceProvider: ServiceLocator) => T;
  */
 export type ServiceKey<T = any> = string | (new (...args: any[]) => T);
 
+<<<<<<< HEAD
+=======
+/**
+ * Represents a service registry mapping string keys to their service types.
+ * This is used to track registered services at the type level for compile-time safety.
+ * 
+ * @example
+ * ```typescript
+ * // Example registry type
+ * type MyRegistry = {
+ *   'Logger': ILogger;
+ *   'DatabaseService': DatabaseService;
+ *   'UserService': UserService;
+ * };
+ * ```
+ */
+export type ServiceRegistry = Record<string, any>;
+
+/**
+ * Type-safe registrar interface that provides simplified registration methods.
+ * This replaces the complex ServiceBuilderFactory for the new type-safe API.
+ * 
+ * @template T - The service type being registered
+ */
+export interface TypeSafeRegistrar<T> {
+    /**
+     * Use a constructor function to create the service.
+     * @param constructor - The constructor function
+     * @param dependencies - Optional dependency keys
+     */
+    useType<TCtor extends new (...args: any[]) => T>(
+        constructor: TCtor,
+        ...dependencies: string[]
+    ): void;
+
+    /**
+     * Use a factory function to create the service.
+     * @param factory - Factory function that creates the service
+     */
+    useFactory(factory: Factory<T>): void;
+
+    /**
+     * Use an existing instance (singleton pattern).
+     * @param instance - The service instance
+     */
+    useInstance(instance: T): void;
+}
+
+>>>>>>> 90d0f39 (Initial commit with type safety changes)

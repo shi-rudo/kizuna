@@ -188,3 +188,43 @@ export interface ServiceLocator {
      */
     dispose(): void;
 }
+<<<<<<< HEAD
+=======
+
+/**
+ * Type-safe ServiceLocator that provides compile-time safety and IDE autocompletion.
+ * 
+ * @template TRegistry - The service registry type mapping string keys to service types
+ */
+export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
+    /**
+     * Type-safe service resolution by string key with autocompletion and type inference.
+     * 
+     * @template K - The string key from the registry
+     * @param key - The string key identifying the service (must be registered)
+     * @returns An instance of the service with inferred type
+     */
+    get<K extends keyof TRegistry>(key: K): TRegistry[K];
+    
+    /**
+     * Resolves a service by constructor type.
+     * 
+     * @template T - The constructor type of the service
+     * @param objToImplement - The constructor function of the service
+     * @returns An instance of the requested service
+     */
+    get<T extends new (...args: any) => any>(objToImplement: T): InstanceType<T>;
+    
+    /**
+     * Creates a new scope with the same type safety.
+     * 
+     * @returns A new TypeSafeServiceLocator instance with the same registry
+     */
+    startScope(): TypeSafeServiceLocator<TRegistry>;
+    
+    /**
+     * Disposes of all services and cleans up resources.
+     */
+    dispose(): void;
+}
+>>>>>>> 90d0f39 (Initial commit with type safety changes)
