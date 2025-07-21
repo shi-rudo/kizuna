@@ -44,11 +44,11 @@ pnpm add kizuna
 
 ## Registration APIs
 
-Kizuna offers two powerful registration APIs that can be used independently or together in the same application:
+Kizuna offers two registration APIs that can be used independently or together in the same application:
 
 ### 🎯 **Type-Safe API** *(Recommended for most projects)*
 
-The type-safe API provides perfect IDE autocompletion, type inference, and compile-time safety - ideal for TypeScript projects prioritizing developer productivity:
+The type-safe API provides IDE autocompletion, type inference, and compile-time safety - ideal for TypeScript projects prioritizing developer productivity:
 
 ```typescript
 import { ContainerBuilder } from "kizuna";
@@ -70,14 +70,14 @@ class UserService {
   }
 }
 
-// ✨ Type-safe registration with perfect autocompletion
+// ✨ Type-safe registration with autocompletion
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)           // Type inferred: ConfigService
   .registerSingleton('Database', DatabaseService, 'Config')  // Dependencies as strings  
   .registerScoped('UserService', UserService, 'Database')    // Chained with type safety
   .buildTypeSafe();
 
-// 🔥 IDE autocompletion suggests: 'Config', 'Database', 'UserService'
+// IDE autocompletion suggests: 'Config', 'Database', 'UserService'
 const userService = container.get('UserService');  // Type: UserService (auto-inferred!)
 const user = userService.getUser("123");           // Full IntelliSense support
 ```
@@ -105,7 +105,7 @@ const user = userService.getUser("123");
 |---------|---------------|------------|
 | **Registration Style** | Direct: `registerSingleton('key', Class, ...deps)` | Callback: `addSingleton(r => r.fromType(Class).withDeps(...))` |
 | **Build Method** | `buildTypeSafe()` → `TypeSafeServiceLocator` | `build()` → `ServiceLocator` |
-| **Type Safety** | ✅ Perfect type inference & autocompletion | ⚠️ Requires manual type annotations |
+| **Type Safety** | ✅ Full type inference & autocompletion | ⚠️ Requires manual type annotations |
 | **IDE Support** | ✅ String key autocompletion | ⚠️ No autocompletion for string keys |
 | **Compile-Time Safety** | ✅ Errors for unregistered services | ❌ Runtime-only validation |
 | **Service Resolution** | `get('ServiceKey')` → fully typed | `get<Type>('ServiceKey')` → requires generics |
@@ -118,7 +118,7 @@ const user = userService.getUser("123");
 
 ### **Start with Type-Safe API** *(Recommended for 80% of use cases)*
 
-**Perfect for:**
+**Good for:**
 - ✅ New TypeScript projects
 - ✅ Teams prioritizing developer productivity  
 - ✅ Simple to moderate complexity dependency graphs
@@ -162,7 +162,7 @@ builder.addScoped(r =>
 );
 ```
 
-### **✨ Hybrid Approach** *(Best of both worlds)*
+### **✨ Hybrid Approach** *(Combining both APIs)*
 
 You can mix both APIs in the same application:
 
@@ -186,11 +186,11 @@ const container = new ContainerBuilder()
   .buildTypeSafe(); // Type safety maintained!
 ```
 
-> **💡 Key Takeaway**: Both APIs are first-class citizens in Kizuna. The Type-Safe API covers most common scenarios with excellent developer experience, while the Fluent API provides the flexibility needed for advanced patterns. You can use them together in the same application, choosing the right tool for each specific use case.
+> **💡 Key Takeaway**: Both APIs are first-class citizens in Kizuna. The Type-Safe API covers most common scenarios with good developer experience, while the Fluent API provides the flexibility needed for advanced patterns. You can use them together in the same application, choosing the right tool for each specific use case.
 
 ### 🚀 **Type-Safe API Advanced Usage**
 
-The type-safe API supports scoped services and demonstrates perfect type inference across scopes:
+The type-safe API supports scoped services with consistent type inference across scopes:
 
 ```typescript
 // Advanced type-safe registration
@@ -202,7 +202,7 @@ const container = new ContainerBuilder()
   .registerTransient('EmailService', EmailService, 'Logger')
   .buildTypeSafe();
 
-// 🎯 Perfect type inference in scoped scenarios
+// Type inference in scoped scenarios
 const scope1 = container.startScope();
 const scope2 = container.startScope();
 
@@ -214,7 +214,7 @@ const logger1 = scope1.get('Logger');      // Type: ConsoleLogger
 const logger2 = scope2.get('Logger');      // Type: ConsoleLogger
 console.log(logger1 === logger2);          // true (same singleton instance)
 
-// 🔥 Compile-time error prevention
+// Compile-time error prevention
 // const invalid = container.get('NonExistent');  // ❌ TypeScript Error!
 ```
 
@@ -425,7 +425,7 @@ const repo = container.get<IRepository>("IRepository");
 
 ### Service Factory
 
-Service factories provide complete control over service instantiation:
+Service factories provide flexible control over service instantiation:
 
 ```typescript
 // Simple factory
@@ -1188,7 +1188,7 @@ Disposes all services and cleans up resources.
 
 ## TypeScript
 
-Kizuna is built with TypeScript and provides full type safety out of the box. A TypeScript declaration file is bundled with this package.
+Kizuna is built with TypeScript and provides strong type safety. A TypeScript declaration file is bundled with this package.
 
 ### Configuration
 
