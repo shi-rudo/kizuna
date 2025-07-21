@@ -42,13 +42,13 @@ yarn add kizuna
 pnpm add kizuna
 ```
 
-## API Overview
+## Registration APIs
 
-Kizuna provides two APIs for different use cases:
+Kizuna offers two powerful registration APIs that can be used independently or together in the same application:
 
-### 🎯 **Type-Safe API**
+### 🎯 **Type-Safe API** *(Recommended for most projects)*
 
-The type-safe API provides perfect IDE autocompletion, type inference, and compile-time safety:
+The type-safe API provides perfect IDE autocompletion, type inference, and compile-time safety - ideal for TypeScript projects prioritizing developer productivity:
 
 ```typescript
 import { ContainerBuilder } from "kizuna";
@@ -82,9 +82,9 @@ const userService = container.get('UserService');  // Type: UserService (auto-in
 const user = userService.getUser("123");           // Full IntelliSense support
 ```
 
-### ⚡ **Classic API**
+### ⚡ **Fluent API** *(For maximum flexibility)*
 
-The callback-based API for maximum flexibility:
+The fluent callback-based API provides maximum flexibility and control over service creation:
 
 ```typescript
 // Configure services with callback API
@@ -101,31 +101,92 @@ const user = userService.getUser("123");
 
 ## 🆚 **API Comparison**
 
-| Feature | Type-Safe API | Classic API |
-|---------|---------------|-------------|
-| **Methods** | `registerSingleton()`, `registerScoped()`, `registerTransient()` | `addSingleton()`, `addScoped()`, `addTransient()` |
-| **Registration** | Direct constructor: `registerSingleton('key', ServiceClass, ...deps)` | Callback: `addSingleton(r => r.fromType(ServiceClass).withDeps(...))` |
+| Feature | Type-Safe API | Fluent API |
+|---------|---------------|------------|
+| **Registration Style** | Direct: `registerSingleton('key', Class, ...deps)` | Callback: `addSingleton(r => r.fromType(Class).withDeps(...))` |
 | **Build Method** | `buildTypeSafe()` → `TypeSafeServiceLocator` | `build()` → `ServiceLocator` |
-| **Type Safety** | ✅ Perfect type inference & autocompletion | ❌ Requires manual type annotations |
-| **IDE Support** | ✅ String key autocompletion | ❌ No autocompletion for string keys |
+| **Type Safety** | ✅ Perfect type inference & autocompletion | ⚠️ Requires manual type annotations |
+| **IDE Support** | ✅ String key autocompletion | ⚠️ No autocompletion for string keys |
 | **Compile-Time Safety** | ✅ Errors for unregistered services | ❌ Runtime-only validation |
 | **Service Resolution** | `get('ServiceKey')` → fully typed | `get<Type>('ServiceKey')` → requires generics |
-| **Flexibility** | 🔶 Constructor-focused | ✅ Full factory/type/instance options |
-| **When to Use** | New projects, maximum type safety | Legacy code, complex registrations |
+| **Factory Support** | 🔶 Limited to constructor injection | ✅ Full factory/conditional logic support |
+| **Interface Registration** | ❌ Constructor-focused only | ✅ `fromName()` for interface-based patterns |
+| **Learning Curve** | 📈 Gentle - intuitive method names | 📈 Moderate - requires understanding fluent patterns |
+| **Best For** | Most TypeScript projects, new developers | Complex scenarios, advanced patterns |
 
-### 💡 **Which API Should I Use?**
+## 💡 **Which API Should I Choose?**
 
-- **Choose Type-Safe API** if you want:
-  - Maximum developer productivity with IDE autocompletion
-  - Compile-time safety and error prevention
-  - Modern TypeScript development experience
-  - Simple service registrations with constructors
+### **Start with Type-Safe API** *(Recommended for 80% of use cases)*
 
-- **Choose Classic API** if you need:
-  - Complex factory functions with custom logic
-  - Interface-based registrations (`fromName()`)
-  - Maximum flexibility in service configuration
-  - Full control over service creation lifecycle
+**Perfect for:**
+- ✅ New TypeScript projects
+- ✅ Teams prioritizing developer productivity  
+- ✅ Simple to moderate complexity dependency graphs
+- ✅ Constructor-based service patterns
+- ✅ Applications wanting compile-time safety
+
+**Example decision factors:**
+```typescript
+// ✅ Good fit for Type-Safe API
+class UserService {
+  constructor(private db: DatabaseService, private logger: Logger) {}
+}
+
+// Simple, direct registration
+container.registerScoped('UserService', UserService, 'Database', 'Logger');
+```
+
+### **Use Fluent API When You Need Advanced Patterns**
+
+**Required for:**
+- 🔧 Complex factory functions with conditional logic
+- 🔧 Interface-based dependency injection patterns
+- 🔧 Dynamic service registration based on runtime conditions
+- 🔧 Advanced service creation workflows
+
+**Example scenarios requiring Fluent API:**
+```typescript
+// ❗ Requires Fluent API - conditional factory logic
+builder.addSingleton(r =>
+  r.fromName('PaymentGateway').useFactory(provider => {
+    const config = provider.get(Config);
+    return config.isProd 
+      ? new StripeGateway(config.stripeKey)
+      : new MockPaymentGateway();
+  })
+);
+
+// ❗ Requires Fluent API - interface-based registration
+builder.addScoped(r => 
+  r.fromName('IUserRepository').useType(DatabaseUserRepository)
+);
+```
+
+### **✨ Hybrid Approach** *(Best of both worlds)*
+
+You can mix both APIs in the same application:
+
+```typescript
+const container = new ContainerBuilder()
+  // Type-safe API for simple services
+  .registerSingleton('Logger', ConsoleLogger)
+  .registerSingleton('Config', ConfigService)
+  
+  // Fluent API for complex scenarios
+  .addSingleton(r => 
+    r.fromName('PaymentProcessor')
+     .useFactory(provider => {
+       const config = provider.get('Config');
+       return new PaymentProcessor(config.apiUrl, config.apiKey);
+     })
+  )
+  
+  // Back to type-safe for simple services
+  .registerScoped('UserService', UserService, 'Logger')
+  .buildTypeSafe(); // Type safety maintained!
+```
+
+> **💡 Key Takeaway**: Both APIs are first-class citizens in Kizuna. The Type-Safe API covers most common scenarios with excellent developer experience, while the Fluent API provides the flexibility needed for advanced patterns. You can use them together in the same application, choosing the right tool for each specific use case.
 
 ### 🚀 **Type-Safe API Advanced Usage**
 
