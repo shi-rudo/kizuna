@@ -42,57 +42,119 @@ yarn add kizuna
 pnpm add kizuna
 ```
 
-## Example
+## API Overview
 
-### Synchronous Services
+Kizuna provides two APIs for different use cases:
 
-Simple example with synchronous services:
+### 🎯 **Type-Safe API (Recommended)**
+
+The new type-safe API provides perfect IDE autocompletion, type inference, and compile-time safety:
 
 ```typescript
 import { ContainerBuilder } from "kizuna";
 
-// Define your services
 class ConfigService {
-  getDbUrl() {
-    return "postgresql://localhost:5432/myapp";
-  }
+  getDbUrl() { return "postgresql://localhost:5432/myapp"; }
 }
 
 class DatabaseService {
   constructor(private config: ConfigService) {}
-
-  connect() {
-    const url = this.config.getDbUrl();
-    return `Connected to database at ${url}`;
-  }
+  connect() { return `Connected to ${this.config.getDbUrl()}`; }
 }
 
 class UserService {
   constructor(private db: DatabaseService) {}
-
   getUser(id: string) {
     this.db.connect();
     return { id, name: "John Doe", email: "john@example.com" };
   }
 }
 
-// Build your container
-const builder = new ContainerBuilder();
+// ✨ Type-safe registration with perfect autocompletion
+const container = new ContainerBuilder()
+  .registerSingleton('Config', ConfigService)           // Type inferred: ConfigService
+  .registerSingleton('Database', DatabaseService, 'Config')  // Dependencies as strings  
+  .registerScoped('UserService', UserService, 'Database')    // Chained with type safety
+  .buildTypeSafe();
 
-// Configure services
+// 🔥 IDE autocompletion suggests: 'Config', 'Database', 'UserService'
+const userService = container.get('UserService');  // Type: UserService (auto-inferred!)
+const user = userService.getUser("123");           // Full IntelliSense support
+```
+
+### ⚡ **Classic API (Backward Compatible)**
+
+The original callback-based API for maximum flexibility:
+
+```typescript
+// Configure services with callback API
+const builder = new ContainerBuilder();
 builder.addSingleton((r) => r.fromType(ConfigService));
-builder.addSingleton((r) =>
-  r.fromType(DatabaseService).withDependencies(ConfigService)
-);
-builder.addScoped((r) =>
-  r.fromType(UserService).withDependencies(DatabaseService)
-);
+builder.addSingleton((r) => r.fromType(DatabaseService).withDependencies(ConfigService));
+builder.addScoped((r) => r.fromType(UserService).withDependencies(DatabaseService));
 
 // Build and use
 const container = builder.build();
 const userService = container.get(UserService);
 const user = userService.getUser("123");
-console.log(user); // { id: "123", name: "John Doe", email: "john@example.com" }
+```
+
+## 🆚 **API Comparison**
+
+| Feature | Type-Safe API | Classic API |
+|---------|---------------|-------------|
+| **Methods** | `registerSingleton()`, `registerScoped()`, `registerTransient()` | `addSingleton()`, `addScoped()`, `addTransient()` |
+| **Registration** | Direct constructor: `registerSingleton('key', ServiceClass, ...deps)` | Callback: `addSingleton(r => r.fromType(ServiceClass).withDeps(...))` |
+| **Build Method** | `buildTypeSafe()` → `TypeSafeServiceLocator` | `build()` → `ServiceLocator` |
+| **Type Safety** | ✅ Perfect type inference & autocompletion | ❌ Requires manual type annotations |
+| **IDE Support** | ✅ String key autocompletion | ❌ No autocompletion for string keys |
+| **Compile-Time Safety** | ✅ Errors for unregistered services | ❌ Runtime-only validation |
+| **Service Resolution** | `get('ServiceKey')` → fully typed | `get<Type>('ServiceKey')` → requires generics |
+| **Flexibility** | 🔶 Constructor-focused | ✅ Full factory/type/instance options |
+| **When to Use** | New projects, maximum type safety | Legacy code, complex registrations |
+
+### 💡 **Which API Should I Use?**
+
+- **Choose Type-Safe API** if you want:
+  - Maximum developer productivity with IDE autocompletion
+  - Compile-time safety and error prevention
+  - Modern TypeScript development experience
+  - Simple service registrations with constructors
+
+- **Choose Classic API** if you need:
+  - Complex factory functions with custom logic
+  - Interface-based registrations (`fromName()`)
+  - Maximum flexibility in service configuration
+  - Backward compatibility with existing code
+
+### 🚀 **Type-Safe API Advanced Usage**
+
+The type-safe API supports scoped services and demonstrates perfect type inference across scopes:
+
+```typescript
+// Advanced type-safe registration
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', ConsoleLogger)
+  .registerSingleton('Database', DatabaseConnection, 'Logger')
+  .registerScoped('UserRepo', UserRepository, 'Database', 'Logger')
+  .registerScoped('OrderRepo', OrderRepository, 'Database')
+  .registerTransient('EmailService', EmailService, 'Logger')
+  .buildTypeSafe();
+
+// 🎯 Perfect type inference in scoped scenarios
+const scope1 = container.startScope();
+const scope2 = container.startScope();
+
+const userRepo1 = scope1.get('UserRepo');  // Type: UserRepository
+const userRepo2 = scope2.get('UserRepo');  // Type: UserRepository  
+console.log(userRepo1 !== userRepo2);      // true (different scoped instances)
+
+const logger1 = scope1.get('Logger');      // Type: ConsoleLogger
+const logger2 = scope2.get('Logger');      // Type: ConsoleLogger
+console.log(logger1 === logger2);          // true (same singleton instance)
+
+// 🔥 Compile-time error prevention
+// const invalid = container.get('NonExistent');  // ❌ TypeScript Error!
 ```
 
 ### Asynchronous Services
