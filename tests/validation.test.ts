@@ -435,6 +435,7 @@ describe('ContainerBuilder Validation', () => {
 
             builder
                 .registerSingleton('WrongName1', ServiceWithNoDeps)
+                .registerSingleton('serviceWithNoDeps', ServiceWithNoDeps) // Register missing dependency
                 .registerSingleton('WrongName2', ServiceWithOneDep, 'serviceWithNoDeps') 
                 .registerSingleton('TestService', TestService, 'WrongName2', 'WrongName1'); // Wrong parameter names!
 
