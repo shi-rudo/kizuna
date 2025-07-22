@@ -2,21 +2,23 @@
  * Multiple Containers for Domain Separation Example
  * 
  * This example demonstrates how to use separate containers for different
- * business domains or bounded contexts in a larger application.
+ * business domains or bounded contexts in a larger application using the
+ * unified ContainerBuilder with full type safety.
  * 
  * Benefits:
- * - Clear domain boundaries
+ * - Clear domain boundaries with type safety
  * - Prevents cross-domain dependencies
  * - Shared infrastructure services
  * - Independent domain evolution
  * - Easier testing and maintenance
+ * - Full IDE autocompletion and compile-time checking
  */
 
-import { FluentContainerBuilder } from '../src/api/fluent-container-builder';
-import { ServiceLocator } from '../src/api/contracts/interfaces';
+import { ContainerBuilder } from '../src/api/container-builder';
+import { TypeSafeServiceLocator } from '../src/api/contracts/interfaces';
 
 // ========================================
-// DOMAIN MODELS (for example purposes)
+// DOMAIN MODELS
 // ========================================
 
 interface User {
@@ -54,10 +56,80 @@ interface PaymentResult {
 }
 
 // ========================================
+// SHARED INFRASTRUCTURE SERVICES
+// ========================================
+
+class Logger {
+  log(message: string): void {
+    console.log(`[${new Date().toISOString()}] ${message}`);
+  }
+
+  error(message: string, error?: Error): void {
+    console.error(`[${new Date().toISOString()}] ERROR: ${message}`, error);
+  }
+
+  warn(message: string): void {
+    console.warn(`[${new Date().toISOString()}] WARN: ${message}`);
+  }
+}
+
+class EmailService {
+  async send(to: string, subject: string, body: string): Promise<void> {
+    // Simulate email sending
+    await new Promise(resolve => setTimeout(resolve, 30));
+    console.log(`📧 Email sent to ${to}: ${subject}`);
+  }
+}
+
+interface IConfig {
+  getDatabaseUrl(): string;
+  getMaxConnections(): number;
+  getEnvironment(): string;
+}
+
+class DatabaseConfig implements IConfig {
+  getDatabaseUrl(): string {
+    return process.env.DATABASE_URL || 'postgresql://localhost:5432/ecommerce';
+  }
+
+  getMaxConnections(): number {
+    return parseInt(process.env.DB_MAX_CONNECTIONS || '10');
+  }
+
+  getEnvironment(): string {
+    return process.env.NODE_ENV || 'development';
+  }
+}
+
+interface IMetrics {
+  increment(metric: string): void;
+  getMetrics(): Record<string, number>;
+}
+
+class MetricsCollector implements IMetrics {
+  private metrics: Map<string, number> = new Map();
+
+  increment(metric: string): void {
+    const current = this.metrics.get(metric) || 0;
+    this.metrics.set(metric, current + 1);
+  }
+
+  getMetrics(): Record<string, number> {
+    return Object.fromEntries(this.metrics);
+  }
+}
+
+// ========================================
 // USER DOMAIN SERVICES
 // ========================================
 
-class UserRepository {
+interface IUserRepository {
+  findById(id: string): Promise<User | null>;
+  create(user: CreateUserDto): Promise<User>;
+  findByEmail(email: string): Promise<User | null>;
+}
+
+class UserRepository implements IUserRepository {
   async findById(id: string): Promise<User | null> {
     // Simulate database lookup
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -77,7 +149,7 @@ class UserRepository {
     };
   }
 
-  async findByEmail(_email: string): Promise<User | null> {
+  async findByEmail(email: string): Promise<User | null> {
     // Simulate email lookup
     await new Promise(resolve => setTimeout(resolve, 10));
     return null; // Simplified for example
@@ -86,41 +158,52 @@ class UserRepository {
 
 class UserService {
   constructor(
-    private userRepo: UserRepository, 
-    private logger: Logger
+    private userRepo: IUserRepository, 
+    private logger: Logger,
+    private metrics: IMetrics
   ) {}
 
   async createUser(userData: CreateUserDto): Promise<User> {
     this.logger.log(`Creating user: ${userData.email}`);
+    this.metrics.increment('user.creation.attempts');
     
     // Check if user already exists
     const existingUser = await this.userRepo.findByEmail(userData.email);
     if (existingUser) {
+      this.metrics.increment('user.creation.duplicates');
       throw new Error('User already exists');
     }
 
     const user = await this.userRepo.create(userData);
     this.logger.log(`User created with ID: ${user.id}`);
+    this.metrics.increment('user.creation.success');
     
     return user;
   }
 
   async getUserById(id: string): Promise<User> {
     this.logger.log(`Fetching user: ${id}`);
+    this.metrics.increment('user.fetch.attempts');
     
     const user = await this.userRepo.findById(id);
     if (!user) {
+      this.metrics.increment('user.fetch.notfound');
       throw new Error('User not found');
     }
     
+    this.metrics.increment('user.fetch.success');
     return user;
   }
 }
 
 class UserNotificationService {
-  constructor(private emailService: EmailService) {}
+  constructor(
+    private emailService: EmailService,
+    private logger: Logger
+  ) {}
 
   async sendWelcomeEmail(user: User): Promise<void> {
+    this.logger.log(`Sending welcome email to ${user.email}`);
     await this.emailService.send(
       user.email,
       'Welcome to our platform!',
@@ -129,6 +212,7 @@ class UserNotificationService {
   }
 
   async sendPasswordResetEmail(user: User, resetToken: string): Promise<void> {
+    this.logger.log(`Sending password reset email to ${user.email}`);
     await this.emailService.send(
       user.email,
       'Password Reset Request',
@@ -141,7 +225,13 @@ class UserNotificationService {
 // ORDER DOMAIN SERVICES
 // ========================================
 
-class OrderRepository {
+interface IOrderRepository {
+  findById(id: string): Promise<Order | null>;
+  create(order: CreateOrderDto): Promise<Order>;
+  findByUserId(userId: string): Promise<Order[]>;
+}
+
+class OrderRepository implements IOrderRepository {
   async findById(id: string): Promise<Order | null> {
     // Simulate database lookup
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -171,7 +261,7 @@ class OrderRepository {
     };
   }
 
-  async findByUserId(_userId: string): Promise<Order[]> {
+  async findByUserId(userId: string): Promise<Order[]> {
     // Simulate fetching user orders
     await new Promise(resolve => setTimeout(resolve, 20));
     return []; // Simplified for example
@@ -180,32 +270,39 @@ class OrderRepository {
 
 class OrderService {
   constructor(
-    private orderRepo: OrderRepository, 
-    private logger: Logger
+    private orderRepo: IOrderRepository, 
+    private logger: Logger,
+    private metrics: IMetrics
   ) {}
 
   async createOrder(orderData: CreateOrderDto): Promise<Order> {
     this.logger.log(`Creating order for user: ${orderData.userId}`);
+    this.metrics.increment('order.creation.attempts');
     
     // Validate order data
     if (!orderData.items.length) {
+      this.metrics.increment('order.creation.validation_errors');
       throw new Error('Order must contain at least one item');
     }
 
     const order = await this.orderRepo.create(orderData);
     this.logger.log(`Order created with ID: ${order.id}, Total: $${order.total}`);
+    this.metrics.increment('order.creation.success');
     
     return order;
   }
 
   async getOrderById(id: string): Promise<Order> {
     this.logger.log(`Fetching order: ${id}`);
+    this.metrics.increment('order.fetch.attempts');
     
     const order = await this.orderRepo.findById(id);
     if (!order) {
+      this.metrics.increment('order.fetch.notfound');
       throw new Error('Order not found');
     }
     
+    this.metrics.increment('order.fetch.success');
     return order;
   }
 
@@ -215,8 +312,13 @@ class OrderService {
   }
 }
 
-class PaymentGateway {
-  async charge(_amount: number): Promise<PaymentResult> {
+interface IPaymentGateway {
+  charge(amount: number): Promise<PaymentResult>;
+  refund(transactionId: string): Promise<boolean>;
+}
+
+class PaymentGateway implements IPaymentGateway {
+  async charge(amount: number): Promise<PaymentResult> {
     // Simulate payment processing
     await new Promise(resolve => setTimeout(resolve, 100));
     
@@ -229,7 +331,7 @@ class PaymentGateway {
     };
   }
 
-  async refund(_transactionId: string): Promise<boolean> {
+  async refund(transactionId: string): Promise<boolean> {
     // Simulate refund processing
     await new Promise(resolve => setTimeout(resolve, 50));
     return true;
@@ -237,165 +339,129 @@ class PaymentGateway {
 }
 
 class PaymentService {
-  constructor(private paymentGateway: PaymentGateway) {}
+  constructor(
+    private paymentGateway: IPaymentGateway,
+    private logger: Logger,
+    private metrics: IMetrics
+  ) {}
 
   async processPayment(order: Order): Promise<PaymentResult> {
+    this.logger.log(`Processing payment for order ${order.id}: $${order.total}`);
+    this.metrics.increment('payment.attempts');
+    
     const result = await this.paymentGateway.charge(order.total);
     
     if (!result.success) {
+      this.metrics.increment('payment.failures');
       throw new Error('Payment failed');
     }
+    
+    this.metrics.increment('payment.success');
+    this.logger.log(`Payment successful: ${result.transactionId}`);
     
     return result;
   }
 
   async refundPayment(transactionId: string): Promise<boolean> {
+    this.logger.log(`Processing refund for transaction: ${transactionId}`);
     return await this.paymentGateway.refund(transactionId);
   }
 }
 
 // ========================================
-// SHARED INFRASTRUCTURE SERVICES
-// ========================================
-
-class Logger {
-  log(message: string): void {
-    console.log(`[${new Date().toISOString()}] ${message}`);
-  }
-
-  error(message: string, error?: Error): void {
-    console.error(`[${new Date().toISOString()}] ERROR: ${message}`, error);
-  }
-
-  warn(message: string): void {
-    console.warn(`[${new Date().toISOString()}] WARN: ${message}`);
-  }
-}
-
-class EmailService {
-  async send(to: string, subject: string, _body: string): Promise<void> {
-    // Simulate email sending
-    await new Promise(resolve => setTimeout(resolve, 30));
-    console.log(`📧 Email sent to ${to}: ${subject}`);
-  }
-}
-
-class DatabaseConfig {
-  getConnectionString(): string {
-    return process.env.DATABASE_URL || 'postgresql://localhost:5432/ecommerce';
-  }
-
-  getMaxConnections(): number {
-    return parseInt(process.env.DB_MAX_CONNECTIONS || '10');
-  }
-}
-
-class MetricsCollector {
-  private metrics: Map<string, number> = new Map();
-
-  increment(metric: string): void {
-    const current = this.metrics.get(metric) || 0;
-    this.metrics.set(metric, current + 1);
-  }
-
-  getMetrics(): Record<string, number> {
-    return Object.fromEntries(this.metrics);
-  }
-}
-
-// ========================================
-// CONTAINER SETUP FUNCTIONS
+// TYPE-SAFE CONTAINER CREATION
 // ========================================
 
 /**
- * Creates the shared infrastructure container.
+ * Creates the shared infrastructure container with full type safety.
  * This container holds services that are used across multiple domains.
  */
-function createSharedContainer(): ServiceLocator {
-  const builder = new FluentContainerBuilder();
-
-  // Infrastructure services - these are singletons shared across the application
-  builder.addSingleton(r => r.fromType(DatabaseConfig));
-  builder.addSingleton(r => r.fromType(Logger));
-  builder.addSingleton(r => r.fromType(EmailService));
-  builder.addSingleton(r => r.fromType(MetricsCollector));
-
-  return builder.build();
+function createSharedContainer() {
+  return new ContainerBuilder()
+    // Infrastructure services - singletons shared across the application
+    .registerInterface<IConfig>('IConfig', DatabaseConfig)
+    .registerSingleton('Logger', Logger)
+    .registerSingleton('EmailService', EmailService)
+    .registerInterface<IMetrics>('IMetrics', MetricsCollector)
+    
+    // Configuration factory with environment-specific logic
+    .registerFactory('AppSettings', (provider) => {
+      const config = provider.get('IConfig');
+      const logger = provider.get('Logger');
+      
+      logger.log(`Initializing app settings for ${config.getEnvironment()}`);
+      
+      return {
+        environment: config.getEnvironment(),
+        database: {
+          url: config.getDatabaseUrl(),
+          maxConnections: config.getMaxConnections()
+        },
+        features: {
+          emailNotifications: config.getEnvironment() !== 'test',
+          detailedLogging: config.getEnvironment() === 'development'
+        }
+      };
+    })
+    
+    .build();
 }
 
 /**
- * Creates the User domain container.
- * This container has access to shared infrastructure and manages user-specific services.
+ * Creates the User domain container with type-safe dependencies.
+ * This container manages user-specific services with shared infrastructure.
  */
-function createUserDomainContainer(sharedContainer: ServiceLocator): ServiceLocator {
-  const builder = new FluentContainerBuilder();
-
-  // Import shared services from the infrastructure container
-  const logger = sharedContainer.get(Logger);
-  const emailService = sharedContainer.get(EmailService);
-  const metricsCollector = sharedContainer.get(MetricsCollector);
-
-  // Register shared services in this domain container
-  builder.addSingleton(r => r.fromName('Logger').useFactory(() => logger));
-  builder.addSingleton(r => r.fromName('EmailService').useFactory(() => emailService));
-  builder.addSingleton(r => r.fromName('MetricsCollector').useFactory(() => metricsCollector));
-
-  // Register user domain-specific services
-  builder.addScoped(r => r.fromType(UserRepository));
-  builder.addScoped(r => 
-    r.fromType(UserService)
-     .withDependencies(UserRepository, 'Logger')
-  );
-  builder.addScoped(r => 
-    r.fromType(UserNotificationService)
-     .withDependencies('EmailService')
-  );
-
-  return builder.build();
+function createUserDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
+  return new ContainerBuilder()
+    // Import shared services (singleton instances from shared container)
+    .registerFactory('Logger', () => sharedContainer.get('Logger'))
+    .registerFactory('EmailService', () => sharedContainer.get('EmailService'))
+    .registerFactory('IMetrics', () => sharedContainer.get('IMetrics'))
+    
+    // User domain-specific services
+    .registerInterface<IUserRepository>('IUserRepository', UserRepository)
+    .registerScoped('UserService', UserService, 'IUserRepository', 'Logger', 'IMetrics')
+    .registerScoped('UserNotificationService', UserNotificationService, 'EmailService', 'Logger')
+    
+    .build();
 }
 
 /**
- * Creates the Order domain container.
- * This container has access to shared infrastructure and manages order-specific services.
+ * Creates the Order domain container with type-safe dependencies.
+ * This container manages order-specific services with shared infrastructure.
  */
-function createOrderDomainContainer(sharedContainer: ServiceLocator): ServiceLocator {
-  const builder = new FluentContainerBuilder();
-
-  // Import shared services from the infrastructure container
-  const logger = sharedContainer.get(Logger);
-  const metricsCollector = sharedContainer.get(MetricsCollector);
-
-  // Register shared services in this domain container
-  builder.addSingleton(r => r.fromName('Logger').useFactory(() => logger));
-  builder.addSingleton(r => r.fromName('MetricsCollector').useFactory(() => metricsCollector));
-
-  // Register order domain-specific services
-  builder.addScoped(r => r.fromType(OrderRepository));
-  builder.addScoped(r => 
-    r.fromType(OrderService)
-     .withDependencies(OrderRepository, 'Logger')
-  );
-  builder.addScoped(r => r.fromType(PaymentGateway));
-  builder.addScoped(r => 
-    r.fromType(PaymentService)
-     .withDependencies(PaymentGateway)
-  );
-
-  return builder.build();
+function createOrderDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
+  return new ContainerBuilder()
+    // Import shared services (singleton instances from shared container)
+    .registerFactory('Logger', () => sharedContainer.get('Logger'))
+    .registerFactory('IMetrics', () => sharedContainer.get('IMetrics'))
+    
+    // Order domain-specific services
+    .registerInterface<IOrderRepository>('IOrderRepository', OrderRepository)
+    .registerScoped('OrderService', OrderService, 'IOrderRepository', 'Logger', 'IMetrics')
+    .registerInterface<IPaymentGateway>('IPaymentGateway', PaymentGateway)
+    .registerScoped('PaymentService', PaymentService, 'IPaymentGateway', 'Logger', 'IMetrics')
+    
+    .build();
 }
+
+// Type aliases for better readability
+type SharedContainer = ReturnType<typeof createSharedContainer>;
+type UserDomainContainer = ReturnType<typeof createUserDomainContainer>;
+type OrderDomainContainer = ReturnType<typeof createOrderDomainContainer>;
 
 // ========================================
-// APPLICATION SETUP
+// TYPE-SAFE APPLICATION CLASS
 // ========================================
 
 /**
- * Main application class that manages multiple domain containers.
+ * Main application class that manages multiple domain containers with full type safety.
  * This demonstrates how to orchestrate different domains while maintaining separation.
  */
 class ECommerceApplication {
-  private sharedContainer!: ServiceLocator;
-  private userDomainContainer!: ServiceLocator;
-  private orderDomainContainer!: ServiceLocator;
+  private sharedContainer!: SharedContainer;
+  private userDomainContainer!: UserDomainContainer;
+  private orderDomainContainer!: OrderDomainContainer;
 
   /**
    * Initialize all containers and their dependencies.
@@ -414,49 +480,60 @@ class ECommerceApplication {
     this.orderDomainContainer = createOrderDomainContainer(this.sharedContainer);
     console.log('✅ Order domain container initialized');
 
+    // Log application settings
+    const appSettings = this.sharedContainer.get('AppSettings');
+    console.log(`📋 App Settings:`, {
+      environment: appSettings.environment,
+      features: appSettings.features
+    });
+
     console.log('🎉 Application initialization complete!');
   }
 
   /**
-   * Domain-specific service accessors.
+   * Domain-specific service accessors with full type safety.
    * These methods provide clean access to domain services while maintaining boundaries.
    */
   
-  // User Domain Services
+  // User Domain Services (fully typed!)
   getUserService(): UserService {
-    return this.userDomainContainer.get(UserService);
+    return this.userDomainContainer.get('UserService');
   }
 
   getUserNotificationService(): UserNotificationService {
-    return this.userDomainContainer.get(UserNotificationService);
+    return this.userDomainContainer.get('UserNotificationService');
   }
 
-  // Order Domain Services
+  // Order Domain Services (fully typed!)
   getOrderService(): OrderService {
-    return this.orderDomainContainer.get(OrderService);
+    return this.orderDomainContainer.get('OrderService');
   }
 
   getPaymentService(): PaymentService {
-    return this.orderDomainContainer.get(PaymentService);
+    return this.orderDomainContainer.get('PaymentService');
   }
 
-  // Shared Infrastructure Services
+  // Shared Infrastructure Services (fully typed!)
   getLogger(): Logger {
-    return this.sharedContainer.get(Logger);
+    return this.sharedContainer.get('Logger');
   }
 
-  getMetricsCollector(): MetricsCollector {
-    return this.sharedContainer.get(MetricsCollector);
+  getMetrics(): IMetrics {
+    return this.sharedContainer.get('IMetrics');
+  }
+
+  getAppSettings() {
+    return this.sharedContainer.get('AppSettings');
   }
 
   /**
-   * Create domain-specific scopes for request processing.
+   * Create domain-specific scopes for request processing with type safety.
    */
-  createUserDomainScope(): ServiceLocator {
+  createUserDomainScope(): UserDomainContainer {
     return this.userDomainContainer.startScope();
   }
 
-  createOrderDomainScope(): ServiceLocator {
+  createOrderDomainScope(): OrderDomainContainer {
     return this.orderDomainContainer.startScope();
   }
 
@@ -475,7 +552,7 @@ class ECommerceApplication {
 }
 
 // ========================================
-// USAGE EXAMPLES
+// USAGE EXAMPLES WITH TYPE SAFETY
 // ========================================
 
 /**
@@ -488,9 +565,10 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
   console.log('--- POST /users ---');
   const userScope = app.createUserDomainScope();
   try {
-    const userService = userScope.get(UserService);
-    const notificationService = userScope.get(UserNotificationService);
-    const metricsCollector = userScope.get('MetricsCollector') as MetricsCollector;
+    // All services are fully typed! ✨
+    const userService = userScope.get('UserService');            // Type: UserService
+    const notificationService = userScope.get('UserNotificationService'); // Type: UserNotificationService
+    const metrics = userScope.get('IMetrics');                  // Type: IMetrics
 
     const userData: CreateUserDto = {
       name: 'Alice Johnson',
@@ -499,7 +577,7 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
 
     const user = await userService.createUser(userData);
     await notificationService.sendWelcomeEmail(user);
-    metricsCollector.increment('users.created');
+    metrics.increment('users.created');
 
     console.log(`✅ User created:`, user);
   } catch (error) {
@@ -512,9 +590,10 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
   console.log('\n--- POST /orders ---');
   const orderScope = app.createOrderDomainScope();
   try {
-    const orderService = orderScope.get(OrderService);
-    const paymentService = orderScope.get(PaymentService);
-    const metricsCollector = orderScope.get('MetricsCollector') as MetricsCollector;
+    // All services are fully typed! ✨
+    const orderService = orderScope.get('OrderService');        // Type: OrderService
+    const paymentService = orderScope.get('PaymentService');    // Type: PaymentService
+    const metrics = orderScope.get('IMetrics');                 // Type: IMetrics
 
     const orderData: CreateOrderDto = {
       userId: 'user_123',
@@ -527,11 +606,11 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
     const order = await orderService.createOrder(orderData);
     const paymentResult = await paymentService.processPayment(order);
     
-    metricsCollector.increment('orders.created');
+    metrics.increment('orders.created');
     if (paymentResult.success) {
-      metricsCollector.increment('payments.successful');
+      metrics.increment('payments.successful');
     } else {
-      metricsCollector.increment('payments.failed');
+      metrics.increment('payments.failed');
     }
 
     console.log(`✅ Order created:`, { order, payment: paymentResult });
@@ -542,12 +621,12 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
   }
 
   // Show metrics
-  const metrics = app.getMetricsCollector().getMetrics();
+  const metrics = app.getMetrics().getMetrics();
   console.log('\n📊 Current Metrics:', metrics);
 }
 
 /**
- * Example: Cross-domain workflow (user creates order)
+ * Example: Cross-domain workflow with type safety
  */
 async function simulateCrossDomainWorkflow(app: ECommerceApplication): Promise<void> {
   console.log('\n🔄 Simulating cross-domain workflow...\n');
@@ -557,7 +636,7 @@ async function simulateCrossDomainWorkflow(app: ECommerceApplication): Promise<v
   let userId: string;
 
   try {
-    const userService = userScope.get(UserService);
+    const userService = userScope.get('UserService'); // Type: UserService ✨
     const user = await userService.createUser({
       name: 'Bob Smith',
       email: 'bob@example.com'
@@ -571,8 +650,8 @@ async function simulateCrossDomainWorkflow(app: ECommerceApplication): Promise<v
   // Step 2: Create order for user in Order domain
   const orderScope = app.createOrderDomainScope();
   try {
-    const orderService = orderScope.get(OrderService);
-    const paymentService = orderScope.get(PaymentService);
+    const orderService = orderScope.get('OrderService');    // Type: OrderService ✨
+    const paymentService = orderScope.get('PaymentService'); // Type: PaymentService ✨
     
     const order = await orderService.createOrder({
       userId: userId,
@@ -592,51 +671,84 @@ async function simulateCrossDomainWorkflow(app: ECommerceApplication): Promise<v
 }
 
 /**
- * Example: Testing individual domains in isolation
+ * Example: Testing with type-safe mocks
  */
-async function demonstrateTestingIsolation(): Promise<void> {
-  console.log('\n🧪 Demonstrating testing isolation...\n');
+async function demonstrateTestingWithTypeSafety(): Promise<void> {
+  console.log('\n🧪 Demonstrating type-safe testing...\n');
 
-  // Create mock shared container for testing
-  const mockSharedContainer = {
-    get: (key: any) => {
-      if (key === Logger) {
-        return {
-          log: (msg: string) => console.log(`[MOCK LOG] ${msg}`),
-          error: (msg: string) => console.log(`[MOCK ERROR] ${msg}`),
-          warn: (msg: string) => console.log(`[MOCK WARN] ${msg}`)
-        };
-      }
-      if (key === EmailService) {
-        return {
-          send: async (to: string, subject: string) => {
-            console.log(`[MOCK EMAIL] To: ${to}, Subject: ${subject}`);
-          }
-        };
-      }
-      return null;
-    },
-    dispose: () => {},
-    startScope: () => mockSharedContainer
-  } as ServiceLocator;
+  // Create test implementations that match the real shared container structure
+  class TestConfig implements IConfig {
+    getDatabaseUrl() { return 'test://localhost'; }
+    getMaxConnections() { return 5; }
+    getEnvironment() { return 'test'; }
+  }
 
-  // Test User domain in isolation
-  const userTestContainer = createUserDomainContainer(mockSharedContainer);
-  const userScope = userTestContainer.startScope();
+  class TestMetrics implements IMetrics {
+    increment(metric: string) { console.log(`[TEST METRIC] ${metric}`); }
+    getMetrics() { return { 'test.metric': 1 }; }
+  }
+
+  class TestLogger extends Logger {
+    log(message: string): void {
+      console.log(`[TEST LOG] ${message}`);
+    }
+    error(message: string, error?: Error): void {
+      console.log(`[TEST ERROR] ${message}`, error);
+    }
+    warn(message: string): void {
+      console.log(`[TEST WARN] ${message}`);
+    }
+  }
+
+  class TestEmailService extends EmailService {
+    async send(to: string, subject: string): Promise<void> {
+      console.log(`[TEST EMAIL] To: ${to}, Subject: ${subject}`);
+    }
+  }
+
+  // Create a type-safe test container that exactly matches the shared container signature
+  const testSharedContainer = new ContainerBuilder()
+    .registerInterface<IConfig>('IConfig', TestConfig)
+    .registerSingleton('Logger', TestLogger)
+    .registerSingleton('EmailService', TestEmailService)
+    .registerInterface<IMetrics>('IMetrics', TestMetrics)
+    .registerFactory('AppSettings', (provider) => {
+      const config = provider.get('IConfig');
+      const logger = provider.get('Logger');
+      
+      logger.log('Initializing test app settings');
+      
+      return {
+        environment: 'test',
+        database: {
+          url: config.getDatabaseUrl(),
+          maxConnections: config.getMaxConnections()
+        },
+        features: {
+          emailNotifications: false,
+          detailedLogging: true
+        }
+      };
+    })
+    .build();
+
+  const testUserContainer = createUserDomainContainer(testSharedContainer);
+  const userScope = testUserContainer.startScope();
 
   try {
-    const userService = userScope.get(UserService);
+    const userService = userScope.get('UserService'); // Type: UserService ✨
     const user = await userService.createUser({
       name: 'Test User',
       email: 'test@example.com'
     });
     
-    console.log(`✅ User domain test passed - User created: ${user.name}`);
+    console.log(`✅ Type-safe test passed - User created: ${user.name}`);
   } catch (error) {
-    console.error('❌ User domain test failed:', error);
+    console.error('❌ Test failed:', error);
   } finally {
     userScope.dispose();
-    userTestContainer.dispose();
+    testUserContainer.dispose();
+    testSharedContainer.dispose();
   }
 }
 
@@ -654,7 +766,16 @@ async function main(): Promise<void> {
     // Run examples
     await simulateHttpRequestHandlers(app);
     await simulateCrossDomainWorkflow(app);
-    await demonstrateTestingIsolation();
+    await demonstrateTestingWithTypeSafety();
+
+    console.log('\n🎉 TYPE-SAFE MULTI-CONTAINER BENEFITS:');
+    console.log('✅ Full type safety across all domains');
+    console.log('✅ Clear domain boundaries with interface separation');  
+    console.log('✅ Shared infrastructure with singleton management');
+    console.log('✅ IDE autocompletion for all service access');
+    console.log('✅ Compile-time error detection');
+    console.log('✅ Easy testing with type-safe mocks');
+    console.log('✅ Independent domain evolution');
 
   } catch (error) {
     console.error('Application error:', error);
@@ -678,5 +799,11 @@ export {
   UserService,
   OrderService,
   Logger,
-  EmailService
+  EmailService,
+  // Export interfaces
+  type IUserRepository,
+  type IOrderRepository,
+  type IPaymentGateway,
+  type IConfig,
+  type IMetrics
 };
