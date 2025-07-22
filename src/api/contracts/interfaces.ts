@@ -224,4 +224,9 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
      * Disposes of all services and cleans up resources.
      */
     dispose(): void;
+
+    /**
+     * Prints a summary of registered services and their lifecycles.
+     */
+    debug(): void;
 }

@@ -50,6 +50,17 @@ export class ServiceWrapper {
     }
 
     /**
+     * Gets the lifecycle name.
+     * @returns The lifecycle name
+     */
+    getLifecycle(): string {
+        if (!this._lifecycle) {
+            return "Disposed";
+        }
+        return this._lifecycle.constructor.name.replace("Lifecycle", "");
+    }
+
+    /**
      * Creates a new scope for scoped services.
      * @returns A new ServiceWrapper instance for the new scope
      */
