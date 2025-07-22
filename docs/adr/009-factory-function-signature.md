@@ -21,16 +21,18 @@ We chose the **ServiceProvider Parameter** approach where factory functions rece
 ### Factory Function Signature
 
 ```typescript
-type Factory<T> = (serviceProvider: ServiceLocator) => T | Promise<T>;
+type Factory<T> = (serviceProvider: TypeSafeServiceLocator<TRegistry>) => T | Promise<T>;
 
-// Usage example
-builder.addSingleton((r) =>
-  r.fromName("DatabaseService").useFactory((provider: ServiceProvider) => {
-    const config = provider.get<Config>("Config");
-    const logger = provider.get<Logger>("Logger");
+// Usage example with current unified API
+const container = new ContainerBuilder()
+  .registerSingleton('Config', ConfigService)
+  .registerSingleton('Logger', LoggerService)
+  .registerFactory('DatabaseService', (provider) => {
+    const config = provider.get('Config');  // Type: ConfigService (inferred!)
+    const logger = provider.get('Logger');  // Type: LoggerService (inferred!)
     return new DatabaseService(config.connectionString, logger);
   })
-);
+  .build();
 ```
 
 ### Benefits of ServiceProvider Parameter
@@ -38,20 +40,23 @@ builder.addSingleton((r) =>
 #### 1. **Maximum Flexibility**
 
 ```typescript
-// Conditional dependency resolution
-builder.addSingleton((r) =>
-  r.fromName("NotificationService").useFactory((provider: ServiceProvider) => {
-    const config = provider.get<AppConfig>("AppConfig");
+// Conditional dependency resolution with current unified API
+const container = new ContainerBuilder()
+  .registerSingleton('AppConfig', AppConfigService)
+  .registerSingleton('EmailService', EmailService)
+  .registerSingleton('SMSService', SMSService)
+  .registerFactory('NotificationService', (provider) => {
+    const config = provider.get('AppConfig');  // Type: AppConfigService
 
     if (config.useEmailNotifications) {
-      const emailService = provider.get<EmailService>("EmailService");
+      const emailService = provider.get('EmailService');  // Type: EmailService
       return new EmailNotificationService(emailService);
     } else {
-      const smsService = provider.get<SMSService>("SMSService");
+      const smsService = provider.get('SMSService');  // Type: SMSService
       return new SMSNotificationService(smsService);
     }
   })
-);
+  .build();
 ```
 
 - Enables runtime dependency selection based on configuration
@@ -61,20 +66,23 @@ builder.addSingleton((r) =>
 #### 2. **Dynamic Service Discovery**
 
 ```typescript
-// Plugin-based architecture
-builder.addSingleton((r) =>
-  r.fromName("PluginManager").useFactory((provider: ServiceProvider) => {
-    const config = provider.get<PluginConfig>("PluginConfig");
+// Plugin-based architecture with current unified API
+const container = new ContainerBuilder()
+  .registerSingleton('PluginConfig', PluginConfigService)
+  .registerSingleton('Plugin_Analytics', AnalyticsPlugin)
+  .registerSingleton('Plugin_Logging', LoggingPlugin)
+  .registerFactory('PluginManager', (provider) => {
+    const config = provider.get('PluginConfig');  // Type: PluginConfigService
     const enabledPlugins = config.enabledPlugins;
 
     const plugins = enabledPlugins.map((pluginName) => {
-      const pluginKey = `Plugin_${pluginName}`;
-      return provider.get<IPlugin>(pluginKey);
+      const pluginKey = `Plugin_${pluginName}` as keyof typeof container;
+      return (provider as any).get(pluginKey);  // Dynamic plugin resolution
     });
 
     return new PluginManager(plugins);
   })
-);
+  .build();
 ```
 
 - Supports discovery and resolution of services based on runtime configuration
@@ -85,20 +93,21 @@ builder.addSingleton((r) =>
 
 ```typescript
 // Async factory with dependent async services
-builder.addSingleton((r) =>
-  r.fromName("AsyncService").useFactory(async (provider: ServiceProvider) => {
-    const config = await provider
-      .get<ConfigService>("ConfigService")
-      .loadConfig();
-    const connection = await provider
-      .get<DatabaseService>("DatabaseService")
-      .connect();
+const container = new ContainerBuilder()
+  .registerSingleton('ConfigService', ConfigService)
+  .registerSingleton('DatabaseService', DatabaseService)
+  .registerFactory('AsyncService', async (provider) => {
+    const configService = provider.get('ConfigService');  // Type: ConfigService
+    const dbService = provider.get('DatabaseService');    // Type: DatabaseService
+    
+    const config = await configService.loadConfig();
+    const connection = await dbService.connect();
 
     const service = new AsyncService(config, connection);
     await service.initialize();
     return service;
   })
-);
+  .build();
 ```
 
 - Factory can await resolution of async services
@@ -254,27 +263,29 @@ type Factory<T> = (container: IDependencyContainer) => T;
 
 ```typescript
 // Simple factory with dependency resolution
-builder.addSingleton((r) =>
-  r.fromName("EmailService").useFactory((provider: ServiceProvider) => {
-    const config = provider.get<EmailConfig>("EmailConfig");
+const container = new ContainerBuilder()
+  .registerSingleton('EmailConfig', EmailConfigService)
+  .registerFactory('EmailService', (provider) => {
+    const config = provider.get('EmailConfig');  // Type: EmailConfigService
     return new EmailService(config.smtpHost, config.smtpPort);
   })
-);
+  .build();
 ```
 
 ### Conditional Service Creation
 
 ```typescript
 // Factory with runtime decision making
-builder.addSingleton((r) =>
-  r.fromName("Logger").useFactory((provider: ServiceProvider) => {
-    const config = provider.get<AppConfig>("AppConfig");
+const container = new ContainerBuilder()
+  .registerSingleton('AppConfig', AppConfigService)
+  .registerFactory('Logger', (provider) => {
+    const config = provider.get('AppConfig');  // Type: AppConfigService
 
     return config.isDevelopment
       ? new ConsoleLogger(config.logLevel)
       : new FileLogger(config.logPath, config.logLevel);
   })
-);
+  .build();
 ```
 
 ### Async Factory Pattern
