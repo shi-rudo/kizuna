@@ -7,11 +7,13 @@ export class ServiceWrapper {
     private readonly _name: string;
     private _lifecycle: Container | null;
     private _dependencies: readonly string[];
+    private _constructorFn?: new (...args: any[]) => any;
 
-    constructor(name: string, lifecycle: Container, dependencies: string[]) {
+    constructor(name: string, lifecycle: Container, dependencies: string[], constructorFn?: new (...args: any[]) => any) {
         this._name = name;
         this._lifecycle = lifecycle;
         this._dependencies = Object.freeze([...dependencies]); // Immutable copy
+        this._constructorFn = constructorFn;
     }
 
     /**
@@ -61,7 +63,8 @@ export class ServiceWrapper {
         return new ServiceWrapper(
             this._name,
             this._lifecycle.createScope(),
-            [...this._dependencies]
+            [...this._dependencies],
+            this._constructorFn
         );
     }
 
@@ -81,5 +84,21 @@ export class ServiceWrapper {
      */
     isDisposed(): boolean {
         return this._lifecycle === null;
+    }
+
+    /**
+     * Gets the constructor function if this is a constructor-based registration.
+     * @returns The constructor function or undefined
+     */
+    getConstructor(): (new (...args: any[]) => any) | undefined {
+        return this._constructorFn;
+    }
+
+    /**
+     * Checks if this is a constructor-based registration.
+     * @returns true if constructor-based, false otherwise
+     */
+    isConstructorBased(): boolean {
+        return this._constructorFn !== undefined;
     }
 }

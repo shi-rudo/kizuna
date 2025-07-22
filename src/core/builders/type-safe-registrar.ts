@@ -10,6 +10,7 @@ export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBu
     private serviceName: string;
     private factory?: (...args: any[]) => any;
     private dependencies: string[] = [];
+    private constructorFn?: new (...args: any[]) => T;
 
     constructor(serviceName: string) {
         this.serviceName = serviceName;
@@ -19,6 +20,7 @@ export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBu
         constructor: TCtor,
         ...dependencies: string[]
     ): void {
+        this.constructorFn = constructor;
         this.dependencies = dependencies;
         this.factory = (...args: any[]) => {
             if (dependencies.length === 0) {
@@ -38,12 +40,16 @@ export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBu
         this.dependencies = [];
     }
 
+    getConstructor(): (new (...args: any[]) => T) | undefined {
+        return this.constructorFn;
+    }
+
     build(lifecycleManager: Container): ServiceWrapper {
         if (!this.factory) {
             throw new Error(`No factory configured for service '${this.serviceName}'`);
         }
 
         lifecycleManager.setFactory(this.factory);
-        return new ServiceWrapper(this.serviceName, lifecycleManager, this.dependencies);
+        return new ServiceWrapper(this.serviceName, lifecycleManager, this.dependencies, this.constructorFn);
     }
 }
