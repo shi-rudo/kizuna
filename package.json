@@ -2,7 +2,14 @@
   "name": "@shirudo/kizuna",
   "version": "1.0.0",
   "description": "A powerful and flexible dependency injection library for TypeScript and JavaScript.",
-  "keywords": ["Dependency Injection", "DI", "IoC", "Inversion of Control", "TypeScript", "JavaScript"],
+  "keywords": [
+    "Dependency Injection",
+    "DI",
+    "IoC",
+    "Inversion of Control",
+    "TypeScript",
+    "JavaScript"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -15,7 +22,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "vitest"
+    "test": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "author": "",
   "license": "MIT",
@@ -23,6 +31,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.1.2",
     "@types/node": "^24.0.15",
+    "@vitest/coverage-v8": "^3.2.4",
     "typescript": "^5.8.3",
     "vite": "^7.0.5",
     "vitest": "^3.2.4"
