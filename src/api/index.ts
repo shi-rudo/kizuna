@@ -4,42 +4,38 @@
  * A lightweight, type-safe dependency injection container for TypeScript/JavaScript applications.
  * Supports singleton, scoped, and transient service lifecycles with automatic dependency resolution.
  * 
- * Provides two distinct APIs:
- * - **TypeSafeContainerBuilder**: Compile-time type safety and IDE autocompletion
- * - **FluentContainerBuilder**: Runtime flexibility and dynamic registration patterns
+ * Features the unified ContainerBuilder with complete type safety and all registration patterns.
  *
  * @example
  * ```typescript
- * import { TypeSafeContainerBuilder } from '@shirudo/kizuna';
+ * import { ContainerBuilder } from '@shirudo/kizuna';
  *
- * // Type-safe API - Full compile-time checking
- * const container = new TypeSafeContainerBuilder()
+ * // The ultimate type-safe container - all patterns in one!
+ * const container = new ContainerBuilder()
+ *   // Constructor-based
  *   .registerSingleton('Logger', ConsoleLogger)
  *   .registerScoped('UserService', UserService, 'Logger')
- *   .buildTypeSafe();
- *
- * const userService = container.get('UserService'); // Type: UserService ✅
- * ```
- *
- * @example
- * ```typescript
- * import { FluentContainerBuilder } from '@shirudo/kizuna';
- *
- * // Fluent API - Runtime flexibility
- * const container = new FluentContainerBuilder()
- *   .addSingleton(r => r.fromType(DatabaseService))
- *   .addScoped(r => r.fromType(UserService).withDependencies(DatabaseService))
+ *   
+ *   // Interface-based
+ *   .registerInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
+ *   
+ *   // Factory-based
+ *   .registerFactory('Config', (provider) => {
+ *     const logger = provider.get('Logger'); // Type: ConsoleLogger
+ *     return { env: 'production', debug: false };
+ *   })
  *   .build();
  *
- * const userService = container.get(UserService); // Runtime resolution
+ * const userService = container.get('UserService'); // Type: UserService ✅
+ * const database = container.get('IDatabase');     // Type: IDatabase ✅  
+ * const config = container.get('Config');          // Type: { env: string; debug: boolean } ✅
  * ```
  *
  * @packageDocumentation
  */
 
-// Container builders - choose the API that fits your needs
-export { TypeSafeContainerBuilder } from "./type-safe-container-builder";
-export { FluentContainerBuilder } from "./fluent-container-builder";
+// The unified, fully type-safe container builder
+export { ContainerBuilder } from "./container-builder";
 
 // Type-safe service provider
 export { TypeSafeServiceProvider } from "./type-safe-service-provider";

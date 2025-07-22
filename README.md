@@ -1,1251 +1,441 @@
 # Kizuna 絆
 
-A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides clean, intuitive APIs for managing service lifecycles with support for singleton, scoped, and transient patterns.
+A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with complete type safety and IDE autocompletion.
 
-## Introduction
+## ✨ Features
 
-Kizuna (F, meaning "bond" or "connection" in Japanese) is designed to create strong connections between your application's services through dependency injection. It offers:
+- **🎯 Complete Type Safety**: Full TypeScript support with automatic type inference
+- **🚀 Unified API**: Single API supporting all registration patterns with excellent DX
+- **🔄 Multiple Lifecycles**: Singleton, Scoped, and Transient service management
+- **🏭 Flexible Registration**: Constructor, interface, and factory-based service registration
+- **📝 Perfect IDE Support**: Full autocompletion and compile-time validation
+- **⚡ Zero Dependencies**: Lightweight with no external dependencies
+- **🌍 Universal**: Works in Node.js, browsers, and edge environments
 
-- **Type Safety**: Full TypeScript support with strong typing
-- **Multiple Lifecycles**: Singleton, Scoped, and Transient service management
-- **Flexible Configuration**: Configure services by type or interface name
-- **Factory Support**: Custom factory functions for complex service creation
-- **Environment Agnostic**: Works in Node.js, browsers, and other JavaScript environments
-- **Zero Dependencies**: Lightweight with no external dependencies
+## 🚀 Quick Start
 
-## Runtime Supports
+```bash
+npm install kizuna
+```
 
-Kizuna is designed to work across different JavaScript environments:
+```typescript
+import { ContainerBuilder } from 'kizuna';
+
+// Define your services
+class Logger {
+  log(message: string) { console.log(`[LOG] ${message}`); }
+}
+
+class DatabaseService {
+  constructor(private logger: Logger) {}
+  connect() { this.logger.log('Connected to database'); }
+}
+
+class UserService {
+  constructor(private db: DatabaseService, private logger: Logger) {}
+  getUser(id: string) {
+    this.db.connect();
+    this.logger.log(`Getting user ${id}`);
+    return { id, name: 'John Doe' };
+  }
+}
+
+// 🎯 Register services with full type safety
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)                      // Type: Logger ✨
+  .registerSingleton('Database', DatabaseService, 'Logger') // Dependencies as strings
+  .registerScoped('UserService', UserService, 'Database', 'Logger')
+  .build();
+
+// ✅ Get services with perfect IDE autocompletion
+const userService = container.get('UserService'); // Type: UserService (auto-inferred!)
+const user = userService.getUser('123');          // Full IntelliSense support
+```
+
+## 🎨 The Unified API
+
+Kizuna provides a single, comprehensive API that combines the best of both type safety and flexibility. All registration patterns work together seamlessly with full type inference.
+
+### 🏗️ **Constructor Registration** (Most Common)
+
+Perfect for services with constructor dependencies:
+
+```typescript
+const container = new ContainerBuilder()
+  .registerSingleton('Config', ConfigService)
+  .registerScoped('UserService', UserService, 'Config')      // Dependencies as strings
+  .registerTransient('EmailService', EmailService, 'Config')
+  .build();
+
+// IDE suggests: 'Config', 'UserService', 'EmailService'
+const userService = container.get('UserService'); // Type: UserService ✨
+```
+
+### 🎯 **Interface Registration** (For Abstractions)
+
+Ideal for implementing abstractions and polymorphism:
+
+```typescript
+interface IEmailService {
+  send(to: string, subject: string, body: string): Promise<void>;
+}
+
+class SMTPEmailService implements IEmailService {
+  async send(to: string, subject: string, body: string) { /* implementation */ }
+}
+
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerInterface<IEmailService>('EmailService', SMTPEmailService, 'Logger')
+  .registerScopedInterface<ICache>('Cache', RedisCache, 'Logger')
+  .build();
+
+const emailService = container.get('EmailService'); // Type: IEmailService ✨
+```
+
+### 🏭 **Factory Registration** (For Complex Creation)
+
+Perfect for complex initialization, conditional logic, or primitive values:
+
+```typescript
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  
+  // Factory returning objects
+  .registerFactory('Config', (provider) => {
+    const logger = provider.get('Logger'); // Type: Logger ✨
+    logger.log('Loading configuration...');
+    
+    return {
+      environment: process.env.NODE_ENV || 'development',
+      database: { url: 'postgresql://localhost:5432/app' },
+      features: { analytics: true }
+    };
+  })
+  
+  // Factory returning primitives
+  .registerFactory('MaxRetries', () => 3)
+  .registerFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de'])
+  
+  // Factory returning functions
+  .registerFactory('Validator', () => ({
+    email: (value: string) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value),
+    required: (value: any) => value != null && value !== ''
+  }))
+  
+  .build();
+
+const config = container.get('Config');     // Type: inferred from factory return! ✨
+const maxRetries = container.get('MaxRetries'); // Type: number ✨
+const validator = container.get('Validator');   // Type: validation functions object ✨
+```
+
+### 🔄 **All Lifecycles Supported**
+
+Every registration pattern supports all three lifecycles:
+
+```typescript
+const container = new ContainerBuilder()
+  // Singleton services (shared across entire application)
+  .registerSingleton('Config', ConfigService)
+  .registerInterface<ILogger>('Logger', ConsoleLogger)
+  .registerFactory('Database', (provider) => createConnection())
+  
+  // Scoped services (shared within scope, new per scope)
+  .registerScoped('RequestContext', RequestContext, 'Logger')
+  .registerScopedInterface<ICache>('Cache', MemoryCache, 'Logger')
+  .registerScopedFactory('RequestId', () => crypto.randomUUID())
+  
+  // Transient services (new instance every time)
+  .registerTransient('EmailService', EmailService, 'Logger')
+  .registerTransientInterface<IValidator>('Validator', DefaultValidator)
+  .registerTransientFactory('Timestamp', () => Date.now())
+  
+  .build();
+```
+
+## 🎯 Complete Type Safety
+
+Kizuna provides compile-time type checking and perfect IDE integration:
+
+### ✅ **Compile-Time Validation**
+
+```typescript
+const container = new ContainerBuilder()
+  .registerSingleton('UserService', UserService, 'Logger')
+  .build();
+
+// ❌ TypeScript Error: 'NonExistent' doesn't exist in registry
+const invalid = container.get('NonExistent');
+
+// ✅ Perfect autocompletion suggests only registered services
+const service = container.get(''); // IDE suggests: 'UserService'
+```
+
+### 🔍 **Runtime Validation**
+
+```typescript
+const builder = new ContainerBuilder()
+  .registerSingleton('Service', SomeService, 'MissingDependency'); // Oops!
+
+// Catch configuration errors before runtime
+const issues = builder.validate();
+// Returns: ["Service depends on unregistered service 'MissingDependency'"]
+
+if (issues.length === 0) {
+  const container = builder.build();
+} else {
+  console.error('Configuration issues:', issues);
+}
+```
+
+## 🔄 Working with Scopes
+
+Scopes provide service isolation for request processing, transactions, and multi-tenant scenarios:
+
+### 🌐 **HTTP Request Processing**
+
+```typescript
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)              // Shared across all requests
+  .registerScoped('RequestContext', RequestContext) // Unique per request
+  .registerScoped('UserService', UserService, 'Logger', 'RequestContext')
+  .build();
+
+// Express.js middleware
+app.use((req, res, next) => {
+  req.scope = container.startScope(); // Create request scope
+  res.on('finish', () => req.scope.dispose()); // Cleanup when done
+  next();
+});
+
+app.get('/users/:id', (req, res) => {
+  const userService = req.scope.get('UserService'); // Request-specific instance
+  const user = userService.getUser(req.params.id);
+  res.json(user);
+});
+```
+
+### 💾 **Database Transactions**
+
+```typescript
+async function withTransaction<T>(work: (scope: ServiceLocator) => Promise<T>): Promise<T> {
+  const transactionScope = container.startScope();
+  
+  try {
+    // Register transaction-specific connection
+    const connection = await createConnection();
+    transactionScope.registerInstance('Connection', connection);
+    
+    await connection.beginTransaction();
+    const result = await work(transactionScope);
+    await connection.commit();
+    
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    transactionScope.dispose(); // Always cleanup
+  }
+}
+
+// Usage
+await withTransaction(async (txScope) => {
+  const userRepo = txScope.get('UserRepository'); // Uses transaction connection
+  const orderRepo = txScope.get('OrderRepository'); // Same transaction
+  
+  const user = await userRepo.create({ name: 'John' });
+  await orderRepo.create({ userId: user.id, total: 100 });
+});
+```
+
+## 🏗️ Advanced Patterns
+
+### 🌍 **Multiple Containers for Domain Separation**
+
+For complex applications, separate containers maintain domain boundaries:
+
+```typescript
+// Shared infrastructure
+const sharedContainer = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerSingleton('EmailService', EmailService, 'Logger')
+  .registerInterface<IConfig>('Config', DatabaseConfig)
+  .build();
+
+// User domain container
+const userContainer = new ContainerBuilder()
+  .registerFactory('Logger', () => sharedContainer.get('Logger'))
+  .registerFactory('EmailService', () => sharedContainer.get('EmailService'))
+  .registerScoped('UserService', UserService, 'Logger')
+  .registerScoped('UserNotificationService', UserNotificationService, 'EmailService')
+  .build();
+
+// Order domain container
+const orderContainer = new ContainerBuilder()
+  .registerFactory('Logger', () => sharedContainer.get('Logger'))
+  .registerScoped('OrderService', OrderService, 'Logger')
+  .registerScoped('PaymentService', PaymentService, 'Logger')
+  .build();
+
+// Each domain has isolated services but shares infrastructure
+const userService = userContainer.startScope().get('UserService');
+const orderService = orderContainer.startScope().get('OrderService');
+```
+
+### 🧪 **Testing with Type-Safe Mocks**
+
+```typescript
+describe('UserService', () => {
+  let testContainer: TypeSafeServiceLocator<any>;
+  
+  beforeEach(() => {
+    testContainer = new ContainerBuilder()
+      .registerFactory('Logger', () => ({
+        log: jest.fn(),
+        error: jest.fn()
+      } as any))
+      .registerFactory('Database', () => mockDatabase)
+      .registerScoped('UserService', UserService, 'Database', 'Logger')
+      .build();
+  });
+  
+  it('should create user with mocked dependencies', async () => {
+    const userService = testContainer.get('UserService'); // Type: UserService ✨
+    const user = await userService.createUser({ name: 'Test User' });
+    expect(user.id).toBeDefined();
+  });
+});
+```
+
+### ⚙️ **Environment-Specific Configuration**
+
+```typescript
+const container = new ContainerBuilder()
+  .registerFactory('Config', () => ({
+    environment: process.env.NODE_ENV || 'development',
+    database: { url: process.env.DATABASE_URL },
+    redis: { url: process.env.REDIS_URL }
+  }))
+  
+  .registerFactory('EmailService', (provider) => {
+    const config = provider.get('Config');
+    
+    // Environment-specific implementations
+    return config.environment === 'production'
+      ? new SMTPEmailService(config.smtp)
+      : new MockEmailService();
+  })
+  
+  .registerFactory('Cache', (provider) => {
+    const config = provider.get('Config');
+    
+    return config.redis.url
+      ? new RedisCache(config.redis.url)
+      : new InMemoryCache();
+  })
+  
+  .build();
+```
+
+## 📚 Examples
+
+Check out comprehensive examples in the [`examples/`](./examples) directory:
+
+- **[`unified-container-example.ts`](./examples/unified-container-example.ts)** - Complete unified API demonstration
+- **[`multiple-containers-domain-separation.ts`](./examples/multiple-containers-domain-separation.ts)** - E-commerce app with domain separation
+- **[`validation-example.ts`](./examples/validation-example.ts)** - Configuration validation patterns
+
+## 📖 API Reference
+
+### ContainerBuilder
+
+The main class for configuring your dependency injection container.
+
+#### Constructor Registration Methods
+
+```typescript
+// Singleton lifecycle
+.registerSingleton<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.registerInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
+.registerFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+
+// Scoped lifecycle (one instance per scope)
+.registerScoped<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.registerScopedInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
+.registerScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+
+// Transient lifecycle (new instance every time)
+.registerTransient<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.registerTransientInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
+.registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+```
+
+#### Container Management
+
+```typescript
+.build(): TypeSafeServiceLocator<TRegistry>  // Build the container
+.validate(): string[]                        // Validate configuration
+.clear(): ContainerBuilder                   // Clear all registrations
+.count: number                              // Number of registered services
+.isRegistered(key: string): boolean         // Check if service is registered
+```
+
+### TypeSafeServiceLocator
+
+The built container interface for service resolution.
+
+```typescript
+interface TypeSafeServiceLocator<TRegistry> {
+  get<K extends keyof TRegistry>(key: K): TRegistry[K];  // Resolve service
+  startScope(): TypeSafeServiceLocator<TRegistry>;      // Create new scope
+  dispose(): void;                                      // Cleanup resources
+}
+```
+
+### Service Lifecycles
+
+- **Singleton**: One instance per container (application lifetime)
+- **Scoped**: One instance per scope (request/transaction lifetime)  
+- **Transient**: New instance every time requested
+
+## 🌍 Runtime Support
+
+Kizuna works across different JavaScript environments:
 
 - **Node.js**: Version 18.0.0 and above
 - **Browsers**: Modern browsers supporting ES2020+
 - **Edge Environments**: Cloudflare Workers, Vercel Edge Functions, etc.
 - **Other Runtimes**: Deno, Bun, and other JavaScript runtimes
 
-## Browser Supports
+## 📝 TypeScript
 
-- **Chrome**: 85+
-- **Firefox**: 80+
-- **Safari**: 14+
-- **Edge**: 85+
-
-## Installation
-
-```bash
-# npm
-npm install kizuna
-
-# yarn
-yarn add kizuna
-
-# pnpm
-pnpm add kizuna
-```
-
-## Registration APIs
-
-Kizuna offers two registration APIs that can be used independently or together in the same application:
-
-### 🎯 **Type-Safe API** *(Recommended for most projects)*
-
-The type-safe API provides IDE autocompletion, type inference, and compile-time safety - ideal for TypeScript projects prioritizing developer productivity:
-
-```typescript
-import { ContainerBuilder } from "kizuna";
-
-class ConfigService {
-  getDbUrl() { return "postgresql://localhost:5432/myapp"; }
-}
-
-class DatabaseService {
-  constructor(private config: ConfigService) {}
-  connect() { return `Connected to ${this.config.getDbUrl()}`; }
-}
-
-class UserService {
-  constructor(private db: DatabaseService) {}
-  getUser(id: string) {
-    this.db.connect();
-    return { id, name: "John Doe", email: "john@example.com" };
-  }
-}
-
-// ✨ Type-safe registration with autocompletion
-const container = new ContainerBuilder()
-  .registerSingleton('Config', ConfigService)           // Type inferred: ConfigService
-  .registerSingleton('Database', DatabaseService, 'Config')  // Dependencies as strings  
-  .registerScoped('UserService', UserService, 'Database')    // Chained with type safety
-  .buildTypeSafe();
-
-// IDE autocompletion suggests: 'Config', 'Database', 'UserService'
-const userService = container.get('UserService');  // Type: UserService (auto-inferred!)
-const user = userService.getUser("123");           // Full IntelliSense support
-```
-
-### ⚡ **Fluent API** *(For maximum flexibility)*
-
-The fluent callback-based API provides maximum flexibility and control over service creation:
-
-```typescript
-// Configure services with callback API
-const builder = new ContainerBuilder();
-builder.addSingleton((r) => r.fromType(ConfigService));
-builder.addSingleton((r) => r.fromType(DatabaseService).withDependencies(ConfigService));
-builder.addScoped((r) => r.fromType(UserService).withDependencies(DatabaseService));
-
-// Build and use
-const container = builder.build();
-const userService = container.get(UserService);
-const user = userService.getUser("123");
-```
-
-## 🆚 **API Comparison**
-
-| Feature | Type-Safe API | Fluent API |
-|---------|---------------|------------|
-| **Registration Style** | Direct: `registerSingleton('key', Class, ...deps)` | Callback: `addSingleton(r => r.fromType(Class).withDeps(...))` |
-| **Build Method** | `buildTypeSafe()` → `TypeSafeServiceLocator` | `build()` → `ServiceLocator` |
-| **Type Safety** | ✅ Full type inference & autocompletion | ⚠️ Requires manual type annotations |
-| **IDE Support** | ✅ String key autocompletion | ⚠️ No autocompletion for string keys |
-| **Compile-Time Safety** | ✅ Errors for unregistered services | ❌ Runtime-only validation |
-| **Service Resolution** | `get('ServiceKey')` → fully typed | `get<Type>('ServiceKey')` → requires generics |
-| **Factory Support** | 🔶 Limited to constructor injection | ✅ Full factory/conditional logic support |
-| **Interface Registration** | ❌ Constructor-focused only | ✅ `fromName()` for interface-based patterns |
-| **Learning Curve** | 📈 Gentle - intuitive method names | 📈 Moderate - requires understanding fluent patterns |
-| **Best For** | Most TypeScript projects, new developers | Complex scenarios, advanced patterns |
-
-## 💡 **Which API Should I Choose?**
-
-### **Start with Type-Safe API** *(Recommended for 80% of use cases)*
-
-**Good for:**
-- ✅ New TypeScript projects
-- ✅ Teams prioritizing developer productivity  
-- ✅ Simple to moderate complexity dependency graphs
-- ✅ Constructor-based service patterns
-- ✅ Applications wanting compile-time safety
-
-**Example decision factors:**
-```typescript
-// ✅ Good fit for Type-Safe API
-class UserService {
-  constructor(private db: DatabaseService, private logger: Logger) {}
-}
-
-// Simple, direct registration
-container.registerScoped('UserService', UserService, 'Database', 'Logger');
-```
-
-### **Use Fluent API When You Need Advanced Patterns**
-
-**Required for:**
-- 🔧 Complex factory functions with conditional logic
-- 🔧 Interface-based dependency injection patterns
-- 🔧 Dynamic service registration based on runtime conditions
-- 🔧 Advanced service creation workflows
-
-**Example scenarios requiring Fluent API:**
-```typescript
-// ❗ Requires Fluent API - conditional factory logic
-builder.addSingleton(r =>
-  r.fromName('PaymentGateway').useFactory(provider => {
-    const config = provider.get(Config);
-    return config.isProd 
-      ? new StripeGateway(config.stripeKey)
-      : new MockPaymentGateway();
-  })
-);
-
-// ❗ Requires Fluent API - interface-based registration
-builder.addScoped(r => 
-  r.fromName('IUserRepository').useType(DatabaseUserRepository)
-);
-```
-
-### **✨ Hybrid Approach** *(Combining both APIs)*
-
-You can mix both APIs in the same application:
-
-```typescript
-const container = new ContainerBuilder()
-  // Type-safe API for simple services
-  .registerSingleton('Logger', ConsoleLogger)
-  .registerSingleton('Config', ConfigService)
-  
-  // Fluent API for complex scenarios
-  .addSingleton(r => 
-    r.fromName('PaymentProcessor')
-     .useFactory(provider => {
-       const config = provider.get('Config');
-       return new PaymentProcessor(config.apiUrl, config.apiKey);
-     })
-  )
-  
-  // Back to type-safe for simple services
-  .registerScoped('UserService', UserService, 'Logger')
-  .buildTypeSafe(); // Type safety maintained!
-```
-
-> **💡 Key Takeaway**: Both APIs are first-class citizens in Kizuna. The Type-Safe API covers most common scenarios with good developer experience, while the Fluent API provides the flexibility needed for advanced patterns. You can use them together in the same application, choosing the right tool for each specific use case.
-
-### 🚀 **Type-Safe API Advanced Usage**
-
-The type-safe API supports scoped services with consistent type inference across scopes:
-
-```typescript
-// Advanced type-safe registration
-const container = new ContainerBuilder()
-  .registerSingleton('Logger', ConsoleLogger)
-  .registerSingleton('Database', DatabaseConnection, 'Logger')
-  .registerScoped('UserRepo', UserRepository, 'Database', 'Logger')
-  .registerScoped('OrderRepo', OrderRepository, 'Database')
-  .registerTransient('EmailService', EmailService, 'Logger')
-  .buildTypeSafe();
-
-// Type inference in scoped scenarios
-const scope1 = container.startScope();
-const scope2 = container.startScope();
-
-const userRepo1 = scope1.get('UserRepo');  // Type: UserRepository
-const userRepo2 = scope2.get('UserRepo');  // Type: UserRepository  
-console.log(userRepo1 !== userRepo2);      // true (different scoped instances)
-
-const logger1 = scope1.get('Logger');      // Type: ConsoleLogger
-const logger2 = scope2.get('Logger');      // Type: ConsoleLogger
-console.log(logger1 === logger2);          // true (same singleton instance)
-
-// Compile-time error prevention
-// const invalid = container.get('NonExistent');  // ❌ TypeScript Error!
-```
-
-### Asynchronous Services
-
-Kizuna supports two async patterns: services that perform async operations and services that require async initialization.
-
-#### Async Operations Pattern
-
-For services that perform async operations after being resolved:
-
-```typescript
-import { ContainerBuilder } from "kizuna";
-
-// Services with async operations
-class DatabaseConnection {
-  constructor(private connectionString: string) {}
-
-  async connect() {
-    // Simulate async connection
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return `Connected to ${this.connectionString}`;
-  }
-
-  async query(sql: string) {
-    await this.connect();
-    return `Executed: ${sql}`;
-  }
-}
-
-class UserRepository {
-  constructor(private db: DatabaseConnection) {}
-
-  async findById(id: string) {
-    const result = await this.db.query(`SELECT * FROM users WHERE id = ${id}`);
-    return { id, name: "Jane Doe", result };
-  }
-}
-
-// Configure services normally - container resolution is sync, operations are async
-const builder = new ContainerBuilder();
-builder.addSingleton((r) => r.fromType(DatabaseConnection));
-builder.addScoped((r) =>
-  r.fromType(UserRepository).withDependencies(DatabaseConnection)
-);
-
-const container = builder.build();
-const userRepo = container.get(UserRepository); // Sync resolution
-const user = await userRepo.findById("123"); // Async operation
-```
-
-#### Async Initialization Pattern
-
-For services that require async initialization (loading config, establishing connections, etc.):
-
-```typescript
-// Service that needs async initialization
-class ConfigService {
-  private config: Record<string, string> = {};
-
-  constructor(configData: Record<string, string>) {
-    this.config = configData;
-  }
-
-  get(key: string): string {
-    return this.config[key] || "";
-  }
-}
-
-class DatabaseService {
-  constructor(private config: ConfigService) {}
-
-  // Can perform either sync or async operations after initialization
-  async query(sql: string): Promise<string> {
-    const dbUrl = this.config.get("dbUrl");
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    return `Executed "${sql}" on ${dbUrl}`;
-  }
-}
-
-// Configure with async factory for initialization
-const builder = new ContainerBuilder();
-
-// Async initialization - load config from file/API/network
-builder.addSingleton((r) =>
-  r.fromName("ConfigService").useFactory(async () => {
-    // Simulate loading config from external source
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    const configData = {
-      dbUrl: "postgresql://localhost:5432/myapp",
-      apiKey: "secret-key",
-    };
-
-    return new ConfigService(configData);
-  })
-);
-
-// Usage requires async resolution for services with async initialization
-async function main() {
-  const container = builder.build();
-
-  // First resolve async-initialized services
-  const config = await container.get<ConfigService>("ConfigService");
-
-  // Then create dependent services
-  const builder2 = new ContainerBuilder();
-  builder2.addSingleton((r) =>
-    r.fromName("ConfigService").useFactory(() => config)
-  );
-  builder2.addScoped((r) =>
-    r.fromType(DatabaseService).withDependencies("ConfigService")
-  );
-
-  const container2 = builder2.build();
-  const dbService = container2.get(DatabaseService);
-
-  // Now use the service (sync or async operations)
-  const result = await dbService.query("SELECT * FROM users");
-  console.log(result);
-
-  container2.dispose();
-}
-
-main();
-```
-
-#### Combined Pattern: Async Initialization + Async Operations
-
-```typescript
-class AsyncDatabaseConfig {
-  private config: Record<string, string>;
-  private isConnected = false;
-
-  constructor(configData: Record<string, string>) {
-    this.config = configData;
-  }
-
-  async connect(): Promise<string> {
-    if (!this.isConnected) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      this.isConnected = true;
-    }
-    return `Connected to ${this.config.dbUrl}`;
-  }
-
-  async query(sql: string): Promise<string> {
-    await this.connect();
-    return `Executed: ${sql}`;
-  }
-}
-
-// Configure with async initialization
-builder.addSingleton((r) =>
-  r.fromName("AsyncDatabaseConfig").useFactory(async () => {
-    // Load config asynchronously
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return new AsyncDatabaseConfig({
-      dbUrl: "postgresql://remote:5432/app",
-    });
-  })
-);
-
-// Usage: async initialization + async operations
-const container = builder.build();
-const dbConfig = await container.get<AsyncDatabaseConfig>(
-  "AsyncDatabaseConfig"
-);
-const result = await dbConfig.query("SELECT * FROM users");
-```
-
-## Injecting Dependencies
-
-Kizuna supports multiple ways to configure and inject dependencies:
-
-### Constructor Dependencies
-
-```typescript
-class EmailService {
-  constructor(private config: ConfigService, private logger: LoggerService) {}
-}
-
-// Configure with dependencies
-builder.addTransient((r) =>
-  r.fromType(EmailService).withDependencies(ConfigService, LoggerService)
-);
-```
-
-### Interface-based Configuration
-
-```typescript
-interface IRepository {
-  save(data: any): void;
-}
-
-class DatabaseRepository implements IRepository {
-  save(data: any) {
-    // Implementation
-  }
-}
-
-// Configure by interface name
-builder.addScoped((r) => r.fromName("IRepository").useType(DatabaseRepository));
-
-// Resolve by interface
-const repo = container.get<IRepository>("IRepository");
-```
-
-### Service Factory
-
-Service factories provide flexible control over service instantiation:
-
-```typescript
-// Simple factory
-builder.addSingleton((r) =>
-  r.fromName("ApiClient").useFactory(() => new ApiClient(process.env.API_URL))
-);
-
-// Factory with dependencies
-builder.addScoped((r) =>
-  r.fromName("UserService").useFactory((provider) => {
-    const db = provider.get(DatabaseService);
-    const logger = provider.get<ILogger>("Logger");
-    return new UserService(db, logger);
-  })
-);
-
-// Conditional factory
-builder.addTransient((r) =>
-  r.fromName("Storage").useFactory((provider) => {
-    const config = provider.get(ConfigService);
-    return config.isDevelopment
-      ? new InMemoryStorage()
-      : new RedisStorage(config.redisUrl);
-  })
-);
-```
-
-### Service Provider
-
-The service provider is your runtime container for resolving services:
-
-```typescript
-const container = builder.build();
-
-// Resolve by type
-const userService = container.get(UserService);
-
-// Resolve by string key
-const apiClient = container.get<IApiClient>("ApiClient");
-
-// Create scopes for isolation
-const requestScope = container.startScope();
-const scopedService = requestScope.get(RequestService);
-
-// Clean up when done
-requestScope.dispose();
-```
-
-## When to Use Scopes (`startScope()`)
-
-Scopes create isolated containers where scoped services have separate instances, while singletons remain shared. Understanding when and how to use scopes is crucial for proper resource management and service isolation.
-
-### 🎯 **When to Use Scopes**
-
-#### 1. **HTTP Request Processing**
-Each HTTP request should have its own scope to isolate request-specific services:
-
-```typescript
-// Express.js example
-app.use((req, res, next) => {
-  // Create a scope for this request
-  req.scope = container.startScope();
-  
-  // Store request-specific data
-  req.scope.registerInstance('RequestContext', {
-    requestId: uuid.v4(),
-    userId: req.user?.id,
-    startTime: Date.now()
-  });
-  
-  next();
-});
-
-app.get('/users/:id', async (req, res) => {
-  // Each request gets its own UserService instance
-  const userService = req.scope.get(UserService);
-  const user = await userService.findById(req.params.id);
-  res.json(user);
-});
-
-// Cleanup middleware
-app.use((req, res, next) => {
-  res.on('finish', () => {
-    req.scope.dispose(); // Clean up request scope
-  });
-  next();
-});
-```
-
-#### 2. **Database Transaction Management**
-Scopes ensure each transaction has its own connection and context:
-
-```typescript
-class DatabaseService {
-  private connection: Connection;
-  
-  async withTransaction<T>(work: (scope: ServiceLocator) => Promise<T>): Promise<T> {
-    const transactionScope = this.container.startScope();
-    const connection = await this.createConnection();
-    
-    try {
-      // Register transaction-specific connection
-      transactionScope.registerInstance('DatabaseConnection', connection);
-      await connection.beginTransaction();
-      
-      const result = await work(transactionScope);
-      
-      await connection.commit();
-      return result;
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      await connection.close();
-      transactionScope.dispose();
-    }
-  }
-}
-
-// Usage
-await databaseService.withTransaction(async (txScope) => {
-  const userRepo = txScope.get(UserRepository); // Uses transaction connection
-  const orderRepo = txScope.get(OrderRepository); // Uses same transaction connection
-  
-  const user = await userRepo.create({...});
-  const order = await orderRepo.create({ userId: user.id, ... });
-  
-  return order;
-});
-```
-
-#### 3. **Batch Processing**
-Process each batch item in isolation:
-
-```typescript
-class BatchProcessor {
-  constructor(private container: ServiceLocator) {}
-  
-  async processBatch(items: BatchItem[]): Promise<void> {
-    const results = await Promise.all(
-      items.map(async (item) => {
-        // Each item gets its own scope
-        const itemScope = this.container.startScope();
-        
-        try {
-          // Register item-specific context
-          itemScope.registerInstance('CurrentItem', item);
-          
-          const processor = itemScope.get(ItemProcessor);
-          return await processor.process();
-        } finally {
-          itemScope.dispose(); // Always clean up
-        }
-      })
-    );
-  }
-}
-```
-
-#### 4. **Multi-Tenant Applications**
-Isolate tenant-specific services and data:
-
-```typescript
-class TenantScopeFactory {
-  constructor(private container: ServiceLocator) {}
-  
-  createTenantScope(tenantId: string): ServiceLocator {
-    const tenantScope = this.container.startScope();
-    
-    // Register tenant-specific services
-    tenantScope.registerInstance('TenantContext', { tenantId });
-    
-    // Tenant-specific database connection
-    tenantScope.registerSingleton(r => 
-      r.fromName('TenantDatabase')
-       .useFactory(provider => {
-         const context = provider.get('TenantContext');
-         return new TenantDatabase(context.tenantId);
-       })
-    );
-    
-    return tenantScope;
-  }
-}
-
-// Usage in request handler
-const tenantScope = tenantScopeFactory.createTenantScope(req.headers['tenant-id']);
-const userService = tenantScope.get(UserService); // Tenant-specific instance
-```
-
-#### 5. **Test Isolation**
-Isolate test scenarios with different configurations:
-
-```typescript
-describe('UserService', () => {
-  let testScope: ServiceLocator;
-  
-  beforeEach(() => {
-    testScope = container.startScope();
-    
-    // Override services for testing
-    testScope.registerInstance('DatabaseService', mockDatabase);
-    testScope.registerInstance('Logger', testLogger);
-  });
-  
-  afterEach(() => {
-    testScope.dispose();
-  });
-  
-  it('should create user', async () => {
-    const userService = testScope.get(UserService); // Uses mock dependencies
-    const user = await userService.create({ name: 'John' });
-    expect(user.id).toBeDefined();
-  });
-});
-```
-
-## Multiple Containers for Domain Separation
-
-For complex applications with multiple domains or bounded contexts, you can create separate containers to maintain clear boundaries and prevent cross-domain dependencies.
-
-### 🏗️ **Domain-Specific Containers**
-
-This pattern allows you to:
-- **Isolate domains** - Each business domain has its own container
-- **Share infrastructure** - Common services (logging, database, email) are shared
-- **Prevent coupling** - Domains cannot accidentally depend on each other
-- **Enable testing** - Test each domain in isolation
-
-### Basic Pattern
-
-```typescript
-// 1. Create shared infrastructure container
-const sharedContainer = createSharedContainer(); // Logger, EmailService, etc.
-
-// 2. Create domain-specific containers that import shared services  
-const userDomainContainer = createUserDomainContainer(sharedContainer);
-const orderDomainContainer = createOrderDomainContainer(sharedContainer);
-
-// 3. Use domain containers with scopes for request processing
-const userScope = userDomainContainer.startScope();
-const userService = userScope.get(UserService); // Domain-specific service
-```
-
-### 🎯 **When to Use Multiple Containers**
-
-**✅ Use Multiple Containers When:**
-- You have distinct business domains or bounded contexts
-- You want to prevent cross-domain dependencies  
-- You're planning to eventually split into microservices
-- You want to enforce architectural boundaries at the dependency level
-
-**❌ Use Single Container When:**
-- Your application is small with tightly coupled features
-- You don't have clear domain boundaries
-- The overhead of managing multiple containers outweighs benefits
-
-### 📖 **Complete Example**
-
-See [`examples/multiple-containers-domain-separation.ts`](./examples/multiple-containers-domain-separation.ts) for a comprehensive e-commerce application example demonstrating:
-- User domain (UserService, UserNotificationService) 
-- Order domain (OrderService, PaymentService)
-- Shared infrastructure (Logger, EmailService, DatabaseConfig)
-- Express.js integration with scoped request handling
-- Cross-domain workflows and testing isolation
-
-### ❌ **When NOT to Use Scopes**
-
-#### 1. **Long-Lived Operations**
-Don't create scopes for operations that run for extended periods:
-
-```typescript
-// ❌ BAD: Long-lived scope holds resources
-const longScope = container.startScope();
-setInterval(() => {
-  const service = longScope.get(SomeService);
-  service.doWork();
-}, 1000); // Never disposed - memory leak!
-
-// ✅ GOOD: Create scope per operation
-setInterval(() => {
-  const scope = container.startScope();
-  try {
-    const service = scope.get(SomeService);
-    service.doWork();
-  } finally {
-    scope.dispose();
-  }
-}, 1000);
-```
-
-#### 2. **Singleton-Only Services**
-If all your services are singletons, scopes provide no benefit:
-
-```typescript
-// All singletons - scoping is unnecessary
-builder.addSingleton(r => r.fromType(ConfigService));
-builder.addSingleton(r => r.fromType(Logger));
-builder.addSingleton(r => r.fromType(DatabaseService));
-
-// Scope doesn't change behavior - all services are shared anyway
-const scope = container.startScope();
-```
-
-#### 3. **Simple, Stateless Operations**
-For simple operations without resource management needs:
-
-```typescript
-// ❌ UNNECESSARY: Simple calculation doesn't need scope
-const scope = container.startScope();
-const mathService = scope.get(MathService);
-const result = mathService.add(2, 3);
-scope.dispose();
-
-// ✅ BETTER: Use root container
-const mathService = container.get(MathService);
-const result = mathService.add(2, 3);
-```
-
-### 🔧 **Scope Best Practices**
-
-#### 1. **Always Dispose Scopes**
-```typescript
-// ✅ GOOD: Try-finally ensures cleanup
-const scope = container.startScope();
-try {
-  const service = scope.get(ServiceType);
-  return await service.doWork();
-} finally {
-  scope.dispose();
-}
-
-// ✅ GOOD: Using pattern
-async function withScope<T>(container: ServiceLocator, work: (scope: ServiceLocator) => Promise<T>): Promise<T> {
-  const scope = container.startScope();
-  try {
-    return await work(scope);
-  } finally {
-    scope.dispose();
-  }
-}
-```
-
-#### 2. **Scope Lifetime Should Match Operation Lifetime**
-```typescript
-// ✅ GOOD: Request scope matches request lifetime
-app.use((req, res, next) => {
-  req.scope = container.startScope();
-  res.on('finish', () => req.scope.dispose());
-  next();
-});
-
-// ✅ GOOD: Transaction scope matches transaction lifetime
-await db.withTransaction(async (txScope) => {
-  // Work with txScope
-  // Scope disposed when transaction ends
-});
-```
-
-#### 3. **Register Scoped Services Appropriately**
-```typescript
-// Configure services with appropriate lifetimes
-builder.addSingleton(r => r.fromType(ConfigService));     // Shared across all scopes
-builder.addSingleton(r => r.fromType(Logger));            // Shared across all scopes
-builder.addScoped(r => r.fromType(DatabaseConnection));   // One per scope
-builder.addScoped(r => r.fromType(UserContext));          // One per scope
-builder.addTransient(r => r.fromType(EmailService));      // New instance every time
-```
-
-### 🎭 **Scope vs Lifecycle Summary**
-
-| Lifecycle | Root Container | Scoped Container | Use Case |
-|-----------|---------------|------------------|----------|
-| **Singleton** | Same instance | Same instance | Global services (config, logging) |
-| **Scoped** | New each time | Same within scope | Request/transaction context |
-| **Transient** | New each time | New each time | Stateless utilities |
-
-Understanding scopes helps you build applications with proper resource management, service isolation, and predictable behavior across different execution contexts.
-
-## Service Configuration Methods
-
-Kizuna provides different methods for configuring services depending on your use case. Understanding when to use each method is key to effective dependency injection.
-
-### `fromType()` - Constructor-based Services
-
-Use `fromType()` when you want to register a concrete class by its constructor.
-
-**When to use:**
-
-- You have a concrete class with a constructor
-- You want type safety and IntelliSense support
-- Dependencies are injected via constructor parameters
-- Most common and recommended approach
-
-**Syntax:** `r.fromType(ConstructorFunction)`
-
-```typescript
-class DatabaseService {
-  constructor(private config: ConfigService) {}
-  connect() {
-    /* implementation */
-  }
-}
-
-class UserService {
-  constructor(private db: DatabaseService, private logger: LoggerService) {}
-  getUser(id: string) {
-    /* implementation */
-  }
-}
-
-// Configure concrete classes
-builder.addSingleton((r) => r.fromType(ConfigService));
-builder.addSingleton((r) =>
-  r.fromType(DatabaseService).withDependencies(ConfigService)
-);
-builder.addScoped((r) =>
-  r.fromType(UserService).withDependencies(DatabaseService, LoggerService)
-);
-
-// Resolve by constructor
-const userService = container.get(UserService);
-```
-
-### `fromName()` - String-based Services
-
-Use `fromName()` when you need to register services by string identifiers.
-
-**When to use:**
-
-- Implementing interfaces or abstract types
-- Multiple implementations of the same interface
-- Cross-module dependencies where you don't want to import types
-- Dynamic service registration
-- When you need to avoid circular import dependencies
-
-**Syntax:** `r.fromName('ServiceName')`
-
-```typescript
-interface ILogger {
-  log(message: string): void;
-}
-
-interface IRepository<T> {
-  findById(id: string): T;
-  save(item: T): void;
-}
-
-class ConsoleLogger implements ILogger {
-  log(message: string) {
-    console.log(message);
-  }
-}
-
-class FileLogger implements ILogger {
-  log(message: string) {
-    /* write to file */
-  }
-}
-
-class UserRepository implements IRepository<User> {
-  findById(id: string): User {
-    /* implementation */
-  }
-  save(user: User): void {
-    /* implementation */
-  }
-}
-
-// Configure by interface name
-builder.addSingleton((r) => r.fromName("ILogger").useType(ConsoleLogger));
-builder.addScoped((r) => r.fromName("IUserRepository").useType(UserRepository));
-
-// Multiple implementations
-builder.addSingleton((r) => r.fromName("ConsoleLogger").useType(ConsoleLogger));
-builder.addSingleton((r) => r.fromName("FileLogger").useType(FileLogger));
-
-// Resolve by string key
-const logger = container.get<ILogger>("ILogger");
-const userRepo = container.get<IRepository<User>>("IUserRepository");
-```
-
-### `useType()` vs `useFactory()` - Implementation Methods
-
-After using `fromName()`, you choose how to create the service:
-
-#### `useType()` - Constructor Instantiation
-
-Use when you want the container to call the constructor directly.
-
-```typescript
-// Simple instantiation - no dependencies
-builder.addSingleton((r) => r.fromName("Logger").useType(ConsoleLogger));
-
-// With dependencies
-builder.addScoped((r) =>
-  r
-    .fromName("IUserService")
-    .useType(UserService)
-    .withDependencies(DatabaseService, "Logger")
-);
-```
-
-#### `useFactory()` - Custom Factory Function
-
-Use when you need custom logic for creating the service.
-
-**When to use `useFactory()`:**
-
-- Complex initialization logic
-- Conditional service creation
-- Async initialization (loading config, establishing connections)
-- Services that require specific constructor parameters
-- Integration with external libraries
-- Environment-specific implementations
-
-```typescript
-// Simple factory
-builder.addSingleton((r) =>
-  r
-    .fromName("ApiClient")
-    .useFactory(() => new ApiClient(process.env.API_URL, { timeout: 5000 }))
-);
-
-// Factory with dependencies
-builder.addScoped((r) =>
-  r.fromName("UserService").useFactory((provider) => {
-    const db = provider.get(DatabaseService);
-    const logger = provider.get<ILogger>("Logger");
-    const config = provider.get(ConfigService);
-
-    return new UserService(db, logger, config.getUserServiceOptions());
-  })
-);
-
-// Conditional factory
-builder.addTransient((r) =>
-  r.fromName("Storage").useFactory((provider) => {
-    const config = provider.get(ConfigService);
-
-    if (config.isDevelopment) {
-      return new InMemoryStorage();
-    } else if (config.useRedis) {
-      return new RedisStorage(config.redisUrl);
-    } else {
-      return new FileStorage(config.storagePath);
-    }
-  })
-);
-
-// Async initialization factory
-builder.addSingleton((r) =>
-  r.fromName("DatabaseConnection").useFactory(async (provider) => {
-    const config = provider.get(ConfigService);
-    const connection = new DatabaseConnection(config.connectionString);
-    await connection.connect();
-    return connection;
-  })
-);
-```
-
-### Decision Tree: Which Method to Use?
-
-```
-Do you have a concrete class?
-├─ YES: Use fromType(ClassName)
-│   └─ Need dependencies? Add .withDependencies(...)
-│
-└─ NO: Use fromName('ServiceName')
-    ├─ Simple constructor? Use .useType(ClassName)
-    │   └─ Need dependencies? Add .withDependencies(...)
-    │
-    └─ Complex creation logic? Use .useFactory(...)
-        ├─ Need dependencies? Access via provider parameter
-        └─ Async initialization? Return Promise from factory
-```
-
-### Best Practices
-
-1. **Prefer `fromType()` for concrete classes** - Better type safety and IntelliSense
-2. **Use `fromName()` for interfaces and abstractions** - Enables polymorphism
-3. **Use `useFactory()` for complex initialization** - When constructor isn't enough
-4. **Keep factory functions pure** - Avoid side effects in factories
-5. **Use consistent naming** - Prefix interfaces with 'I' (e.g., 'ILogger', 'IRepository')
-
-### Common Patterns
-
-#### Repository Pattern
-
-```typescript
-// Interface-based registration
-builder.addScoped((r) =>
-  r.fromName("IUserRepository").useType(DatabaseUserRepository)
-);
-builder.addScoped((r) =>
-  r.fromName("IOrderRepository").useType(DatabaseOrderRepository)
-);
-
-// Service depends on interfaces
-builder.addScoped((r) =>
-  r
-    .fromType(OrderService)
-    .withDependencies("IUserRepository", "IOrderRepository")
-);
-```
-
-#### Environment-specific Services
-
-```typescript
-builder.addSingleton((r) =>
-  r.fromName("IEmailService").useFactory((provider) => {
-    const config = provider.get(ConfigService);
-    return config.isDevelopment
-      ? new MockEmailService()
-      : new SmtpEmailService(config.smtpSettings);
-  })
-);
-```
-
-#### Plugin Architecture
-
-```typescript
-// Register multiple implementations
-builder.addTransient((r) => r.fromName("JsonParser").useType(JsonParser));
-builder.addTransient((r) => r.fromName("XmlParser").useType(XmlParser));
-builder.addTransient((r) => r.fromName("CsvParser").useType(CsvParser));
-
-// Factory that chooses implementation
-builder.addTransient((r) =>
-  r.fromName("IParser").useFactory((provider) => {
-    const fileType = getCurrentFileType(); // Your logic
-    return provider.get<IParser>(`${fileType}Parser`);
-  })
-);
-```
-
-## API
-
-### ContainerBuilder
-
-The main class for configuring your dependency injection container.
-
-#### `addSingleton<T>(registration: ServiceBuilderCallback<T>): ContainerBuilder`
-
-Registers a service with singleton lifetime (one instance per application).
-
-**Parameters:**
-
-| Param            | Type                        | Details                                    |
-| :--------------- | :-------------------------- | :----------------------------------------- |
-| **registration** | `ServiceBuilderCallback<T>` | Factory function for service configuration |
-
-**Example:**
-
-```typescript
-builder.addSingleton((r) => r.fromType(ConfigService));
-```
-
-#### `addScoped<T>(registration: ServiceBuilderCallback<T>): ContainerBuilder`
-
-Registers a service with scoped lifetime (one instance per scope).
-
-**Parameters:**
-
-| Param            | Type                        | Details                                    |
-| :--------------- | :-------------------------- | :----------------------------------------- |
-| **registration** | `ServiceBuilderCallback<T>` | Factory function for service configuration |
-
-**Example:**
-
-```typescript
-builder.addScoped((r) =>
-  r.fromType(UserService).withDependencies(DatabaseService)
-);
-```
-
-#### `addTransient<T>(registration: ServiceBuilderCallback<T>): ContainerBuilder`
-
-Registers a service with transient lifetime (new instance every time).
-
-**Parameters:**
-
-| Param            | Type                        | Details                                    |
-| :--------------- | :-------------------------- | :----------------------------------------- |
-| **registration** | `ServiceBuilderCallback<T>` | Factory function for service configuration |
-
-**Example:**
-
-```typescript
-builder.addTransient((r) => r.fromType(Logger));
-```
-
-#### `build(): ServiceLocator`
-
-Builds the configured container and returns a ServiceLocator.
-
-**Returns:** `ServiceLocator` - The built container ready for service resolution
-
-#### `isRegistered<T>(serviceName: string | T): boolean`
-
-Checks if a service is registered in the container.
-
-**Parameters:**
-
-| Param           | Type          | Details                              |
-| :-------------- | :------------ | :----------------------------------- |
-| **serviceName** | `string \| T` | Service name or constructor to check |
-
-#### `validate(): string[]`
-
-Validates all configured services and returns any issues found.
-
-**Returns:** `string[]` - Array of validation warnings/errors
-
-### ServiceLocator
-
-Interface for service resolution and container management.
-
-#### `get<T>(key: ServiceKey<T>): T`
-
-Resolves and returns an instance of the requested service.
-
-**Parameters:**
-
-| Param   | Type            | Details                                        |
-| :------ | :-------------- | :--------------------------------------------- |
-| **key** | `ServiceKey<T>` | Service key (string or constructor) to resolve |
-
-**Returns:** `T` - An instance of the requested service
-
-#### `startScope(): ServiceLocator`
-
-Creates a new scope for isolated service resolution.
-
-**Returns:** `ServiceLocator` - A new scoped container
-
-#### `dispose(): void`
-
-Disposes all services and cleans up resources.
-
-### Service Lifecycles
-
-#### Singleton
-
-- **Lifetime**: Application lifetime
-- **Use Case**: Expensive-to-create services, shared state, configuration
-- **Example**: Database connections, configuration services, caches
-
-#### Scoped
-
-- **Lifetime**: Per scope (e.g., per request)
-- **Use Case**: Request-specific services, transaction contexts
-- **Example**: User context, request processors, database transactions
-
-#### Transient
-
-- **Lifetime**: New instance every time
-- **Use Case**: Lightweight services, stateless operations
-- **Example**: Loggers, utility services, data processors
-
-## TypeScript
-
-Kizuna is built with TypeScript and provides strong type safety. A TypeScript declaration file is bundled with this package.
-
-### Configuration
-
-To get TypeScript to resolve types automatically, ensure your `tsconfig.json` has:
+Kizuna is built with TypeScript and provides complete type safety. Ensure your `tsconfig.json` includes:
 
 ```json
 {
   "compilerOptions": {
     "moduleResolution": "node",
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "strict": true
   }
 }
 ```
 
-### Type Safety Examples
-
-```typescript
-// Type-safe service configuration
-interface IUserRepository {
-  findById(id: string): User;
-}
-
-class UserRepository implements IUserRepository {
-  findById(id: string): User {
-    // Implementation
-  }
-}
-
-// Strongly typed configuration
-builder.addScoped((r) => r.fromName("IUserRepository").useType(UserRepository));
-
-// Type-safe resolution
-const userRepo = container.get<IUserRepository>("IUserRepository");
-// userRepo is now strongly typed as IUserRepository
-```
-
-### Generic Factory Functions
-
-```typescript
-// Generic factory with type inference
-function createFactory<T>(factory: () => T): Factory<T> {
-  return () => factory();
-}
-
-const configFactory = createFactory(() => new AppConfig());
-builder.addSingleton((r) => r.fromName("Config").useFactory(configFactory));
-```
-
-## License
-
-MIT
-
-## Contributing
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## Credits
+## 📜 License
+
+MIT - see [LICENSE](./LICENSE) file for details.
+
+## 🙏 Credits
 
 This project was inspired by the foundational work of Remi Henache on the [injected-ts](https://github.com/remihenache/injected-ts) library.
+
+---
+
+**Kizuna** (絆) - Creating strong bonds between your application's services through dependency injection. 🤝
