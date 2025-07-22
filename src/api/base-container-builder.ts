@@ -31,7 +31,7 @@ export abstract class BaseContainerBuilder {
     protected readonly registrations: Map<string, ServiceWrapper> = new Map();
     protected readonly registrationNames: Set<string> = new Set();
     protected isBuilt: boolean = false;
-    protected strictParameterValidation: boolean = false;
+    protected strictParameterValidation: boolean = true;
 
     /**
      * Creates a new instance of BaseContainerBuilder.
@@ -77,12 +77,13 @@ export abstract class BaseContainerBuilder {
     }
 
     /**
-     * Enables strict parameter name validation for constructor-based registrations.
-     * When enabled, validation will check that dependency names match constructor parameter names.
+     * Disables strict parameter name validation for constructor-based registrations.
+     * By default, validation checks that dependency names match constructor parameter names.
+     * This method allows you to disable that validation if needed.
      * @returns {this} The container builder for method chaining
      */
-    enableStrictParameterValidation(): this {
-        this.strictParameterValidation = true;
+    disableStrictParameterValidation(): this {
+        this.strictParameterValidation = false;
         return this;
     }
 
