@@ -81,6 +81,26 @@ class ContainerBuilder {
 }
 ```
 
+### 5. Parameter Name Validation (Kizuna Feature)
+```typescript
+// ✅ Strict parameter validation enabled by default
+class EmailService {
+    constructor(private logger: Logger, private mailer: MailService) {}
+}
+
+// This will fail validation - parameter names don't match
+builder.registerScoped("EmailService", EmailService, "MailService", "Logger");
+//                                                    ^^^^^^^^^^^ Wrong order!
+
+// ✅ Correct - parameter names match
+builder.registerScoped("EmailService", EmailService, "logger", "mailer");
+
+// ✅ Opt-out if needed (not recommended)
+builder
+    .disableStrictParameterValidation()  // Disable validation
+    .registerScoped("EmailService", EmailService, "MailService", "Logger"); // Now allowed
+```
+
 ## Key Principles
 
 1. **Avoid String-Based Type Detection**: Never rely on class names for behavior

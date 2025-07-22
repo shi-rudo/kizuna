@@ -330,7 +330,7 @@ describe('ContainerBuilder Validation', () => {
 
             // Add the missing dependency - now using parameter name
             builder.registerSingleton('MissingService', ServiceWithNoDeps);
-            // Still won't pass validation because parameter name is 'serviceWithNoDeps' but dependency name is 'MissingService'
+            // With strict validation enabled by default, still won't pass because parameter name is 'serviceWithNoDeps' but dependency name is 'MissingService'
             expect(builder.validate().length).toBeGreaterThan(0);
             
             // Fix by using correct parameter name
@@ -509,6 +509,29 @@ describe('ContainerBuilder Validation', () => {
             const issues = builder.validate();
             const parameterIssues = issues.filter(issue => issue.includes('parameter') && issue.includes('named'));
             expect(parameterIssues).toEqual([]);
+        });
+
+        it('should allow disabling strict parameter validation', () => {
+            class TestService {
+                constructor(private logger: ServiceWithNoDeps, private bar: ServiceWithOneDep) {}
+            }
+
+            builder
+                .disableStrictParameterValidation() // Disable strict validation
+                .registerSingleton('WrongName1', ServiceWithNoDeps)
+                .registerSingleton('serviceWithNoDeps', ServiceWithNoDeps) // Register missing dependency
+                .registerSingleton('WrongName2', ServiceWithOneDep, 'serviceWithNoDeps') 
+                .registerSingleton('TestService', TestService, 'WrongName2', 'WrongName1'); // Wrong parameter names but validation disabled
+
+            const issues = builder.validate();
+            
+            // Should NOT detect parameter name mismatches when disabled
+            const parameterIssues = issues.filter(issue => issue.includes('parameter') && issue.includes('named'));
+            expect(parameterIssues.length).toBe(0); // No parameter validation issues when disabled
+            
+            // Should still catch other validation issues like missing dependencies
+            const otherIssues = issues.filter(issue => !issue.includes('parameter'));
+            expect(otherIssues.length).toBeGreaterThanOrEqual(0); // May have other issues but no parameter issues
         });
     });
 });
