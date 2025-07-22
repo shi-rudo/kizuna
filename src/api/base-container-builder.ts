@@ -31,6 +31,7 @@ export abstract class BaseContainerBuilder {
     protected readonly registrations: Map<string, ServiceWrapper> = new Map();
     protected readonly registrationNames: Set<string> = new Set();
     protected isBuilt: boolean = false;
+    protected strictParameterValidation: boolean = false;
 
     /**
      * Creates a new instance of BaseContainerBuilder.
@@ -73,6 +74,16 @@ export abstract class BaseContainerBuilder {
      */
     getRegisteredServiceNames(): string[] {
         return Array.from(this.registrationNames);
+    }
+
+    /**
+     * Enables strict parameter name validation for constructor-based registrations.
+     * When enabled, validation will check that dependency names match constructor parameter names.
+     * @returns {this} The container builder for method chaining
+     */
+    enableStrictParameterValidation(): this {
+        this.strictParameterValidation = true;
+        return this;
     }
 
     /**
@@ -154,6 +165,29 @@ export abstract class BaseContainerBuilder {
                     );
                 }
             });
+
+            // Validate parameter names match dependencies for constructor-based registrations
+            if (resolver.isConstructorBased()) {
+                const constructor = resolver.getConstructor();
+                if (constructor) {
+                    const paramNames = this.extractParameterNames(constructor);
+                    const deps = resolver.getDependencies();
+                    
+                    // Only validate if we have both parameters and dependencies
+                    // and parameter names were successfully extracted
+                    if (paramNames.length > 0 && deps.length > 0 && paramNames.length >= deps.length) {
+                        deps.forEach((depName, index) => {
+                            const paramName = paramNames[index];
+                            if (paramName && depName !== paramName) {
+                                issues.push(
+                                    `Service '${name}' parameter ${index} is named '${paramName}' but dependency '${depName}' is provided. ` +
+                                    `Consider: .registerSingleton('${name}', ${constructor.name}, ${paramNames.map(p => `'${p}'`).join(', ')})`
+                                );
+                            }
+                        });
+                    }
+                }
+            }
         });
 
         // Check for circular dependencies
@@ -353,6 +387,73 @@ export abstract class BaseContainerBuilder {
             if (isDevelopment()) {
                 this.logError("Error during patch operation:", error);
             }
+        }
+    }
+
+    /**
+     * Extracts parameter names from a constructor function.
+     * @private
+     * @param constructor - The constructor function to analyze
+     * @returns Array of parameter names
+     */
+    private extractParameterNames(constructor: new (...args: any[]) => any): string[] {
+        try {
+            // Convert constructor to string and extract parameter list
+            const constructorStr = constructor.toString();
+            
+            
+            // Match various constructor patterns
+            const patterns = [
+                /constructor\s*\(([^)]*)\)/, // constructor(params)
+                /function\s+\w*\s*\(([^)]*)\)/, // function Name(params)
+                /^\s*\(([^)]*)\)\s*=>/, // (params) => 
+                /^\s*([^=]*?)\s*=>/ // param => or param1, param2 =>
+            ];
+            
+            let paramString = '';
+            for (const pattern of patterns) {
+                const match = constructorStr.match(pattern);
+                if (match) {
+                    paramString = match[1];
+                    break;
+                }
+            }
+            
+            if (!paramString.trim()) {
+                return [];
+            }
+            
+            
+            // Split parameters and clean them up
+            const result = paramString
+                .split(',')
+                .map(param => {
+                    // Remove TypeScript types, default values, destructuring
+                    let cleaned = param
+                        .trim()
+                        .replace(/:\s*[^=,]+/g, '') // Remove : Type
+                        .replace(/\s*=\s*[^,]+/g, '') // Remove = defaultValue
+                        .replace(/^(public|private|protected|readonly)\s+/, '') // Remove access modifiers
+                        .replace(/\s+/g, ''); // Remove extra spaces
+                    
+                    // Handle destructuring and rest params
+                    if (cleaned.includes('{') || cleaned.includes('[') || cleaned.startsWith('...')) {
+                        return '';
+                    }
+                    
+                    return cleaned;
+                })
+                .filter(name => name && name !== '' && !name.startsWith('{') && !name.startsWith('['))
+                .map(name => name.replace(/[^a-zA-Z0-9_$]/g, '')) // Remove special characters
+                .filter(name => name.length > 0);
+                
+            return result;
+        } catch (error) {
+            // If parsing fails, return empty array - better than crashing
+            if (isDevelopment()) {
+                this.logWarning(`Failed to extract parameter names from constructor: ${error}`);
+            }
+            return [];
         }
     }
 
