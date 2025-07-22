@@ -471,6 +471,33 @@ Kizuna works across different JavaScript environments:
 - **Edge Environments**: Cloudflare Workers, Vercel Edge Functions, etc.
 - **Other Runtimes**: Deno, Bun, and other JavaScript runtimes
 
+## ⚡ Concurrency Considerations
+
+**Important**: Kizuna is optimized for JavaScript's single-threaded model and is **not thread-safe**. For concurrent environments:
+
+### Safe Patterns ✅
+```typescript
+// Container-per-worker (recommended)
+const worker = new Worker('worker.js');
+// Each worker creates its own container
+
+// Request-scoped isolation (web servers)
+app.use((req, res, next) => {
+    req.services = rootContainer.startScope(); // Isolated per request
+    res.on('finish', () => req.services.dispose());
+});
+```
+
+### Unsafe Patterns ❌
+```typescript
+// DON'T share containers across threads
+const sharedContainer = builder.build();
+worker1.postMessage({ container: sharedContainer }); // ❌ Race conditions
+worker2.postMessage({ container: sharedContainer }); // ❌ Unsafe
+```
+
+**📖 For detailed guidance, see our [Concurrency Patterns Guide](./docs/concurrency-patterns.md)**
+
 ## 📝 TypeScript
 
 Kizuna is built with TypeScript and provides complete type safety. Ensure your `tsconfig.json` includes:
