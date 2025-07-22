@@ -20,7 +20,7 @@
  *   .registerSingletonInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
  *   
  *   // Factory-based
- *   .registerFactory('Config', (provider) => {
+ *   .registerSingletonFactory('Config', (provider) => {
  *     const logger = provider.get('Logger'); // Type: ConsoleLogger
  *     return { env: 'production', debug: false };
  *   })
