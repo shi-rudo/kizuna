@@ -63,6 +63,15 @@ export class TypeSafeServiceProvider<TRegistry extends ServiceRegistry>
         });
     }
 
+    debug(): void {
+        console.log("--- Registered Services ---");
+        for (const [key, wrapper] of Object.entries(this.registrations)) {
+            const lifecycle = wrapper.getLifecycle();
+            console.log(`${key} -> [${lifecycle}]`);
+        }
+        console.log("-------------------------");
+    }
+
     private getTypeName<T>(keyOrType: ServiceKey<T>): string {
         return typeof keyOrType === "string" ? keyOrType : keyOrType.name;
     }
