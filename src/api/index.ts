@@ -20,7 +20,7 @@
  *   .registerSingletonInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
  *   
  *   // Factory-based
- *   .registerFactory('Config', (provider) => {
+ *   .registerSingletonFactory('Config', (provider) => {
  *     const logger = provider.get('Logger'); // Type: ConsoleLogger
  *     return { env: 'production', debug: false };
  *   })
@@ -37,8 +37,8 @@
 // The unified, fully type-safe container builder
 export { ContainerBuilder } from "./container-builder";
 
-// Type-safe service provider
-export { TypeSafeServiceProvider } from "./type-safe-service-provider";
+// Service provider (type-safe by design)
+export { ServiceProvider } from "./service-provider";
 
 // Contracts and interfaces
 export {
@@ -46,12 +46,8 @@ export {
     PendingService,
     ServiceBuilder,
     ServiceLocator,
-    ServiceRegistration,
     TypeSafeServiceLocator,
 } from "./contracts/interfaces";
 
 // Type definitions
 export * from "./contracts/types";
-
-// Core services
-export { ServiceProvider } from "./service-provider";
