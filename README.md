@@ -16,11 +16,11 @@ A lightweight, type-safe dependency injection container for TypeScript and JavaS
 ## 🚀 Quick Start
 
 ```bash
-npm install kizuna
+npm install @shirudo/kizuna
 ```
 
 ```typescript
-import { ContainerBuilder } from 'kizuna';
+import { ContainerBuilder } from '@shirudo/kizuna';
 
 // Define your services
 class Logger {
