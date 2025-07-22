@@ -445,7 +445,7 @@ export abstract class BaseContainerBuilder {
                     
                     return cleaned;
                 })
-                .filter(name => name && name !== '' && !name.startsWith('{') && !name.startsWith('['))
+                .filter(name => !name.startsWith('{') && !name.startsWith('['))
                 .map(name => name.replace(/[^a-zA-Z0-9_$]/g, '')) // Remove special characters
                 .filter(name => name.length > 0);
                 
