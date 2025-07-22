@@ -12,7 +12,8 @@
  * - Easier testing and maintenance
  */
 
-import { ContainerBuilder, ServiceLocator } from '../src';
+import { FluentContainerBuilder } from '../src/api/fluent-container-builder';
+import { ServiceLocator } from '../src/api/contracts/interfaces';
 
 // ========================================
 // DOMAIN MODELS (for example purposes)
@@ -311,7 +312,7 @@ class MetricsCollector {
  * This container holds services that are used across multiple domains.
  */
 function createSharedContainer(): ServiceLocator {
-  const builder = new ContainerBuilder();
+  const builder = new FluentContainerBuilder();
 
   // Infrastructure services - these are singletons shared across the application
   builder.addSingleton(r => r.fromType(DatabaseConfig));
@@ -327,7 +328,7 @@ function createSharedContainer(): ServiceLocator {
  * This container has access to shared infrastructure and manages user-specific services.
  */
 function createUserDomainContainer(sharedContainer: ServiceLocator): ServiceLocator {
-  const builder = new ContainerBuilder();
+  const builder = new FluentContainerBuilder();
 
   // Import shared services from the infrastructure container
   const logger = sharedContainer.get(Logger);
@@ -358,7 +359,7 @@ function createUserDomainContainer(sharedContainer: ServiceLocator): ServiceLoca
  * This container has access to shared infrastructure and manages order-specific services.
  */
 function createOrderDomainContainer(sharedContainer: ServiceLocator): ServiceLocator {
-  const builder = new ContainerBuilder();
+  const builder = new FluentContainerBuilder();
 
   // Import shared services from the infrastructure container
   const logger = sharedContainer.get(Logger);
