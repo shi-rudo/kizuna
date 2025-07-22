@@ -24,6 +24,10 @@ export class TestStubWithOneDependency implements TestInterface {
         this._testStub = testStub;
     }
 
+    get dependency(): TestStub {
+        return this._testStub;
+    }
+
     doSomething(): string {
         return `${this._testStub.doSomething()}TestStubWithOneDependency doSomething`;
     }
