@@ -148,6 +148,87 @@ const container = new ContainerBuilder()
         return new Date().toISOString();
     })
     
+    // 🎨 Advanced function registration patterns
+    .registerFactory('ValidationRules', () => ({
+        email: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+        required: (value: any) => value != null && value !== '',
+        minLength: (length: number) => (value: string) => value.length >= length,
+        range: (min: number, max: number) => (value: number) => value >= min && value <= max
+    }))
+    
+    .registerFactory('EventBus', () => {
+        const listeners = new Map<string, Function[]>();
+        return {
+            on: (event: string, callback: Function) => {
+                if (!listeners.has(event)) listeners.set(event, []);
+                listeners.get(event)!.push(callback);
+            },
+            emit: (event: string, ...args: any[]) => {
+                const callbacks = listeners.get(event) || [];
+                callbacks.forEach(cb => cb(...args));
+            },
+            off: (event: string, callback: Function) => {
+                const callbacks = listeners.get(event) || [];
+                const index = callbacks.indexOf(callback);
+                if (index > -1) callbacks.splice(index, 1);
+            }
+        };
+    })
+    
+    .registerScopedFactory('PerformanceTracker', () => {
+        const startTime = performance.now();
+        const metrics: { [key: string]: number } = {};
+        
+        return {
+            start: (operation: string) => {
+                metrics[`${operation}_start`] = performance.now();
+            },
+            end: (operation: string) => {
+                const start = metrics[`${operation}_start`];
+                if (start) {
+                    metrics[`${operation}_duration`] = performance.now() - start;
+                }
+            },
+            getMetrics: () => ({ 
+                ...metrics, 
+                totalDuration: performance.now() - startTime 
+            })
+        };
+    })
+    
+    // Function returning different types
+    .registerFactory('EnvironmentConfig', (provider) => {
+        const config = provider.get('AppConfig');
+        
+        // Return different configurations based on environment
+        switch (config.environment) {
+            case 'production':
+                return {
+                    logLevel: 'error',
+                    enableMetrics: true,
+                    cacheTimeout: 3600
+                };
+            case 'development':
+                return {
+                    logLevel: 'debug',
+                    enableMetrics: false,
+                    cacheTimeout: 60
+                };
+            default:
+                return {
+                    logLevel: 'info',
+                    enableMetrics: false,
+                    cacheTimeout: 300
+                };
+        }
+    })
+    
+    // Factory returning a primitive value
+    .registerFactory('MaxRetryAttempts', () => 3)
+    
+    // Factory returning an array
+    .registerFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de', 'ja'])
+    
     .build(); // 🚀 Build the ultimate container!
 
 console.log('✅ Unified container built successfully!\n');
@@ -165,12 +246,31 @@ const database = container.get('IDatabase');        // Type: IDatabase
 const cache = container.get('ICache');              // Type: ICache
 const config = container.get('AppConfig');          // Type: inferred from factory!
 
+// Advanced function-based services are also fully typed!
+const validators = container.get('ValidationRules');     // Type: validation functions object
+const eventBus = container.get('EventBus');             // Type: event bus interface
+const maxRetries = container.get('MaxRetryAttempts');   // Type: number
+const languages = container.get('SupportedLanguages');  // Type: string[]
+
 console.log('Service types resolved:');
 console.log(`- Logger: ${logger.constructor.name}`);
 console.log(`- UserService: ${userService.constructor.name}`);
 console.log(`- Database: ${database.constructor.name}`);
 console.log(`- Cache: ${cache.constructor.name}`);
 console.log(`- Config: ${typeof config}`);
+console.log(`- Validators: ${typeof validators} with ${Object.keys(validators).length} rules`);
+console.log(`- MaxRetries: ${typeof maxRetries} (value: ${maxRetries})`);
+console.log(`- Languages: ${typeof languages} with ${languages.length} items`);
+
+// Demonstrate advanced function services
+console.log('\n🎨 Testing advanced function-based services:');
+console.log(`- Email validation: ${validators.email('test@example.com')}`);
+console.log(`- Required validation: ${validators.required('hello')}`);
+console.log(`- Min length validation: ${validators.minLength(5)('testing')}`);
+
+// Test event bus
+eventBus.on('user-registered', (user: any) => console.log(`- Event received: User ${user.name} registered`));
+eventBus.emit('user-registered', { name: 'Alice', id: 1 });
 
 // =================
 // DEMONSTRATE SCOPED SERVICES

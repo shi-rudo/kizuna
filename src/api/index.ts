@@ -34,12 +34,8 @@
  * @packageDocumentation
  */
 
-// The unified, fully type-safe container builder - everything you need!
+// The unified, fully type-safe container builder
 export { ContainerBuilder } from "./container-builder";
-
-// Legacy builders (deprecated - use ContainerBuilder instead)
-export { TypeSafeContainerBuilder } from "./type-safe-container-builder";
-export { FluentContainerBuilder } from "./fluent-container-builder";
 
 // Type-safe service provider
 export { TypeSafeServiceProvider } from "./type-safe-service-provider";
