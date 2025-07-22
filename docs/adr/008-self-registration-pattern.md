@@ -1,336 +1,102 @@
-# ADR-008: Self-Registration Pattern
+# ADR-008: Decoupled Provider for Factory Functions
 
 ## Status
 
-Accepted
+Accepted (Supersedes previous "Self-Registration Pattern")
 
 ## Context
 
-Kizuna needed to decide whether the ServiceProvider should be available as a resolvable service within the container itself. Three approaches were considered:
+For factory functions to be useful, they need a mechanism to resolve the dependencies required to construct a service. A key architectural decision was how to provide this capability. The primary options were:
 
-1. **No Self-Registration**: ServiceProvider is not available for injection
-2. **Manual Registration**: Users must explicitly register the ServiceProvider
-3. **Automatic Self-Registration**: ServiceProvider automatically registers itself
+1.  **Automatic Self-Registration**: The service provider would automatically register itself as a resolvable service within the container. This would allow any service to inject the provider.
+2.  **No Self-Registration**: The service provider would not be a resolvable service, preventing it from being injected into regular services.
+3.  **Manual Registration**: Require the user to explicitly register the service provider if they wanted to inject it.
+
+The library initially implemented automatic self-registration.
 
 ## Decision
 
-We chose **Automatic Self-Registration** where the ServiceProvider automatically registers itself as a singleton service.
+We have **reversed the original decision**. The service provider is **no longer a self-registered or resolvable service**. 
+
+Instead, the `TypeSafeServiceLocator` (the provider) is **explicitly passed as an argument only to factory functions** at the time of resolution. It cannot be injected into a service's constructor.
 
 ## Rationale
 
-### Self-Registration Implementation
+This change was made to enforce a cleaner dependency injection architecture and discourage the use of the Service Locator, which is widely considered an anti-pattern.
 
-```typescript
-class ServiceProvider implements ServiceLocator {
-  constructor(private readonly registrations: Record<string, Container>) {
-    this.addItSelfResolver();
-  }
+1.  **Discourages the Service Locator Anti-Pattern**: When the container itself is injectable, services can use it to fetch their own dependencies. This hides the service's true dependencies, making the code harder to understand, test, and maintain. By making the provider non-injectable, we force dependencies to be declared explicitly in the service's constructor.
 
-  private addItSelfResolver(): void {
-    this.registrations[ServiceProvider.name] = new SingletonLifecycle(
-      () => this,
-      []
-    );
-  }
-}
-```
+2.  **Promotes Clear, Explicit Dependencies**: A class's dependencies should be part of its public contract (the constructor signature). The new model enforces this. It is immediately clear what a service needs to function, without having to read its implementation to see what it resolves from a service locator.
 
-### Benefits of Self-Registration
+3.  **Vastly Improved Testability**: Services that do not depend on the container are much easier to unit test. Dependencies can be mocked and passed directly to the constructor. If a service depends on the provider, tests would need to construct and configure a full container instance, which is complex and couples the test to the DI framework.
 
-#### 1. **Service Locator Pattern Support**
-
-```typescript
-// Services can access the container for advanced scenarios
-class AdvancedService {
-  constructor(private readonly serviceProvider: ServiceProvider) {}
-
-  processWithDynamicDependencies(): void {
-    const pluginType = this.determinePluginType();
-    const plugin = this.serviceProvider.get(pluginType);
-    plugin.execute();
-  }
-}
-
-// Registration
-builder.addSingleton((r) =>
-  r.fromType(AdvancedService).withDependencies(ServiceProvider)
-);
-```
-
-- Enables advanced scenarios requiring dynamic service resolution
-- Supports plugin architectures and factory patterns
-- Allows services to resolve dependencies conditionally
-
-#### 2. **Factory Pattern Convenience**
-
-```typescript
-// Factories can resolve dependencies without parameter passing
-builder.addSingleton((r) =>
-  r.fromName("DatabaseService").useFactory((provider: ServiceProvider) => {
-    const config = provider.get<DatabaseConfig>("DatabaseConfig");
-    const logger = provider.get<Logger>("Logger");
-    return new DatabaseService(config.connectionString, logger);
-  })
-);
-```
-
-- Factory functions have direct access to ServiceProvider
-- No need to manually pass the provider through dependency chains
-- Cleaner factory implementations
-
-#### 3. **Scope Access Within Services**
-
-```typescript
-class RequestHandler {
-  constructor(private readonly serviceProvider: ServiceProvider) {}
-
-  async handleRequest(request: Request): Promise<Response> {
-    // Create a scoped container for this request
-    const requestScope = this.serviceProvider.startScope();
-
-    try {
-      const processor = requestScope.get(RequestProcessor);
-      return await processor.process(request);
-    } finally {
-      requestScope.dispose();
-    }
-  }
-}
-```
-
-- Services can create and manage their own scopes
-- Enables advanced lifetime management patterns
-- Supports request-scoped processing architectures
-
-#### 4. **Consistency with Dependency Injection Principles**
-
-```typescript
-// ServiceProvider is just another service dependency
-class ServiceA {
-  constructor(
-    private readonly serviceB: ServiceB,
-    private readonly serviceProvider: ServiceProvider
-  ) {}
-}
-
-// Uniform registration pattern
-builder.addSingleton((r) =>
-  r.fromType(ServiceA).withDependencies(ServiceB, ServiceProvider)
-);
-```
-
-- ServiceProvider follows the same injection patterns as other services
-- No special handling or different resolution mechanisms needed
-- Consistent with standard dependency injection practices
-
-### Implementation Details
-
-#### Automatic Registration
-
-```typescript
-constructor(private readonly registrations: Record<string, Container>) {
-  // Automatically register itself
-  this.addItSelfResolver();
-}
-
-private addItSelfResolver(): void {
-  this.registrations[ServiceProvider.name] = new SingletonLifecycle(
-    () => this,
-    []
-  );
-}
-```
-
-#### Type-Safe Resolution
-
-```typescript
-// Resolve as constructor type
-const provider = container.get(ServiceProvider);
-
-// Resolve as string key
-const provider = container.get<ServiceProvider>("ServiceProvider");
-```
-
-#### Singleton Behavior
-
-```typescript
-// Same instance returned across all resolutions
-const provider1 = container.get(ServiceProvider);
-const provider2 = container.get(ServiceProvider);
-// provider1 === provider2 (same instance)
-```
-
-### Trade-offs Accepted
-
-#### Advantages
-
-- **Convenience**: No manual registration required
-- **Consistency**: Follows standard dependency injection patterns
-- **Flexibility**: Enables advanced service resolution scenarios
-- **Factory Support**: Simplifies factory function implementations
-- **Scope Management**: Services can manage their own scopes
-
-#### Disadvantages
-
-- **Service Locator Anti-Pattern**: Can lead to service locator usage
-- **Hidden Dependencies**: Services may resolve dependencies without declaring them
-- **Testing Complexity**: Harder to mock or isolate services using the provider
-- **Circular Dependency Risk**: ServiceProvider depends on itself conceptually
-
-### Alternatives Considered
-
-#### No Self-Registration
-
-```typescript
-// Rejected approach
-class ServiceProvider {
-  constructor(private readonly registrations: Record<string, Container>) {
-    // No self-registration
-  }
-}
-
-// ServiceProvider not available for injection
-const service = container.get(ServiceProvider); // Would throw error
-```
-
-- **Rejected**: Limits advanced scenarios requiring dynamic resolution
-- **Rejected**: Makes factory patterns more complex
-- **Rejected**: Prevents services from managing scopes
-
-#### Manual Registration Required
-
-```typescript
-// Rejected approach
-const builder = new ContainerBuilder();
-
-// User must explicitly register the provider
-builder.addSingleton((r) =>
-  r.fromName("ServiceProvider").useFactory((provider) => provider)
-);
-
-const container = builder.build();
-```
-
-- **Rejected**: Additional ceremony for common use case
-- **Rejected**: Easy to forget, leading to runtime errors
-- **Rejected**: Inconsistent behavior across different container instances
-
-#### Interface-Based Registration
-
-```typescript
-// Rejected approach
-interface IServiceLocator {
-  get<T>(key: ServiceKey<T>): T;
-}
-
-class ServiceProvider implements IServiceLocator {
-  constructor(registrations: Record<string, Container>) {
-    this.registrations["IServiceLocator"] = new SingletonLifecycle(
-      () => this,
-      []
-    );
-  }
-}
-```
-
-- **Rejected**: Additional interface abstraction for minimal benefit
-- **Rejected**: Users would expect both interface and concrete registration
-- **Rejected**: Complicates the API without clear advantages
+4.  **Preserves the Power of Factories**: The primary legitimate use case for accessing the provider is within factory functions for complex, conditional, or dynamic service creation. The new model retains this power precisely where it is needed, without exposing the provider to the rest of the application.
 
 ## Implementation Pattern
 
-### Basic Service Locator Usage
+The service provider is not a registered service. Attempting to inject it will fail.
+
+### Incorrect Usage (No Longer Possible)
 
 ```typescript
-class PluginManager {
-  constructor(private readonly serviceProvider: ServiceProvider) {}
-
-  loadPlugin(pluginName: string): IPlugin {
-    // Dynamic resolution based on configuration
-    const pluginKey = `Plugin_${pluginName}`;
-    return this.serviceProvider.get<IPlugin>(pluginKey);
+// This service attempts to inject the provider, which is an anti-pattern.
+class MyService {
+  constructor(private provider: TypeSafeServiceLocator<{}>) { // This will fail
+    // ...
   }
 }
 
-// Registration
-builder.addSingleton((r) =>
-  r.fromType(PluginManager).withDependencies(ServiceProvider)
-);
+// The following registration would lead to a resolution error because
+// `TypeSafeServiceLocator` is not a registered service.
+const builder = new ContainerBuilder()
+  .registerSingleton('MyService', MyService, 'TypeSafeServiceLocator');
 ```
 
-### Factory with Provider Access
+### Correct Usage (Factory-Based)
+
+The provider is passed as an argument to the factory function, where its use is appropriate.
 
 ```typescript
-// Complex initialization requiring multiple services
-builder.addSingleton((r) =>
-  r.fromName("EmailService").useFactory((provider: ServiceProvider) => {
-    const config = provider.get<EmailConfig>("EmailConfig");
-    const logger = provider.get<Logger>("Logger");
-    const metrics = provider.get<MetricsCollector>("MetricsCollector");
-
-    return new EmailService(config, logger, metrics);
-  })
-);
-```
-
-### Scope Management in Services
-
-```typescript
-class BatchProcessor {
-  constructor(private readonly serviceProvider: ServiceProvider) {}
-
-  async processBatch(items: BatchItem[]): Promise<void> {
-    for (const item of items) {
-      // Create isolated scope for each item
-      const itemScope = this.serviceProvider.startScope();
-
-      try {
-        const processor = itemScope.get<ItemProcessor>("ItemProcessor");
-        await processor.process(item);
-      } finally {
-        itemScope.dispose();
-      }
+// A factory function receives the provider to resolve dependencies.
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerFactory('ComplexService', (provider) => { // provider is passed here
+    const logger = provider.get('Logger'); // Correctly resolve dependencies
+    
+    // Perform complex or conditional logic
+    if (process.env.NODE_ENV === 'development') {
+      return new ComplexService(logger, new DevTools());
+    } else {
+      return new ComplexService(logger, new ProdTools());
     }
-  }
-}
+  })
+  .build();
+
+// The service is created via its factory, which correctly uses the provider.
+const service = container.get('ComplexService');
 ```
 
 ## Consequences
 
 ### Positive
 
-- **Advanced Patterns**: Enables sophisticated service resolution scenarios
-- **Factory Simplicity**: Factories have direct access to the container
-- **Scope Control**: Services can manage scopes for specific operations
-- **Consistency**: ServiceProvider behaves like any other injected service
+*   **Architectural Integrity**: Prevents the Service Locator anti-pattern and promotes a clean DI architecture.
+*   **Improved Testability**: Services are easier to unit test in isolation.
+*   **Clear Dependencies**: A service's dependencies are made explicit in its constructor.
+*   **Reduced Complexity**: Eliminates the risk of hidden dependencies and complex resolution paths inside services.
 
 ### Negative
 
-- **Anti-Pattern Risk**: May encourage service locator usage over dependency injection
-- **Hidden Dependencies**: Services can acquire dependencies without declaring them
-- **Testing Challenges**: Harder to unit test services that use the provider
-- **Complexity**: Can lead to more complex service graphs
+*   **More Ceremony for Dynamic Resolution**: If a service genuinely needs to resolve dependencies dynamically, it *must* be constructed via a factory. This is a positive trade-off, as it makes the choice to use dynamic resolution an explicit architectural decision.
 
-## Guidelines
+## Alternatives Considered
 
-### When to Use ServiceProvider Injection
+### Automatic Self-Registration
 
-#### Appropriate Use Cases
+*   **Description**: The provider automatically registers itself as an injectable service.
+*   **Reason for Rejection**: This was the previous model. It was rejected because it actively encourages the Service Locator anti-pattern, which leads to poor architectural outcomes regarding testability and maintainability.
 
-- **Factory Implementations**: When creating services dynamically
-- **Plugin Architectures**: Loading plugins based on configuration
-- **Scope Management**: Creating isolated scopes for specific operations
-- **Conditional Resolution**: Resolving different services based on runtime conditions
+### Manual Registration
 
-#### Avoid ServiceProvider Injection For
-
-- **Regular Dependencies**: Use constructor injection instead
-- **Configuration**: Inject specific config objects, not the provider
-- **Simple Services**: Services with static, known dependencies
-
-### Best Practices
-
-1. **Minimize Usage**: Use sparingly and only for advanced scenarios
-2. **Document Intent**: Clearly document why the provider is needed
-3. **Consider Alternatives**: Evaluate if the dependency can be injected directly
-4. **Test Isolation**: Create test doubles for the provider in unit tests
+*   **Description**: Allow the user to explicitly register the provider if they want to inject it.
+*   **Reason for Rejection**: This is verbose and still enables the anti-pattern. The goal is to guide users toward a better architecture, and allowing manual registration would be a loophole that undermines that goal.
