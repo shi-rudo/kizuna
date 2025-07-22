@@ -8,6 +8,7 @@ A lightweight, type-safe dependency injection container for TypeScript and JavaS
 - **🚀 Unified API**: Single API supporting all registration patterns with excellent DX
 - **🔄 Multiple Lifecycles**: Singleton, Scoped, and Transient service management
 - **🏭 Flexible Registration**: Constructor, interface, and factory-based service registration
+- **🛡️ Parameter Validation**: Automatic validation of dependency names vs constructor parameters
 - **📝 Perfect IDE Support**: Full autocompletion and compile-time validation
 - **⚡ Zero Dependencies**: Lightweight with no external dependencies
 - **🌍 Universal**: Works in Node.js, browsers, and edge environments
@@ -187,6 +188,66 @@ if (issues.length === 0) {
 } else {
   console.error('Configuration issues:', issues);
 }
+```
+
+### 🎯 **Strict Parameter Validation**
+
+Kizuna automatically validates that your dependency names match constructor parameter names, preventing runtime errors from incorrect dependency order:
+
+```typescript
+class EmailService {
+  // Constructor parameters: logger, mailer
+  constructor(private logger: Logger, private mailer: MailService) {}
+}
+
+// ❌ Wrong parameter order - will fail validation
+const builder = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerSingleton('MailService', MailService, 'Logger')
+  .registerScoped('EmailService', EmailService, 'MailService', 'Logger'); // Wrong order!
+
+const issues = builder.validate();
+// Returns: [
+//   "Service 'EmailService' parameter 0 is named 'logger' but dependency 'MailService' is provided",
+//   "Service 'EmailService' parameter 1 is named 'mailer' but dependency 'Logger' is provided"
+// ]
+
+// ✅ Correct parameter order - validation passes
+const correctBuilder = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerSingleton('MailService', MailService, 'Logger')
+  .registerScoped('EmailService', EmailService, 'logger', 'mailer'); // Matches constructor!
+
+correctBuilder.validate(); // Returns: [] (no issues)
+```
+
+**Key Benefits:**
+- **🛡️ Prevents Runtime Errors**: Catches dependency order mismatches at validation time
+- **🎯 Enabled by Default**: Works automatically with no setup required
+- **💡 Helpful Suggestions**: Provides corrected registration examples in error messages
+- **🔧 Opt-out Available**: Can be disabled if needed with `.disableStrictParameterValidation()`
+
+**When Parameter Validation Helps:**
+```typescript
+// Before: Runtime error when EmailService tries to use dependencies
+class EmailService {
+  constructor(private logger: Logger, private config: ConfigService) {}
+  
+  sendEmail() {
+    this.logger.log('Sending email...'); // 💥 Runtime error if dependencies swapped!
+  }
+}
+
+// After: Validation catches the error before runtime
+builder.validate(); // Catches parameter name mismatches early
+```
+
+**Disable if needed** (not recommended):
+```typescript
+const container = new ContainerBuilder()
+  .disableStrictParameterValidation() // Turn off validation
+  .registerScoped('EmailService', EmailService, 'config', 'logger') // Order doesn't matter
+  .build();
 ```
 
 ## 🔄 Working with Scopes
@@ -375,11 +436,12 @@ The main class for configuring your dependency injection container.
 #### Container Management
 
 ```typescript
-.build(): TypeSafeServiceLocator<TRegistry>  // Build the container
-.validate(): string[]                        // Validate configuration
-.clear(): ContainerBuilder                   // Clear all registrations
-.count: number                              // Number of registered services
-.isRegistered(key: string): boolean         // Check if service is registered
+.build(): TypeSafeServiceLocator<TRegistry>        // Build the container
+.validate(): string[]                              // Validate configuration
+.clear(): ContainerBuilder                         // Clear all registrations
+.disableStrictParameterValidation(): ContainerBuilder  // Disable parameter name validation
+.count: number                                    // Number of registered services
+.isRegistered(key: string): boolean               // Check if service is registered
 ```
 
 ### TypeSafeServiceLocator
