@@ -47,11 +47,17 @@ invalidationIssues.forEach((issue, i) => console.log(`  ${i + 1}. ${issue}`));
 
 // Example 3: Build and use valid container
 console.log('\n3. Building and using valid container:');
+const revalidationIssues = validBuilder.validate();
+if (revalidationIssues.length > 0) {
+    console.error(`Revalidation failed with issues: ${revalidationIssues.join(', ')}`);
+    throw new Error('Container build aborted due to validation issues.');
+}
 const container = validBuilder.build();
 
 const userService = container.get('UserService');
 userService.getUsers();
 
 console.log('\n✅ Validation helps catch configuration issues before runtime!');
+console.log('✅ Revalidation before building ensures consistency and safety!');
 
-export { validBuilder, invalidBuilder };
+export { invalidBuilder, validBuilder };
