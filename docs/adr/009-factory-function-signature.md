@@ -27,7 +27,7 @@ type Factory<T> = (serviceProvider: TypeSafeServiceLocator<TRegistry>) => T | Pr
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)
   .registerSingleton('Logger', LoggerService)
-  .registerFactory('DatabaseService', (provider) => {
+  .registerSingletonFactory('DatabaseService', (provider) => {
     const config = provider.get('Config');  // Type: ConfigService (inferred!)
     const logger = provider.get('Logger');  // Type: LoggerService (inferred!)
     return new DatabaseService(config.connectionString, logger);
@@ -45,7 +45,7 @@ const container = new ContainerBuilder()
   .registerSingleton('AppConfig', AppConfigService)
   .registerSingleton('EmailService', EmailService)
   .registerSingleton('SMSService', SMSService)
-  .registerFactory('NotificationService', (provider) => {
+  .registerSingletonFactory('NotificationService', (provider) => {
     const config = provider.get('AppConfig');  // Type: AppConfigService
 
     if (config.useEmailNotifications) {
@@ -71,7 +71,7 @@ const container = new ContainerBuilder()
   .registerSingleton('PluginConfig', PluginConfigService)
   .registerSingleton('Plugin_Analytics', AnalyticsPlugin)
   .registerSingleton('Plugin_Logging', LoggingPlugin)
-  .registerFactory('PluginManager', (provider) => {
+  .registerSingletonFactory('PluginManager', (provider) => {
     const config = provider.get('PluginConfig');  // Type: PluginConfigService
     const enabledPlugins = config.enabledPlugins;
 
@@ -96,7 +96,7 @@ const container = new ContainerBuilder()
 const container = new ContainerBuilder()
   .registerSingleton('ConfigService', ConfigService)
   .registerSingleton('DatabaseService', DatabaseService)
-  .registerFactory('AsyncService', async (provider) => {
+  .registerSingletonFactory('AsyncService', async (provider) => {
     const configService = provider.get('ConfigService');  // Type: ConfigService
     const dbService = provider.get('DatabaseService');    // Type: DatabaseService
     
@@ -265,7 +265,7 @@ type Factory<T> = (container: IDependencyContainer) => T;
 // Simple factory with dependency resolution
 const container = new ContainerBuilder()
   .registerSingleton('EmailConfig', EmailConfigService)
-  .registerFactory('EmailService', (provider) => {
+  .registerSingletonFactory('EmailService', (provider) => {
     const config = provider.get('EmailConfig');  // Type: EmailConfigService
     return new EmailService(config.smtpHost, config.smtpPort);
   })
@@ -278,7 +278,7 @@ const container = new ContainerBuilder()
 // Factory with runtime decision making
 const container = new ContainerBuilder()
   .registerSingleton('AppConfig', AppConfigService)
-  .registerFactory('Logger', (provider) => {
+  .registerSingletonFactory('Logger', (provider) => {
     const config = provider.get('AppConfig');  // Type: AppConfigService
 
     return config.isDevelopment

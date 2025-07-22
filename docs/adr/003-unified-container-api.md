@@ -32,11 +32,11 @@ const container = new ContainerBuilder()
   .registerScoped('UserService', UserService, 'Database', 'Logger')
   
   // Interface-based registration (abstraction + type safety)
-  .registerInterface<IDatabase>('Database', PostgreSQLDatabase, 'Logger')
+  .registerSingletonInterface<IDatabase>('Database', PostgreSQLDatabase, 'Logger')
   .registerScopedInterface<ICache>('Cache', RedisCache, 'Logger')
   
   // Factory-based registration (flexibility + type safety)
-  .registerFactory('Config', (provider) => {
+  .registerSingletonFactory('Config', (provider) => {
     const logger = provider.get('Logger'); // Type: ConsoleLogger ✅
     return createConfiguration(logger);
   })
@@ -61,8 +61,8 @@ const container = new ContainerBuilder()
   // .register[Lifecycle][Pattern](key, implementation, ...dependencies)
   
   .registerSingleton('Service1', Service1Class)                    // Constructor
-  .registerInterface<IService>('Service2', Service2Impl)          // Interface  
-  .registerFactory('Service3', (provider) => new Service3())      // Factory
+  .registerSingletonInterface<IService>('Service2', Service2Impl)          // Interface  
+  .registerSingletonFactory('Service3', (provider) => new Service3())      // Factory
   
   // Lifecycle variants work identically across all patterns
   .registerScopedInterface<ICache>('Cache', CacheImpl)
@@ -77,8 +77,8 @@ const container = new ContainerBuilder()
 // Every registration pattern provides complete type safety
 const container = new ContainerBuilder()
   .registerSingleton('Logger', ConsoleLogger)
-  .registerInterface<IDatabase>('DB', DatabaseService, 'Logger')
-  .registerFactory('UserRepo', (provider) => {
+  .registerSingletonInterface<IDatabase>('DB', DatabaseService, 'Logger')
+  .registerSingletonFactory('UserRepo', (provider) => {
     // provider.get() is fully typed based on previous registrations
     const db = provider.get('DB');         // Type: IDatabase ✅
     const logger = provider.get('Logger'); // Type: ConsoleLogger ✅
@@ -100,8 +100,8 @@ const container = new ContainerBuilder()
   
   // Singleton services (shared across entire container)
   .registerSingleton('Config', ConfigService)
-  .registerInterface<ILogger>('Logger', ConsoleLogger)
-  .registerFactory('Database', (provider) => createConnection())
+  .registerSingletonInterface<ILogger>('Logger', ConsoleLogger)
+  .registerSingletonFactory('Database', (provider) => createConnection())
   
   // Scoped services (shared within scope, new per scope)
   .registerScoped('RequestContext', RequestContext)
@@ -123,21 +123,21 @@ const container = new ContainerBuilder()
 const container = new ContainerBuilder()
   
   // Functions returning primitives
-  .registerFactory('MaxRetries', () => 3)
-  .registerFactory('Environment', () => process.env.NODE_ENV || 'development')
+  .registerSingletonFactory('MaxRetries', () => 3)
+  .registerSingletonFactory('Environment', () => process.env.NODE_ENV || 'development')
   
   // Functions returning collections
-  .registerFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de'])
-  .registerFactory('FeatureFlags', () => new Map([['analytics', true]]))
+  .registerSingletonFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de'])
+  .registerSingletonFactory('FeatureFlags', () => new Map([['analytics', true]]))
   
   // Functions returning functions (higher-order)
-  .registerFactory('Validator', () => ({
+  .registerSingletonFactory('Validator', () => ({
     email: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
     required: (value: any) => value != null && value !== ''
   }))
   
   // Functions returning event systems
-  .registerFactory('EventBus', () => {
+  .registerSingletonFactory('EventBus', () => {
     const listeners = new Map<string, Function[]>();
     return {
       on: (event: string, callback: Function) => { /* ... */ },
@@ -153,8 +153,8 @@ const container = new ContainerBuilder()
 ```typescript
 const container = new ContainerBuilder()
   .registerSingleton('UserService', UserService)
-  .registerInterface<IEmailService>('EmailService', SMTPService)
-  .registerFactory('Config', () => ({ env: 'prod' }))
+  .registerSingletonInterface<IEmailService>('EmailService', SMTPService)
+  .registerSingletonFactory('Config', () => ({ env: 'prod' }))
   .build();
 
 // IDE provides autocompletion for ALL registered services
@@ -182,14 +182,14 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}>
   ): ContainerBuilder<TRegistry & Record<K, T>>;
   
   // Interface-based registration
-  registerInterface<T, K extends string = string>(
+  registerSingletonInterface<T, K extends string = string>(
     key: K,
     implementationType: new (...args: any[]) => T,
     ...dependencies: string[]
   ): ContainerBuilder<TRegistry & Record<K, T>>;
   
   // Factory-based registration
-  registerFactory<K extends string, T>(
+  registerSingletonFactory<K extends string, T>(
     key: K,
     factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
   ): ContainerBuilder<TRegistry & Record<K, T>>;
@@ -211,7 +211,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}>
 
 ```typescript
 // Factory functions receive fully typed providers
-.registerFactory('ComplexService', (provider) => {
+.registerSingletonFactory('ComplexService', (provider) => {
   // Every .get() call is fully typed based on registry
   const logger = provider.get('Logger');     // Type inferred from registry
   const database = provider.get('Database'); // Type inferred from registry
@@ -260,7 +260,7 @@ type WithUserService = WithDatabase & Record<'UserService', UserService>;
 ```typescript
 const builder = new ContainerBuilder()
   .registerSingleton('Service1', Service1, 'MissingDep') // Missing dependency
-  .registerFactory('Service2', (provider) => {
+  .registerSingletonFactory('Service2', (provider) => {
     throw new Error('Factory error');
   });
 
@@ -325,7 +325,7 @@ builder.validate(); // Catches missing dependency before build
 - Enabling testing with mocks
 
 ```typescript
-.registerInterface<IEmailService>('EmailService', SMTPEmailService, 'Config')
+.registerSingletonInterface<IEmailService>('EmailService', SMTPEmailService, 'Config')
 ```
 
 #### Use Factory Registration When
@@ -335,7 +335,7 @@ builder.validate(); // Catches missing dependency before build
 - Creating primitive values, functions, or collections
 
 ```typescript
-.registerFactory('DatabaseConnection', async (provider) => {
+.registerSingletonFactory('DatabaseConnection', async (provider) => {
   const config = provider.get('Config');
   return await createConnection(config.connectionString);
 })

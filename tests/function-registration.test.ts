@@ -21,8 +21,8 @@ describe('ContainerBuilder - Function Registration', () => {
     describe('Primitive Return Types', () => {
         it('should register and resolve factory functions returning strings', () => {
             const container = builder
-                .registerFactory('Environment', () => 'production')
-                .registerFactory('DatabaseUrl', () => 'postgresql://localhost:5432/app')
+                .registerSingletonFactory('Environment', () => 'production')
+                .registerSingletonFactory('DatabaseUrl', () => 'postgresql://localhost:5432/app')
                 .build();
 
             const env = container.get('Environment');
@@ -36,9 +36,9 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should register and resolve factory functions returning numbers', () => {
             const container = builder
-                .registerFactory('Port', () => 3000)
-                .registerFactory('MaxConnections', () => 100)
-                .registerFactory('Version', () => 1.2)
+                .registerSingletonFactory('Port', () => 3000)
+                .registerSingletonFactory('MaxConnections', () => 100)
+                .registerSingletonFactory('Version', () => 1.2)
                 .build();
 
             const port = container.get('Port');
@@ -55,9 +55,9 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should register and resolve factory functions returning booleans', () => {
             const container = builder
-                .registerFactory('IsProduction', () => true)
-                .registerFactory('EnableLogging', () => false)
-                .registerFactory('FeatureFlag', () => Math.random() > 0.5)
+                .registerSingletonFactory('IsProduction', () => true)
+                .registerSingletonFactory('EnableLogging', () => false)
+                .registerSingletonFactory('FeatureFlag', () => Math.random() > 0.5)
                 .build();
 
             const isProd = container.get('IsProduction');
@@ -73,8 +73,8 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should register and resolve factory functions returning null/undefined', () => {
             const container = builder
-                .registerFactory('NullValue', () => null)
-                .registerFactory('UndefinedValue', () => undefined)
+                .registerSingletonFactory('NullValue', () => null)
+                .registerSingletonFactory('UndefinedValue', () => undefined)
                 .build();
 
             const nullVal = container.get('NullValue');
@@ -88,9 +88,9 @@ describe('ContainerBuilder - Function Registration', () => {
     describe('Collection Return Types', () => {
         it('should register and resolve factory functions returning arrays', () => {
             const container = builder
-                .registerFactory('Numbers', () => [1, 2, 3, 4, 5])
-                .registerFactory('Strings', () => ['apple', 'banana', 'cherry'])
-                .registerFactory('Mixed', () => [1, 'two', true, null])
+                .registerSingletonFactory('Numbers', () => [1, 2, 3, 4, 5])
+                .registerSingletonFactory('Strings', () => ['apple', 'banana', 'cherry'])
+                .registerSingletonFactory('Mixed', () => [1, 'two', true, null])
                 .build();
 
             const numbers = container.get('Numbers');
@@ -107,8 +107,8 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should register and resolve factory functions returning Maps and Sets', () => {
             const container = builder
-                .registerFactory('UserMap', () => new Map([['john', 25], ['jane', 30]]))
-                .registerFactory('TagSet', () => new Set(['tag1', 'tag2', 'tag3']))
+                .registerSingletonFactory('UserMap', () => new Map([['john', 25], ['jane', 30]]))
+                .registerSingletonFactory('TagSet', () => new Set(['tag1', 'tag2', 'tag3']))
                 .build();
 
             const userMap = container.get('UserMap');
@@ -126,9 +126,9 @@ describe('ContainerBuilder - Function Registration', () => {
     describe('Function Return Types', () => {
         it('should register and resolve factory functions returning callback functions', () => {
             const container = builder
-                .registerFactory('Logger', () => (message: string) => console.log(`LOG: ${message}`))
-                .registerFactory('Validator', () => (value: any) => value != null && value !== '')
-                .registerFactory('Formatter', () => (num: number) => `$${num.toFixed(2)}`)
+                .registerSingletonFactory('Logger', () => (message: string) => console.log(`LOG: ${message}`))
+                .registerSingletonFactory('Validator', () => (value: any) => value != null && value !== '')
+                .registerSingletonFactory('Formatter', () => (num: number) => `$${num.toFixed(2)}`)
                 .build();
 
             const logger = container.get('Logger');
@@ -146,8 +146,8 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should register and resolve factory functions returning arrow functions', () => {
             const container = builder
-                .registerFactory('Adder', () => (a: number, b: number) => a + b)
-                .registerFactory('StringUtils', () => ({
+                .registerSingletonFactory('Adder', () => (a: number, b: number) => a + b)
+                .registerSingletonFactory('StringUtils', () => ({
                     upper: (str: string) => str.toUpperCase(),
                     lower: (str: string) => str.toLowerCase(),
                     reverse: (str: string) => str.split('').reverse().join('')
@@ -184,7 +184,7 @@ describe('ContainerBuilder - Function Registration', () => {
             }
 
             const container = builder
-                .registerFactory('DatabaseConfig', (): DatabaseConfig => ({
+                .registerSingletonFactory('DatabaseConfig', (): DatabaseConfig => ({
                     host: 'localhost',
                     port: 5432,
                     credentials: {
@@ -213,7 +213,7 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should register factory functions returning objects with methods', () => {
             const container = builder
-                .registerFactory('Calculator', () => ({
+                .registerSingletonFactory('Calculator', () => ({
                     add: (a: number, b: number) => a + b,
                     subtract: (a: number, b: number) => a - b,
                     multiply: (a: number, b: number) => a * b,
@@ -243,7 +243,7 @@ describe('ContainerBuilder - Function Registration', () => {
             let creationCount = 0;
             
             const container = builder
-                .registerFactory('Counter', () => {
+                .registerSingletonFactory('Counter', () => {
                     creationCount++;
                     return { value: creationCount, timestamp: Date.now() };
                 })
@@ -311,7 +311,7 @@ describe('ContainerBuilder - Function Registration', () => {
             let transientCount = 0;
 
             const container = builder
-                .registerFactory('SingletonService', () => {
+                .registerSingletonFactory('SingletonService', () => {
                     singletonCount++;
                     return { type: 'singleton', count: singletonCount };
                 })
@@ -360,7 +360,7 @@ describe('ContainerBuilder - Function Registration', () => {
 
             const container = builder
                 .registerSingleton('Logger', Logger)
-                .registerFactory('ConfigService', (provider) => {
+                .registerSingletonFactory('ConfigService', (provider) => {
                     const logger = provider.get('Logger'); // Should be typed as Logger
                     logger.log('Creating configuration service');
                     
@@ -406,9 +406,9 @@ describe('ContainerBuilder - Function Registration', () => {
             }
 
             const container = builder
-                .registerInterface<ICache>('ICache', MemoryCache)
+                .registerSingletonInterface<ICache>('ICache', MemoryCache)
                 .registerSingleton('DatabaseService', DatabaseService)
-                .registerFactory('UserRepository', (provider) => {
+                .registerSingletonFactory('UserRepository', (provider) => {
                     const cache = provider.get('ICache');
                     const db = provider.get('DatabaseService');
                     
@@ -446,12 +446,12 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should handle deeply nested provider service access', () => {
             const container = builder
-                .registerFactory('Level1', () => ({ value: 1, name: 'level1' }))
-                .registerFactory('Level2', (provider) => {
+                .registerSingletonFactory('Level1', () => ({ value: 1, name: 'level1' }))
+                .registerSingletonFactory('Level2', (provider) => {
                     const level1 = provider.get('Level1');
                     return { value: level1.value + 1, name: 'level2', parent: level1 };
                 })
-                .registerFactory('Level3', (provider) => {
+                .registerSingletonFactory('Level3', (provider) => {
                     const level1 = provider.get('Level1');
                     const level2 = provider.get('Level2');
                     return { 
@@ -477,7 +477,7 @@ describe('ContainerBuilder - Function Registration', () => {
     describe('Error Handling and Edge Cases', () => {
         it('should handle factory functions that throw errors during creation', () => {
             const container = builder
-                .registerFactory('FailingService', () => {
+                .registerSingletonFactory('FailingService', () => {
                     throw new Error('Service creation failed');
                 })
                 .build();
@@ -517,7 +517,7 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should handle factory functions accessing non-existent services', () => {
             const container = builder
-                .registerFactory('ServiceWithMissingDep', (provider) => {
+                .registerSingletonFactory('ServiceWithMissingDep', (provider) => {
                     // Cast to any to bypass type checking for this error test
                     const missing = (provider as any).get('NonExistentService');
                     return { dependency: missing };
@@ -530,7 +530,7 @@ describe('ContainerBuilder - Function Registration', () => {
         it('should handle factory functions with invalid return types', () => {
             // Test registering a factory that doesn't return anything
             const container = builder
-                .registerFactory('VoidService', () => {
+                .registerSingletonFactory('VoidService', () => {
                     console.log('This factory returns undefined');
                     // No return statement - implicitly returns undefined
                 })
@@ -546,7 +546,7 @@ describe('ContainerBuilder - Function Registration', () => {
             let computationCount = 0;
             
             const container = builder
-                .registerFactory('ExpensiveComputation', () => {
+                .registerSingletonFactory('ExpensiveComputation', () => {
                     computationCount++;
                     
                     // Simulate expensive computation
@@ -579,7 +579,7 @@ describe('ContainerBuilder - Function Registration', () => {
 
         it('should handle factory functions creating large objects', () => {
             const container = builder
-                .registerFactory('LargeDataset', () => {
+                .registerSingletonFactory('LargeDataset', () => {
                     return {
                         data: Array.from({ length: 10000 }, (_, i) => ({
                             id: i,
@@ -609,7 +609,7 @@ describe('ContainerBuilder - Function Registration', () => {
             let sharedResourceCreationCount = 0;
             
             const container = builder
-                .registerFactory('SharedResource', () => {
+                .registerSingletonFactory('SharedResource', () => {
                     sharedResourceCreationCount++;
                     return {
                         id: `resource-${sharedResourceCreationCount}`,
@@ -617,7 +617,7 @@ describe('ContainerBuilder - Function Registration', () => {
                         createdAt: Date.now()
                     };
                 })
-                .registerFactory('Service1', (provider) => {
+                .registerSingletonFactory('Service1', (provider) => {
                     const resource = provider.get('SharedResource');
                     return {
                         name: 'Service1',
@@ -625,7 +625,7 @@ describe('ContainerBuilder - Function Registration', () => {
                         processedData: resource.data.slice(0, 100)
                     };
                 })
-                .registerFactory('Service2', (provider) => {
+                .registerSingletonFactory('Service2', (provider) => {
                     const resource = provider.get('SharedResource');
                     return {
                         name: 'Service2',
@@ -651,7 +651,7 @@ describe('ContainerBuilder - Function Registration', () => {
     describe('Advanced Factory Function Scenarios', () => {
         it('should handle factory functions that return promises', () => {
             const container = builder
-                .registerFactory('AsyncConfig', () => Promise.resolve({
+                .registerSingletonFactory('AsyncConfig', () => Promise.resolve({
                     environment: 'production',
                     loaded: true
                 }))
@@ -679,8 +679,8 @@ describe('ContainerBuilder - Function Registration', () => {
             }
 
             const container = builder
-                .registerFactory('Counter1', createCounterFactory(0))
-                .registerFactory('Counter2', createCounterFactory(100))
+                .registerSingletonFactory('Counter1', createCounterFactory(0))
+                .registerSingletonFactory('Counter2', createCounterFactory(100))
                 .build();
 
             const counter1 = container.get('Counter1');
@@ -709,7 +709,7 @@ describe('ContainerBuilder - Function Registration', () => {
             }
 
             const container = builder
-                .registerFactory('EventBus', (): EventEmitter => {
+                .registerSingletonFactory('EventBus', (): EventEmitter => {
                     const listeners = new Map<string, ((...args: any[]) => void)[]>();
                     
                     return {
@@ -769,7 +769,7 @@ describe('ContainerBuilder - Function Registration', () => {
             const container = builder
                 .registerSingleton('DatabaseService', DatabaseService)
                 .registerSingleton('Logger', Logger)
-                .registerFactory('UserService', (provider) => {
+                .registerSingletonFactory('UserService', (provider) => {
                     const db = provider.get('DatabaseService');
                     const logger = provider.get('Logger');
                     
@@ -802,7 +802,7 @@ describe('ContainerBuilder - Function Registration', () => {
             }
 
             const container = builder
-                .registerFactory('EmailConfig', () => ({
+                .registerSingletonFactory('EmailConfig', () => ({
                     environment: 'production',
                     smtpHost: 'smtp.example.com',
                     apiKey: 'secret-key'
@@ -846,20 +846,20 @@ describe('ContainerBuilder - Function Registration', () => {
 
             const container = builder
                 // Factory registration
-                .registerFactory('ApiConfig', () => ({
+                .registerSingletonFactory('ApiConfig', () => ({
                     baseUrl: 'https://api.example.com',
                     timeout: 5000,
                     retries: 3
                 }))
                 
                 // Interface registration
-                .registerInterface<ICache>('ICache', MemoryCache)
+                .registerSingletonInterface<ICache>('ICache', MemoryCache)
                 
                 // Constructor registration depending on both
                 .registerSingleton('ApiClient', ApiClient, 'ApiConfig', 'ICache')
                 
                 // Factory registration depending on constructor service
-                .registerFactory('UserRepository', (provider) => {
+                .registerSingletonFactory('UserRepository', (provider) => {
                     const apiClient = provider.get('ApiClient');
                     
                     return {

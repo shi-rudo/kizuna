@@ -86,7 +86,7 @@ class SMTPEmailService implements IEmailService {
 
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
-  .registerInterface<IEmailService>('EmailService', SMTPEmailService, 'Logger')
+  .registerSingletonInterface<IEmailService>('EmailService', SMTPEmailService, 'Logger')
   .registerScopedInterface<ICache>('Cache', RedisCache, 'Logger')
   .build();
 
@@ -102,7 +102,7 @@ const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   
   // Factory returning objects
-  .registerFactory('Config', (provider) => {
+  .registerSingletonFactory('Config', (provider) => {
     const logger = provider.get('Logger'); // Type: Logger ✨
     logger.log('Loading configuration...');
     
@@ -114,11 +114,11 @@ const container = new ContainerBuilder()
   })
   
   // Factory returning primitives
-  .registerFactory('MaxRetries', () => 3)
-  .registerFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de'])
+  .registerSingletonFactory('MaxRetries', () => 3)
+  .registerSingletonFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de'])
   
   // Factory returning functions
-  .registerFactory('Validator', () => ({
+  .registerSingletonFactory('Validator', () => ({
     email: (value: string) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value),
     required: (value: any) => value != null && value !== ''
   }))
@@ -138,8 +138,8 @@ Every registration pattern supports all three lifecycles:
 const container = new ContainerBuilder()
   // Singleton services (shared across entire application)
   .registerSingleton('Config', ConfigService)
-  .registerInterface<ILogger>('Logger', ConsoleLogger)
-  .registerFactory('Database', (provider) => createConnection())
+  .registerSingletonInterface<ILogger>('Logger', ConsoleLogger)
+  .registerSingletonFactory('Database', (provider) => createConnection())
   
   // Scoped services (shared within scope, new per scope)
   .registerScoped('RequestContext', RequestContext, 'Logger')
@@ -261,20 +261,20 @@ For complex applications, separate containers maintain domain boundaries:
 const sharedContainer = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   .registerSingleton('EmailService', EmailService, 'Logger')
-  .registerInterface<IConfig>('Config', DatabaseConfig)
+  .registerSingletonInterface<IConfig>('Config', DatabaseConfig)
   .build();
 
 // User domain container
 const userContainer = new ContainerBuilder()
-  .registerFactory('Logger', () => sharedContainer.get('Logger'))
-  .registerFactory('EmailService', () => sharedContainer.get('EmailService'))
+  .registerSingletonFactory('Logger', () => sharedContainer.get('Logger'))
+  .registerSingletonFactory('EmailService', () => sharedContainer.get('EmailService'))
   .registerScoped('UserService', UserService, 'Logger')
   .registerScoped('UserNotificationService', UserNotificationService, 'EmailService')
   .build();
 
 // Order domain container
 const orderContainer = new ContainerBuilder()
-  .registerFactory('Logger', () => sharedContainer.get('Logger'))
+  .registerSingletonFactory('Logger', () => sharedContainer.get('Logger'))
   .registerScoped('OrderService', OrderService, 'Logger')
   .registerScoped('PaymentService', PaymentService, 'Logger')
   .build();
@@ -292,11 +292,11 @@ describe('UserService', () => {
   
   beforeEach(() => {
     testContainer = new ContainerBuilder()
-      .registerFactory('Logger', () => ({
+      .registerSingletonFactory('Logger', () => ({
         log: jest.fn(),
         error: jest.fn()
       } as any))
-      .registerFactory('Database', () => mockDatabase)
+      .registerSingletonFactory('Database', () => mockDatabase)
       .registerScoped('UserService', UserService, 'Database', 'Logger')
       .build();
   });
@@ -313,13 +313,13 @@ describe('UserService', () => {
 
 ```typescript
 const container = new ContainerBuilder()
-  .registerFactory('Config', () => ({
+  .registerSingletonFactory('Config', () => ({
     environment: process.env.NODE_ENV || 'development',
     database: { url: process.env.DATABASE_URL },
     redis: { url: process.env.REDIS_URL }
   }))
   
-  .registerFactory('EmailService', (provider) => {
+  .registerSingletonFactory('EmailService', (provider) => {
     const config = provider.get('Config');
     
     // Environment-specific implementations
@@ -328,7 +328,7 @@ const container = new ContainerBuilder()
       : new MockEmailService();
   })
   
-  .registerFactory('Cache', (provider) => {
+  .registerSingletonFactory('Cache', (provider) => {
     const config = provider.get('Config');
     
     return config.redis.url
@@ -358,8 +358,8 @@ The main class for configuring your dependency injection container.
 ```typescript
 // Singleton lifecycle
 .registerSingleton<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
-.registerInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
-.registerFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.registerSingletonInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
+.registerSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Scoped lifecycle (one instance per scope)
 .registerScoped<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
