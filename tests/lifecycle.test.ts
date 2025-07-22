@@ -27,11 +27,11 @@ describe('Service Lifecycle', () => {
 
         it('should maintain same instance across Fluent API requests', () => {
             const container = new FluentContainerBuilder()
-                .addSingleton(r => r.fromType(TestDummy))
+                .registerSingleton('TestDummy', TestDummy)
                 .build();
 
-            const service1 = container.get(TestDummy);
-            const service2 = container.get(TestDummy);
+            const service1 = container.get('TestDummy');
+            const service2 = container.get('TestDummy');
 
             expect(service1).toBe(service2);
             expect(service1.getValue()).toBe(service2.getValue());
@@ -68,12 +68,12 @@ describe('Service Lifecycle', () => {
 
         it('should create same instance within Fluent API scope', () => {
             const container = new FluentContainerBuilder()
-                .addScoped(r => r.fromType(TestDummy))
+                .registerScoped('TestDummy', TestDummy)
                 .build();
 
             const scope = container.startScope();
-            const service1 = scope.get(TestDummy);
-            const service2 = scope.get(TestDummy);
+            const service1 = scope.get('TestDummy');
+            const service2 = scope.get('TestDummy');
 
             expect(service1).toBe(service2);
             expect(service1.getValue()).toBe(service2.getValue());
@@ -96,14 +96,14 @@ describe('Service Lifecycle', () => {
 
         it('should create different instances in different Fluent API scopes', () => {
             const container = new FluentContainerBuilder()
-                .addScoped(r => r.fromType(TestDummy))
+                .registerScoped('TestDummy', TestDummy)
                 .build();
 
             const scope1 = container.startScope();
             const scope2 = container.startScope();
 
-            const service1 = scope1.get(TestDummy);
-            const service2 = scope2.get(TestDummy);
+            const service1 = scope1.get('TestDummy');
+            const service2 = scope2.get('TestDummy');
 
             expect(service1).not.toBe(service2);
             expect(service1.getValue()).not.toBe(service2.getValue());
@@ -125,11 +125,11 @@ describe('Service Lifecycle', () => {
 
         it('should create new instance on each Fluent API request', () => {
             const container = new FluentContainerBuilder()
-                .addTransient(r => r.fromType(TestDummy))
+                .registerTransient('TestDummy', TestDummy)
                 .build();
 
-            const service1 = container.get(TestDummy);
-            const service2 = container.get(TestDummy);
+            const service1 = container.get('TestDummy');
+            const service2 = container.get('TestDummy');
 
             expect(service1).not.toBe(service2);
             expect(service1.getValue()).not.toBe(service2.getValue());

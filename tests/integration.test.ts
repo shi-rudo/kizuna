@@ -13,21 +13,20 @@ import { TestStub, TestStubWithOneDependency, TestStubWithTwoDependencies } from
 
 describe('API Integration', () => {
     describe('API Separation', () => {
-        it('should prevent TypeSafe builder from building Fluent containers', () => {
+        it('should have appropriate build methods for each API', () => {
             const typeSafeBuilder = new TypeSafeContainerBuilder();
-            
-            // TypeSafe builder should not have fluent build method
-            expect((typeSafeBuilder as any).build).toBeUndefined();
-        });
-
-        it('should prevent Fluent builder from building TypeSafe containers', () => {
             const fluentBuilder = new FluentContainerBuilder();
             
-            // Fluent builder should not have type-safe build method
+            // TypeSafe builder should have buildTypeSafe method
+            expect(typeSafeBuilder.buildTypeSafe).toBeDefined();
+            expect((typeSafeBuilder as any).build).toBeUndefined();
+            
+            // Fluent builder now has type-safe build method
+            expect(fluentBuilder.build).toBeDefined();
             expect((fluentBuilder as any).buildTypeSafe).toBeUndefined();
         });
 
-        it('should have separate registration methods for each API', () => {
+        it('should have registration methods for both APIs', () => {
             const typeSafeBuilder = new TypeSafeContainerBuilder();
             const fluentBuilder = new FluentContainerBuilder();
 
@@ -35,9 +34,9 @@ describe('API Integration', () => {
             expect(typeSafeBuilder.registerSingleton).toBeDefined();
             expect((typeSafeBuilder as any).addSingleton).toBeUndefined();
 
-            // Fluent should have add methods but not register methods
-            expect(fluentBuilder.addSingleton).toBeDefined();
-            expect((fluentBuilder as any).registerSingleton).toBeUndefined();
+            // Fluent should now have register methods (no legacy add methods)
+            expect(fluentBuilder.registerSingleton).toBeDefined();
+            expect((fluentBuilder as any).addSingleton).toBeUndefined();
         });
     });
 
@@ -75,13 +74,13 @@ describe('API Integration', () => {
 
         it('should resolve complex Fluent dependency chains', () => {
             const container = new FluentContainerBuilder()
-                .addSingleton(r => r.fromType(TestStub))
-                .addSingleton(r => r.fromType(TestStubWithOneDependency).withDependencies(TestStub))
-                .addSingleton(r => r.fromType(TestStubWithTwoDependencies).withDependencies(TestStub, TestStubWithOneDependency))
-                .addSingleton(r => r.fromType(ComplexService).withDependencies(TestStub, TestStubWithOneDependency, TestStubWithTwoDependencies))
+                .registerSingleton('TestStub', TestStub)
+                .registerSingleton('OneDep', TestStubWithOneDependency, 'TestStub')
+                .registerSingleton('TwoDeps', TestStubWithTwoDependencies, 'TestStub', 'OneDep')
+                .registerSingleton('ComplexService', ComplexService, 'TestStub', 'OneDep', 'TwoDeps')
                 .build();
 
-            const service = container.get(ComplexService);
+            const service = container.get('ComplexService');
             const result = service.process();
 
             expect(result).toContain('TestStub doSomething');
@@ -123,17 +122,17 @@ describe('API Integration', () => {
 
         it('should handle mixed singleton and scoped services in Fluent API', () => {
             const container = new FluentContainerBuilder()
-                .addSingleton(r => r.fromType(TestStub))
-                .addScoped(r => r.fromType(TestStubWithOneDependency).withDependencies(TestStub))
+                .registerSingleton('TestStub', TestStub)
+                .registerScoped('TestStubWithOneDependency', TestStubWithOneDependency, 'TestStub')
                 .build();
 
             const scope1 = container.startScope();
             const scope2 = container.startScope();
 
-            const singleton1 = scope1.get(TestStub);
-            const singleton2 = scope2.get(TestStub);
-            const scoped1 = scope1.get(TestStubWithOneDependency);
-            const scoped2 = scope2.get(TestStubWithOneDependency);
+            const singleton1 = scope1.get('TestStub');
+            const singleton2 = scope2.get('TestStub');
+            const scoped1 = scope1.get('TestStubWithOneDependency');
+            const scoped2 = scope2.get('TestStubWithOneDependency');
 
             expect(singleton1).toBe(singleton2); // Singleton shared across scopes
             expect(scoped1).not.toBe(scoped2); // Scoped different across scopes
@@ -223,20 +222,20 @@ describe('API Integration', () => {
 
         it('should support typical application architecture with Fluent API', () => {
             const container = new FluentContainerBuilder()
-                .addSingleton(r => r.fromType(Logger))
-                .addSingleton(r => r.fromType(DatabaseRepository).withDependencies(Logger))
-                .addSingleton(r => r.fromType(EmailService).withDependencies(Logger))
-                .addScoped(r => r.fromType(UserService).withDependencies(DatabaseRepository, EmailService, Logger))
+                .registerSingleton('Logger', Logger)
+                .registerSingleton('DatabaseRepository', DatabaseRepository, 'Logger')
+                .registerSingleton('EmailService', EmailService, 'Logger')
+                .registerScoped('UserService', UserService, 'DatabaseRepository', 'EmailService', 'Logger')
                 .build();
 
-            const userService = container.get(UserService);
+            const userService = container.get('UserService');
             const result = userService.createUser({ email: 'test@example.com', name: 'John' });
 
             expect(result.id).toBe(1);
             expect(result.name).toBe('John');
             
             // Verify logger was used
-            const logger = container.get(Logger);
+            const logger = container.get('Logger');
             expect(logger.messages.length).toBeGreaterThan(0);
             expect(logger.messages.some(msg => msg.includes('Creating user'))).toBe(true);
         });
