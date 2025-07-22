@@ -114,3 +114,25 @@ builder
 - **Type Safety**: Compile-time guarantees over runtime string parsing
 - **Maintainability**: Clear contracts and explicit behavior
 - **Performance**: No runtime string manipulation or reflection needed
+
+## Concurrency Considerations
+
+While these patterns provide robust lifecycle management, remember that **Kizuna is not thread-safe**. For concurrent applications:
+
+```typescript
+// ✅ Safe: Container-per-worker pattern
+const worker = new Worker('worker.js');
+// Each worker creates its own container with these robust patterns
+
+// ✅ Safe: Request-scoped isolation
+app.use((req, res, next) => {
+    req.services = rootContainer.startScope();
+    res.on('finish', () => req.services.dispose());
+});
+
+// ❌ Unsafe: Sharing containers across threads
+const sharedContainer = builder.build();
+worker.postMessage({ container: sharedContainer }); // Race conditions!
+```
+
+📖 **See our [Concurrency Patterns Guide](../concurrency-patterns.md)** for detailed guidance on safe concurrent usage.
