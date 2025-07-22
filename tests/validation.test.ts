@@ -85,7 +85,7 @@ describe('ContainerBuilder Validation', () => {
         });
 
         it('should detect missing dependencies in interface registration', () => {
-            builder.registerInterface<ITestService>('ITestService', TestServiceImpl, 'MissingDependency');
+            builder.registerSingletonInterface<ITestService>('ITestService', TestServiceImpl, 'MissingDependency');
 
             const issues = builder.validate();
             expect(issues.length).toBeGreaterThan(0);
@@ -94,7 +94,7 @@ describe('ContainerBuilder Validation', () => {
         });
 
         it('should validate factory services (factories are always considered valid)', () => {
-            builder.registerFactory('FactoryService', () => ({ value: 42 }));
+            builder.registerSingletonFactory('FactoryService', () => ({ value: 42 }));
 
             const issues = builder.validate();
             expect(issues).toEqual([]);
@@ -103,7 +103,7 @@ describe('ContainerBuilder Validation', () => {
         it('should validate factory services with provider dependencies', () => {
             builder
                 .registerSingleton('ServiceWithNoDeps', ServiceWithNoDeps)
-                .registerFactory('FactoryWithDeps', (provider) => {
+                .registerSingletonFactory('FactoryWithDeps', (provider) => {
                     const dep = provider.get('ServiceWithNoDeps');
                     return { value: dep.getValue() };
                 });
@@ -208,10 +208,10 @@ describe('ContainerBuilder Validation', () => {
                 .registerScoped('UserService', ServiceWithOneDep, 'Logger')
                 
                 // Interface-based
-                .registerInterface<ITestService>('ITestService', TestServiceImpl, 'Logger')
+                .registerSingletonInterface<ITestService>('ITestService', TestServiceImpl, 'Logger')
                 
                 // Factory-based
-                .registerFactory('Config', (provider) => {
+                .registerSingletonFactory('Config', (provider) => {
                     const logger = provider.get('Logger');
                     return { env: 'test', logger: logger.getValue() };
                 });
@@ -223,8 +223,8 @@ describe('ContainerBuilder Validation', () => {
         it('should detect issues across different registration patterns', () => {
             builder
                 .registerSingleton('Logger', ServiceWithOneDep, 'MissingDep1')  // Missing dep
-                .registerInterface<ITestService>('ITestService', TestServiceImpl, 'MissingDep2')  // Missing dep
-                .registerFactory('Config', () => ({ env: 'test' }));  // Factory always valid
+                .registerSingletonInterface<ITestService>('ITestService', TestServiceImpl, 'MissingDep2')  // Missing dep
+                .registerSingletonFactory('Config', () => ({ env: 'test' }));  // Factory always valid
 
             const issues = builder.validate();
             expect(issues.length).toBe(2); // Two missing dependencies
@@ -235,9 +235,9 @@ describe('ContainerBuilder Validation', () => {
         it('should handle complex interdependencies between different patterns', () => {
             builder
                 .registerSingleton('BaseService', ServiceWithNoDeps)
-                .registerInterface<ITestService>('ITestService', TestServiceImpl, 'BaseService')
+                .registerSingletonInterface<ITestService>('ITestService', TestServiceImpl, 'BaseService')
                 .registerScoped('ScopedService', ServiceWithOneDep, 'BaseService')
-                .registerFactory('FactoryService', (provider) => {
+                .registerSingletonFactory('FactoryService', (provider) => {
                     const base = provider.get('BaseService');
                     const scoped = provider.get('ScopedService');
                     const test = provider.get('ITestService');

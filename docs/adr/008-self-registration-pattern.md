@@ -60,7 +60,7 @@ The provider is passed as an argument to the factory function, where its use is 
 // A factory function receives the provider to resolve dependencies.
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
-  .registerFactory('ComplexService', (provider) => { // provider is passed here
+  .registerSingletonFactory('ComplexService', (provider) => { // provider is passed here
     const logger = provider.get('Logger'); // Correctly resolve dependencies
     
     // Perform complex or conditional logic

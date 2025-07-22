@@ -22,7 +22,7 @@ This decision was driven by the goal of improving developer experience while mai
 
 1.  **Superior Developer Experience**: The unified API is significantly simpler and more intuitive. Developers can configure all their services, both sync and async, in a single `ContainerBuilder` instance, which drastically reduces boilerplate and cognitive overhead.
 
-2.  **Explicit Where It Matters**: Asynchronicity remains explicit at the point of definition (`registerFactory(async ...)` and at the point of resolution (`await container.get('asyncService')`). This preserves clarity about where I/O-bound or time-consuming operations occur without polluting the entire container API or forcing synchronous services to adopt an async pattern.
+2.  **Explicit Where It Matters**: Asynchronicity remains explicit at the point of definition (`registerSingletonFactory(async ...)` and at the point of resolution (`await container.get('asyncService')`). This preserves clarity about where I/O-bound or time-consuming operations occur without polluting the entire container API or forcing synchronous services to adopt an async pattern.
 
 3.  **Optimized Performance**: The performance concerns that led to the original two-container pattern are effectively mitigated.
     *   **Synchronous services are unaffected**: They are resolved synchronously with zero `Promise` overhead.
@@ -48,7 +48,7 @@ builder.registerSingleton('Logger', Logger);
 
 // Register an asynchronous service (e.g., a database connection)
 // The factory is an `async` function.
-builder.registerFactory('Database', async (provider) => {
+builder.registerSingletonFactory('Database', async (provider) => {
   const logger = provider.get('Logger'); // Sync dependency resolved instantly
   logger.log('Initiating database connection...');
   

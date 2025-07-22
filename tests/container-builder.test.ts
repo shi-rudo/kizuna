@@ -192,8 +192,8 @@ describe('ContainerBuilder - Unified API', () => {
     describe('Interface-Based Registration', () => {
         it('should register and resolve interface implementations', () => {
             const container = builder
-                .registerInterface<ILogger>('ILogger', ConsoleLogger)
-                .registerInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'ILogger')
+                .registerSingletonInterface<ILogger>('ILogger', ConsoleLogger)
+                .registerSingletonInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'ILogger')
                 .build();
 
             const logger = container.get('ILogger');
@@ -213,7 +213,7 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should handle scoped interface registrations', () => {
             const container = builder
-                .registerInterface<ILogger>('ILogger', ConsoleLogger)
+                .registerSingletonInterface<ILogger>('ILogger', ConsoleLogger)
                 .registerScopedInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'ILogger')
                 .build();
 
@@ -247,7 +247,7 @@ describe('ContainerBuilder - Unified API', () => {
         it('should register and resolve factory services', () => {
             const container = builder
                 .registerSingleton('TestService', TestService)
-                .registerFactory('Config', (provider) => {
+                .registerSingletonFactory('Config', (provider) => {
                     const testService = provider.get('TestService');
                     return {
                         env: 'test',
@@ -268,8 +268,8 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should provide type-safe access to registered services in factory', () => {
             const container = builder
-                .registerInterface<ILogger>('ILogger', ConsoleLogger)
-                .registerFactory('LoggedConfig', (provider) => {
+                .registerSingletonInterface<ILogger>('ILogger', ConsoleLogger)
+                .registerSingletonFactory('LoggedConfig', (provider) => {
                     const logger = provider.get('ILogger'); // Should be typed as ILogger
                     logger.log('Creating config');
                     return {
@@ -341,10 +341,10 @@ describe('ContainerBuilder - Unified API', () => {
                 .registerScoped('UserService', ServiceWithDependency, 'Logger')
                 
                 // Interface-based
-                .registerInterface<ICache>('ICache', MemoryCache)
+                .registerSingletonInterface<ICache>('ICache', MemoryCache)
                 
                 // Factory-based
-                .registerFactory('AppConfig', (provider) => {
+                .registerSingletonFactory('AppConfig', (provider) => {
                     const logger = provider.get('Logger');
                     const cache = provider.get('ICache');
                     logger.log('Initializing app config');
@@ -381,7 +381,7 @@ describe('ContainerBuilder - Unified API', () => {
             builder.registerScoped('Service2', ServiceWithDependency, 'Service1');
             expect(builder.count).toBe(2);
 
-            builder.registerFactory('Service3', () => ({ value: 42 }));
+            builder.registerSingletonFactory('Service3', () => ({ value: 42 }));
             expect(builder.count).toBe(3);
         });
 

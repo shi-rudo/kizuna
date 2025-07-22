@@ -33,11 +33,11 @@ import { TypeSafeServiceProvider } from "./type-safe-service-provider";
  *   .registerScoped('UserService', UserService, 'Logger')
  *   
  *   // Interface-based registration  
- *   .registerInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
+ *   .registerSingletonInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
  *   .registerScopedInterface<ICache>('ICache', RedisCache, 'Logger')
  *   
  *   // Factory-based registration
- *   .registerFactory('Config', (provider) => {
+ *   .registerSingletonFactory('Config', (provider) => {
  *     const logger = provider.get('Logger'); // Type: ConsoleLogger
  *     return { env: 'production', debug: false };
  *   })
@@ -135,7 +135,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @param dependencies - Optional dependency keys
      * @returns A new ContainerBuilder with the updated registry type
      */
-    registerInterface<TInterface, K extends string = string>(
+    registerSingletonInterface<TInterface, K extends string = string>(
         key: K,
         implementationType: new (...args: any[]) => TInterface,
         ...dependencies: string[]
@@ -201,7 +201,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @param factory - Factory function that creates the service with type-safe provider access
      * @returns A new ContainerBuilder with the updated registry type
      */
-    registerFactory<K extends string, T>(
+    registerSingletonFactory<K extends string, T>(
         key: K,
         factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
     ): ContainerBuilder<TRegistry & Record<K, T>> {
@@ -263,7 +263,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * ```typescript
      * const container = new ContainerBuilder()
      *   .registerSingleton('Logger', ConsoleLogger)
-     *   .registerFactory('Config', () => ({ env: 'dev' }))
+     *   .registerSingletonFactory('Config', () => ({ env: 'dev' }))
      *   .build();
      * 
      * const logger = container.get('Logger'); // Type: ConsoleLogger
