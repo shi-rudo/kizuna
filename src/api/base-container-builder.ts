@@ -167,24 +167,26 @@ export abstract class BaseContainerBuilder {
             });
 
             // Validate parameter names match dependencies for constructor-based registrations
-            if (resolver.isConstructorBased()) {
-                const constructor = resolver.getConstructor();
-                if (constructor) {
-                    const paramNames = this.extractParameterNames(constructor);
-                    const deps = resolver.getDependencies();
-                    
-                    // Only validate if we have both parameters and dependencies
-                    // and parameter names were successfully extracted
-                    if (paramNames.length > 0 && deps.length > 0 && paramNames.length >= deps.length) {
-                        deps.forEach((depName, index) => {
-                            const paramName = paramNames[index];
-                            if (paramName && depName !== paramName) {
-                                issues.push(
-                                    `Service '${name}' parameter ${index} is named '${paramName}' but dependency '${depName}' is provided. ` +
-                                    `Consider: .registerSingleton('${name}', ${constructor.name}, ${paramNames.map(p => `'${p}'`).join(', ')})`
-                                );
-                            }
-                        });
+            if (this.strictParameterValidation) {
+                if (resolver.isConstructorBased()) {
+                    const constructor = resolver.getConstructor();
+                    if (constructor) {
+                        const paramNames = this.extractParameterNames(constructor);
+                        const deps = resolver.getDependencies();
+                        
+                        // Only validate if we have both parameters and dependencies
+                        // and parameter names were successfully extracted
+                        if (paramNames.length > 0 && deps.length > 0 && paramNames.length >= deps.length) {
+                            deps.forEach((depName, index) => {
+                                const paramName = paramNames[index];
+                                if (paramName && depName !== paramName) {
+                                    issues.push(
+                                        `Service '${name}' parameter ${index} is named '${paramName}' but dependency '${depName}' is provided. ` +
+                                        `Consider: .registerSingleton('${name}', ${constructor.name}, ${paramNames.map(p => `'${p}'`).join(', ')})`
+                                    );
+                                }
+                            });
+                        }
                     }
                 }
             }
