@@ -17,7 +17,7 @@
  *   .registerScoped('UserService', UserService, 'Logger')
  *   
  *   // Interface-based
- *   .registerInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
+ *   .registerSingletonInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
  *   
  *   // Factory-based
  *   .registerFactory('Config', (provider) => {
