@@ -8,7 +8,7 @@ import type {
     TypeSafeServiceLocator,
 } from "./contracts/interfaces";
 import type { ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
-import { TypeSafeServiceProvider } from "./type-safe-service-provider";
+import { ServiceProvider } from "./service-provider";
 
 /**
  * ContainerBuilder provides a unified, fully type-safe API for dependency injection.
@@ -279,7 +279,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         }
 
         const registrationsObject = Object.fromEntries(this.registrations);
-        return new TypeSafeServiceProvider<TRegistry>(registrationsObject);
+        return new ServiceProvider<TRegistry>(registrationsObject);
     }
 
     // =================
