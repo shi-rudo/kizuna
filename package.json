@@ -1,6 +1,6 @@
 {
   "name": "@shirudo/kizuna",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "A powerful and flexible dependency injection library for TypeScript and JavaScript.",
   "keywords": [
     "Dependency Injection",
@@ -27,6 +27,9 @@
   },
   "author": "",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@10.13.1",
   "devDependencies": {
     "@biomejs/biome": "2.1.2",

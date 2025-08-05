@@ -3,18 +3,18 @@
 > **⚠️ Beta Release Notice**  
 > Kizuna is currently in beta. While the core functionality is stable and production use can be considered, there may be small API changes and improvements based on community feedback. We recommend thorough testing before production deployment.
 
-A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with complete type safety and IDE autocompletion.
+A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with comprehensive type safety and IDE autocompletion.
 
 ## ✨ Features
 
-- **🎯 Complete Type Safety**: Full TypeScript support with automatic type inference
-- **🚀 Unified API**: Single API supporting all registration patterns with excellent DX
+- **🎯 Comprehensive Type Safety**: Full TypeScript support with automatic type inference
+- **🚀 Unified API**: Single API supporting all registration patterns with a focus on developer experience
 - **🔄 Multiple Lifecycles**: Singleton, Scoped, and Transient service management
 - **🏭 Flexible Registration**: Constructor, interface, and factory-based service registration
 - **🛡️ Parameter Validation**: Automatic validation of dependency names vs constructor parameters
-- **📝 Perfect IDE Support**: Full autocompletion and compile-time validation
+- **📝 Enhanced IDE Support**: Full autocompletion and compile-time validation
 - **⚡ Zero Dependencies**: Lightweight with no external dependencies
-- **🌍 Universal**: Works in Node.js, browsers, and edge environments
+- **🌍 Cross-Platform**: Works in Node.js, browsers, and edge environments
 
 ## 🚀 Quick Start
 
@@ -51,18 +51,18 @@ const container = new ContainerBuilder()
   .registerScoped('UserService', UserService, 'Database', 'Logger')
   .build();
 
-// ✅ Get services with perfect IDE autocompletion
+// ✅ Get services with enhanced IDE autocompletion
 const userService = container.get('UserService'); // Type: UserService (auto-inferred!)
 const user = userService.getUser('123');          // Full IntelliSense support
 ```
 
 ## 🎨 The Unified API
 
-Kizuna provides a single, comprehensive API that combines the best of both type safety and flexibility. All registration patterns work together seamlessly with full type inference.
+Kizuna provides a single, comprehensive API that combines type safety and flexibility. All registration patterns work together with full type inference.
 
 ### 🏗️ **Constructor Registration** (Most Common)
 
-Perfect for services with constructor dependencies:
+For services with constructor dependencies:
 
 ```typescript
 const container = new ContainerBuilder()
@@ -77,7 +77,7 @@ const userService = container.get('UserService'); // Type: UserService ✨
 
 ### 🎯 **Interface Registration** (For Abstractions)
 
-Ideal for implementing abstractions and polymorphism:
+For implementing abstractions and polymorphism:
 
 ```typescript
 interface IEmailService {
@@ -99,7 +99,7 @@ const emailService = container.get('EmailService'); // Type: IEmailService ✨
 
 ### 🏭 **Factory Registration** (For Complex Creation)
 
-Perfect for complex initialization, conditional logic, or primitive values:
+For complex initialization, conditional logic, or primitive values:
 
 ```typescript
 const container = new ContainerBuilder()
@@ -123,7 +123,7 @@ const container = new ContainerBuilder()
   
   // Factory returning functions
   .registerSingletonFactory('Validator', () => ({
-    email: (value: string) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value),
+    email: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
     required: (value: any) => value != null && value !== ''
   }))
   
@@ -158,9 +158,9 @@ const container = new ContainerBuilder()
   .build();
 ```
 
-## 🎯 Complete Type Safety
+## 🎯 Comprehensive Type Safety
 
-Kizuna provides compile-time type checking and perfect IDE integration:
+Kizuna provides compile-time type checking and IDE integration:
 
 ### ✅ **Compile-Time Validation**
 
@@ -172,7 +172,7 @@ const container = new ContainerBuilder()
 // ❌ TypeScript Error: 'NonExistent' doesn't exist in registry
 const invalid = container.get('NonExistent');
 
-// ✅ Perfect autocompletion suggests only registered services
+// Autocompletion suggests only registered services
 const service = container.get(''); // IDE suggests: 'UserService'
 ```
 
@@ -224,11 +224,11 @@ const correctBuilder = new ContainerBuilder()
 correctBuilder.validate(); // Returns: [] (no issues)
 ```
 
-**Key Benefits:**
-- **🛡️ Prevents Runtime Errors**: Catches dependency order mismatches at validation time
-- **🎯 Enabled by Default**: Works automatically with no setup required
-- **💡 Helpful Suggestions**: Provides corrected registration examples in error messages
-- **🔧 Opt-out Available**: Can be disabled if needed with `.disableStrictParameterValidation()`
+**Benefits:**
+- **Helps Prevent Runtime Errors**: Catches dependency order mismatches at validation time
+- **Enabled by Default**: Works automatically with no setup required
+- **Helpful Suggestions**: Provides corrected registration examples in error messages
+- **Opt-out Available**: Can be disabled if needed with `.disableStrictParameterValidation()`
 
 **When Parameter Validation Helps:**
 ```typescript
@@ -503,7 +503,7 @@ worker2.postMessage({ container: sharedContainer }); // ❌ Unsafe
 
 ## 📝 TypeScript
 
-Kizuna is built with TypeScript and provides complete type safety. Ensure your `tsconfig.json` includes:
+Kizuna is built with TypeScript and provides comprehensive type safety. Ensure your `tsconfig.json` includes:
 
 ```json
 {
