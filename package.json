@@ -1,6 +1,6 @@
 {
   "name": "@shirudo/kizuna",
-  "version": "1.0.0",
+  "version": "0.0.9",
   "description": "A powerful and flexible dependency injection library for TypeScript and JavaScript.",
   "keywords": [
     "Dependency Injection",

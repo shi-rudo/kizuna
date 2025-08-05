@@ -1,5 +1,8 @@
 # Kizuna 絆
 
+> **⚠️ Beta Release Notice**  
+> Kizuna is currently in beta. While the core functionality is stable and production use can be considered, there may be small API changes and improvements based on community feedback. We recommend thorough testing before production deployment.
+
 A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with complete type safety and IDE autocompletion.
 
 ## ✨ Features
