@@ -1,0 +1,51 @@
+
+name: E2E Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-vite-app:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build and pack kizuna
+        run: |
+          pnpm run build
+          PKG_FILE=$(pnpm pack)
+          echo "PKG_FILE=$PKG_FILE" >> $GITHUB_ENV
+
+      - name: Create test Vite app
+        run: pnpm create vite test-app --template react-ts
+
+      - name: Install kizuna in test app
+        run: |
+          mv "$PKG_FILE" test-app/
+          cd test-app
+          pnpm add "./$PKG_FILE"
+
+      - name: Create test file
+        run: |
+          echo "import { ContainerBuilder } from '@shirudo/kizuna'; console.log(new ContainerBuilder());" > test-app/src/test.ts
+
+      - name: Build test app
+        run: cd test-app && pnpm run build
