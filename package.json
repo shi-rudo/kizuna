@@ -16,14 +16,17 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
     "./api": {
+      "types": "./dist/api/index.d.ts",
       "import": "./dist/api/index.mjs",
       "require": "./dist/api/index.cjs"
     },
     "./core": {
+      "types": "./dist/core/index.d.ts",
       "import": "./dist/core/index.mjs",
       "require": "./dist/core/index.cjs"
     },
