@@ -1,6 +1,6 @@
 {
   "name": "@shirudo/kizuna",
-  "version": "0.0.12",
+  "version": "0.0.15",
   "description": "A powerful and flexible dependency injection library for TypeScript and JavaScript.",
   "keywords": [
     "Dependency Injection",
@@ -14,24 +14,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs"
-    },
-    "./api": {
-      "types": "./dist/api/index.d.ts",
-      "import": "./dist/api/index.mjs",
-      "require": "./dist/api/index.cjs"
-    },
-    "./core": {
-      "types": "./dist/core/index.d.ts",
-      "import": "./dist/core/index.mjs",
-      "require": "./dist/core/index.cjs"
-    },
-    "./package.json": "./package.json"
-  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest",
