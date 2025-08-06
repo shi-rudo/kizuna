@@ -31,16 +31,17 @@ jobs:
       - name: Build and pack kizuna
         run: |
           pnpm run build
-          pnpm pack
+          PKG_FILE=$(pnpm pack)
+          echo "PKG_FILE=$PKG_FILE" >> $GITHUB_ENV
 
       - name: Create test Vite app
         run: pnpm create vite test-app --template react-ts
 
       - name: Install kizuna in test app
         run: |
-          mv *.tgz test-app/
+          mv "$PKG_FILE" test-app/
           cd test-app
-          pnpm add ./*.tgz
+          pnpm add "./$PKG_FILE"
 
       - name: Create test file
         run: |
