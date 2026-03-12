@@ -56,17 +56,23 @@ interface Disposable {
  */
 export class ScopedLifecycle implements Container {
     /**
-     * The scoped instance (null until first creation).
+     * The scoped instance.
      * @private
      */
-    private _instance: any = null;
-    
+    private _instance: any;
+
+    /**
+     * Whether the instance has been created within this scope.
+     * @private
+     */
+    private _initialized = false;
+
     /**
      * The factory function used to create instances within this scope.
      * @private
      */
     private _factory: ((...args: any[]) => any) | null = null;
-    
+
     /**
      * Tracks whether this scope has been disposed.
      * @private
@@ -138,9 +144,10 @@ export class ScopedLifecycle implements Container {
             throw new Error('No factory registered for this lifecycle');
         }
         
-        if (this._instance === null) {
+        if (!this._initialized) {
             try {
                 this._instance = this._factory(...args);
+                this._initialized = true;
             } catch (error) {
                 throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
             }
@@ -232,7 +239,8 @@ export class ScopedLifecycle implements Container {
                 }
             }
             
-            this._instance = null;
+            this._instance = undefined;
+            this._initialized = false;
             this._factory = null;
             this._isDisposed = true;
         }

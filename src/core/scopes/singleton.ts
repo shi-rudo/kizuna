@@ -42,11 +42,17 @@ import type { Container } from '../../api/contracts/interfaces';
  */
 export class SingletonLifecycle implements Container {
     /**
-     * The singleton instance (null until first creation).
+     * The singleton instance.
      * @private
      */
-    private _instance: any = null;
-    
+    private _instance: any;
+
+    /**
+     * Whether the instance has been created.
+     * @private
+     */
+    private _initialized = false;
+
     /**
      * The factory function used to create the singleton instance.
      * @private
@@ -109,9 +115,10 @@ export class SingletonLifecycle implements Container {
             throw new Error('No factory registered for this lifecycle');
         }
 
-        if (this._instance === null) {
+        if (!this._initialized) {
             try {
                 this._instance = this._factory(...args);
+                this._initialized = true;
             } catch (error) {
                 throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
             }
@@ -177,9 +184,15 @@ export class SingletonLifecycle implements Container {
      * ```
      */
     public dispose(): void {
-        // Singletons should not be disposed when individual scopes are disposed
-        // They live for the application lifetime
-        // This method is intentionally empty to preserve singleton behavior
+        if (this._initialized && this._instance && typeof this._instance === 'object' && 'dispose' in this._instance) {
+            try {
+                (this._instance as { dispose?: () => void }).dispose?.();
+            } catch (error) {
+                console.warn('Error disposing singleton instance:', error);
+            }
+        }
+        this._instance = undefined;
+        this._initialized = false;
     }
 
     /**
