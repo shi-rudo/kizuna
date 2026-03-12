@@ -1,7 +1,7 @@
 # Kizuna 絆
 
-> **⚠️ Beta Release Notice**  
-> Kizuna is currently in beta. While the core functionality is stable and production use can be considered, there may be small API changes and improvements based on community feedback. We recommend thorough testing before production deployment.
+> **Release Candidate**
+> Kizuna is approaching a stable 1.0 release. The API surface is finalized and production use is encouraged. Please report any issues or feedback via GitHub.
 
 A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with comprehensive type safety and IDE autocompletion.
 
@@ -158,6 +158,49 @@ const container = new ContainerBuilder()
   .build();
 ```
 
+### 📦 **Multi-Registration** (Multiple Implementations per Key)
+
+For registering multiple implementations under the same key — plugin systems, middleware pipelines, event handlers, and validation chains:
+
+```typescript
+// Register multiple handlers under one key
+const container = new ContainerBuilder()
+  .addSingleton('handlers', HandlerA)
+  .addSingleton('handlers', HandlerB)
+  .addSingleton('handlers', HandlerC)
+  .build();
+
+// Resolve all implementations as an array
+const handlers = container.getAll('handlers'); // [HandlerA, HandlerB, HandlerC]
+handlers.forEach(h => h.handle(event));
+```
+
+All lifecycles are supported — use `addSingleton`, `addScoped`, or `addTransient` for constructor-based registration, and `addSingletonFactory`, `addScopedFactory`, or `addTransientFactory` for factory-based registration:
+
+```typescript
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+
+  // Constructor-based multi-registration with dependencies
+  .addSingleton('middleware', AuthMiddleware, 'Logger')
+  .addSingleton('middleware', LoggingMiddleware)
+
+  // Factory-based multi-registration
+  .addTransientFactory('validators', () => new EmailValidator())
+  .addTransientFactory('validators', () => new PhoneValidator())
+
+  .build();
+
+const middleware = container.getAll('middleware');  // [AuthMiddleware, LoggingMiddleware]
+const validators = container.getAll('validators'); // New instances each time
+```
+
+**Key rules:**
+- `add*()` and `register*()` cannot be mixed for the same key — each key is either single or multi
+- `getAll()` returns an array; `get()` on a multi-key also returns the array
+- `getAll()` on a single-registration key wraps the result in a single-element array
+- Registration order is preserved in the returned array
+
 ## 🎯 Comprehensive Type Safety
 
 Kizuna provides compile-time type checking and IDE integration:
@@ -283,18 +326,25 @@ app.get('/users/:id', (req, res) => {
 ### 💾 **Database Transactions**
 
 ```typescript
-async function withTransaction<T>(work: (scope: ServiceLocator) => Promise<T>): Promise<T> {
+// Register a scoped connection factory — each scope gets its own connection
+const container = new ContainerBuilder()
+  .registerSingleton('Config', ConfigService)
+  .registerScopedFactory('Connection', (provider) => {
+    const config = provider.get('Config');
+    return createConnection(config.databaseUrl);
+  })
+  .registerScoped('UserRepository', UserRepository, 'Connection')
+  .registerScoped('OrderRepository', OrderRepository, 'Connection')
+  .build();
+
+async function withTransaction<T>(work: (scope: TypeSafeServiceLocator<any>) => Promise<T>): Promise<T> {
   const transactionScope = container.startScope();
-  
+  const connection = transactionScope.get('Connection');
+
   try {
-    // Register transaction-specific connection
-    const connection = await createConnection();
-    transactionScope.registerInstance('Connection', connection);
-    
     await connection.beginTransaction();
     const result = await work(transactionScope);
     await connection.commit();
-    
     return result;
   } catch (error) {
     await connection.rollback();
@@ -304,11 +354,11 @@ async function withTransaction<T>(work: (scope: ServiceLocator) => Promise<T>): 
   }
 }
 
-// Usage
+// Usage — repositories in the same scope share the same connection
 await withTransaction(async (txScope) => {
-  const userRepo = txScope.get('UserRepository'); // Uses transaction connection
-  const orderRepo = txScope.get('OrderRepository'); // Same transaction
-  
+  const userRepo = txScope.get('UserRepository');
+  const orderRepo = txScope.get('OrderRepository');
+
   const user = await userRepo.create({ name: 'John' });
   await orderRepo.create({ userId: user.id, total: 100 });
 });
@@ -436,15 +486,29 @@ The main class for configuring your dependency injection container.
 .registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
 
+#### Multi-Registration Methods
+
+```typescript
+// Append services under a shared key (resolved via getAll())
+.addSingleton<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.addScoped<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.addTransient<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.addSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.addScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.addTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+```
+
 #### Container Management
 
 ```typescript
-.build(): TypeSafeServiceLocator<TRegistry>        // Build the container
-.validate(): string[]                              // Validate configuration
-.clear(): ContainerBuilder                         // Clear all registrations
+.build(): TypeSafeServiceLocator<TRegistry>            // Build the container
+.validate(): string[]                                  // Validate configuration
+.remove(key: string): boolean                          // Remove a registration
+.clear(): ContainerBuilder                             // Clear all registrations
 .disableStrictParameterValidation(): ContainerBuilder  // Disable parameter name validation
-.count: number                                    // Number of registered services
-.isRegistered(key: string): boolean               // Check if service is registered
+.count: number                                         // Number of registered services
+.isRegistered(key: string): boolean                    // Check if service is registered
+.getRegisteredServiceNames(): string[]                 // List all registered keys
 ```
 
 ### TypeSafeServiceLocator
@@ -453,9 +517,10 @@ The built container interface for service resolution.
 
 ```typescript
 interface TypeSafeServiceLocator<TRegistry> {
-  get<K extends keyof TRegistry>(key: K): TRegistry[K];  // Resolve service
-  startScope(): TypeSafeServiceLocator<TRegistry>;      // Create new scope
-  dispose(): void;                                      // Cleanup resources
+  get<K extends keyof TRegistry>(key: K): TRegistry[K];      // Resolve service
+  getAll<K extends keyof TRegistry>(key: K): TRegistry[K][]; // Resolve all implementations as array
+  startScope(): TypeSafeServiceLocator<TRegistry>;            // Create new scope
+  dispose(): void;                                            // Cleanup resources
 }
 ```
 

@@ -93,6 +93,12 @@ pids
 # ────────────────
 repomix-output.* 
 
+# ────────────────
+# Ai files
+# ────────────────
+.agents
+.claude
+
 # Dolt database files (added by bd init)
 .dolt/
 *.db

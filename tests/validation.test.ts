@@ -359,6 +359,32 @@ describe('ContainerBuilder Validation', () => {
             expect(() => builder.registerSingleton('Another', ServiceWithNoDeps)).toThrow();
             // Validation after build might work or might throw - let's just check modification fails
         });
+
+        it('should flag missing dependency after remove()', () => {
+            builder
+                .registerSingleton('serviceWithNoDeps', ServiceWithNoDeps)
+                .registerSingleton('serviceWithOneDep', ServiceWithOneDep, 'serviceWithNoDeps');
+
+            expect(builder.validate()).toEqual([]);
+
+            builder.remove('serviceWithNoDeps');
+
+            const issues = builder.validate();
+            expect(issues.some(i => i.includes('serviceWithNoDeps'))).toBe(true);
+        });
+
+        it('should flag missing multi-registration dependency after remove()', () => {
+            builder
+                .registerSingleton('dep', ServiceWithNoDeps)
+                .addSingleton('multi', ServiceWithOneDep, 'dep');
+
+            expect(builder.validate()).toEqual([]);
+
+            builder.remove('dep');
+
+            const issues = builder.validate();
+            expect(issues.some(i => i.includes('dep'))).toBe(true);
+        });
     });
 
     describe('Integration with Service Management', () => {

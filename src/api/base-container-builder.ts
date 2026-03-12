@@ -29,6 +29,7 @@ const isDevelopment = (): boolean => {
  */
 export abstract class BaseContainerBuilder {
     protected readonly registrations: Map<string, ServiceWrapper> = new Map();
+    protected readonly multiRegistrations: Map<string, ServiceWrapper[]> = new Map();
     protected readonly registrationNames: Set<string> = new Set();
     protected isBuilt: boolean = false;
     protected strictParameterValidation: boolean = true;
@@ -106,10 +107,20 @@ export abstract class BaseContainerBuilder {
         }
 
         try {
+            // Remove single-registration
             const resolver = this.registrations.get(name);
             resolver?.dispose?.();
-
             this.registrations.delete(name);
+
+            // Remove multi-registrations
+            const multiResolvers = this.multiRegistrations.get(name);
+            if (multiResolvers) {
+                for (const r of multiResolvers) {
+                    r.dispose?.();
+                }
+                this.multiRegistrations.delete(name);
+            }
+
             this.registrationNames.delete(name);
             return true;
         } catch (error) {
@@ -125,7 +136,7 @@ export abstract class BaseContainerBuilder {
     clear(): void {
         this.ensureNotBuilt();
 
-        // Dispose of all resolvers
+        // Dispose of all single-registration resolvers
         this.registrations.forEach((resolver) => {
             try {
                 resolver.dispose?.();
@@ -134,7 +145,19 @@ export abstract class BaseContainerBuilder {
             }
         });
 
+        // Dispose of all multi-registration resolvers
+        this.multiRegistrations.forEach((resolvers) => {
+            for (const resolver of resolvers) {
+                try {
+                    resolver.dispose?.();
+                } catch (error) {
+                    this.logError("Error disposing resolver:", error);
+                }
+            }
+        });
+
         this.registrations.clear();
+        this.multiRegistrations.clear();
         this.registrationNames.clear();
     }
 
@@ -193,6 +216,25 @@ export abstract class BaseContainerBuilder {
             }
         });
 
+        // Validate multi-registrations
+        this.multiRegistrations.forEach((resolvers, name) => {
+            for (const resolver of resolvers) {
+                if (resolver.isDisposed()) {
+                    issues.push(`Multi-service '${name}' has a disposed registration`);
+                    continue;
+                }
+
+                const dependencies = resolver.getDependencies();
+                dependencies.forEach((dep) => {
+                    if (!this.isRegistered(dep)) {
+                        issues.push(
+                            `Multi-service '${name}' depends on unregistered service '${dep}'`,
+                        );
+                    }
+                });
+            }
+        });
+
         // Check for circular dependencies
         const circularDependencies = this.detectCircularDependencies();
         issues.push(...circularDependencies);
@@ -215,6 +257,13 @@ export abstract class BaseContainerBuilder {
             throw new Error("Service registration must have a valid name");
         }
 
+        if (this.multiRegistrations.has(serviceName)) {
+            throw new Error(
+                `Key '${serviceName}' is already registered as a multi-service. ` +
+                `Cannot mix add*() and register*() for the same key.`
+            );
+        }
+
         if (this.registrationNames.has(serviceName)) {
             this.logWarning(
                 `Service '${serviceName}' is already registered. Overwriting existing registration.`,
@@ -230,6 +279,30 @@ export abstract class BaseContainerBuilder {
      */
     protected registerService(serviceName: string, resolver: ServiceWrapper): void {
         this.registrations.set(serviceName, resolver);
+        this.registrationNames.add(serviceName);
+    }
+
+    /**
+     * Appends a service wrapper to the multi-registration list for the given key.
+     * Guards against collision with single-registrations.
+     * @protected
+     * @param {string} serviceName - The key for the multi-registration
+     * @param {ServiceWrapper} resolver - The service wrapper to append
+     */
+    protected addMultiService(serviceName: string, resolver: ServiceWrapper): void {
+        if (this.registrations.has(serviceName)) {
+            throw new Error(
+                `Key '${serviceName}' is already registered as a single service. ` +
+                `Cannot mix register*() and add*() for the same key.`
+            );
+        }
+
+        const existing = this.multiRegistrations.get(serviceName);
+        if (existing) {
+            existing.push(resolver);
+        } else {
+            this.multiRegistrations.set(serviceName, [resolver]);
+        }
         this.registrationNames.add(serviceName);
     }
 
@@ -266,6 +339,17 @@ export abstract class BaseContainerBuilder {
         const dependencyGraph = new Map<string, string[]>();
         this.registrations.forEach((resolver, name) => {
             dependencyGraph.set(name, [...resolver.getDependencies()]);
+        });
+
+        // Include multi-registrations in the dependency graph
+        this.multiRegistrations.forEach((resolvers, name) => {
+            const existing = dependencyGraph.get(name) || [];
+            for (const resolver of resolvers) {
+                existing.push(...resolver.getDependencies());
+            }
+            if (existing.length > 0) {
+                dependencyGraph.set(name, existing);
+            }
         });
 
         // Depth-first search to detect cycles

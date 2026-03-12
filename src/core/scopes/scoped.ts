@@ -56,17 +56,23 @@ interface Disposable {
  */
 export class ScopedLifecycle implements Container {
     /**
-     * The scoped instance (null until first creation).
+     * The scoped instance.
      * @private
      */
-    private _instance: any = null;
-    
+    private _instance: any;
+
+    /**
+     * Whether the instance has been created within this scope.
+     * @private
+     */
+    private _initialized = false;
+
     /**
      * The factory function used to create instances within this scope.
      * @private
      */
     private _factory: ((...args: any[]) => any) | null = null;
-    
+
     /**
      * Tracks whether this scope has been disposed.
      * @private
@@ -91,7 +97,7 @@ export class ScopedLifecycle implements Container {
      */
     public setFactory(factory: (...args: any[]) => any): void {
         if (this._isDisposed) {
-            throw new Error('Cannot use factory on disposed lifecycle');
+            throw new Error('Cannot set factory on a disposed scoped lifecycle');
         }
         if (!factory || typeof factory !== 'function') {
             throw new Error('Factory must be a valid function');
@@ -134,13 +140,17 @@ export class ScopedLifecycle implements Container {
      * ```
      */
     public getInstance<T>(...args: any[]): T {
+        if (this._isDisposed) {
+            throw new Error('Cannot resolve from a disposed scoped lifecycle');
+        }
         if (!this._factory) {
             throw new Error('No factory registered for this lifecycle');
         }
         
-        if (this._instance === null) {
+        if (!this._initialized) {
             try {
                 this._instance = this._factory(...args);
+                this._initialized = true;
             } catch (error) {
                 throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
             }
@@ -232,7 +242,8 @@ export class ScopedLifecycle implements Container {
                 }
             }
             
-            this._instance = null;
+            this._instance = undefined;
+            this._initialized = false;
             this._factory = null;
             this._isDisposed = true;
         }

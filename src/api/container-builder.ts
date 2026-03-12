@@ -2,12 +2,13 @@ import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar";
 import { ScopedLifecycle } from "../core/scopes/scoped";
 import { SingletonLifecycle } from "../core/scopes/singleton";
 import { TransientLifecycle } from "../core/scopes/transient";
+import type { ServiceWrapper } from "../core/services/service-wrapper";
 import { BaseContainerBuilder } from "./base-container-builder";
 import type {
     Container,
     TypeSafeServiceLocator,
 } from "./contracts/interfaces";
-import type { ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
+import type { AddToRegistry, Factory, ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
 import { ServiceProvider } from "./service-provider";
 
 /**
@@ -206,7 +207,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
     ): ContainerBuilder<TRegistry & Record<K, T>> {
         const configurator = (registrar: TypeSafeRegistrar<T>) => {
-            registrar.useFactory(factory);
+            registrar.useFactory(factory as Factory<T>);
         };
         return this.registerTypeSafe(key, configurator, new SingletonLifecycle());
     }
@@ -225,7 +226,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
     ): ContainerBuilder<TRegistry & Record<K, T>> {
         const configurator = (registrar: TypeSafeRegistrar<T>) => {
-            registrar.useFactory(factory);
+            registrar.useFactory(factory as Factory<T>);
         };
         return this.registerTypeSafe(key, configurator, new ScopedLifecycle());
     }
@@ -244,9 +245,127 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
     ): ContainerBuilder<TRegistry & Record<K, T>> {
         const configurator = (registrar: TypeSafeRegistrar<T>) => {
-            registrar.useFactory(factory);
+            registrar.useFactory(factory as Factory<T>);
         };
         return this.registerTypeSafe(key, configurator, new TransientLifecycle());
+    }
+
+    // =================
+    // MULTI-REGISTRATION (add* = append semantics)
+    // =================
+
+    /**
+     * Appends a singleton service under a multi-registration key.
+     * Multiple services can be registered under the same key and resolved together via `getAll()`.
+     * Cannot be mixed with `register*()` for the same key.
+     *
+     * @template K - The string key for the multi-registration
+     * @template T - The service type (inferred from constructor)
+     * @param key - The shared key for this group of services
+     * @param serviceType - The service constructor
+     * @param dependencies - Optional dependency keys
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    addSingleton<K extends string, T>(
+        key: K,
+        serviceType: new (...args: any[]) => T,
+        ...dependencies: string[]
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        return this.addTypeSafe(key, serviceType, dependencies, new SingletonLifecycle());
+    }
+
+    /**
+     * Appends a scoped service under a multi-registration key.
+     * Multiple services can be registered under the same key and resolved together via `getAll()`.
+     * Cannot be mixed with `register*()` for the same key.
+     *
+     * @template K - The string key for the multi-registration
+     * @template T - The service type (inferred from constructor)
+     * @param key - The shared key for this group of services
+     * @param serviceType - The service constructor
+     * @param dependencies - Optional dependency keys
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    addScoped<K extends string, T>(
+        key: K,
+        serviceType: new (...args: any[]) => T,
+        ...dependencies: string[]
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        return this.addTypeSafe(key, serviceType, dependencies, new ScopedLifecycle());
+    }
+
+    /**
+     * Appends a transient service under a multi-registration key.
+     * Multiple services can be registered under the same key and resolved together via `getAll()`.
+     * Cannot be mixed with `register*()` for the same key.
+     *
+     * @template K - The string key for the multi-registration
+     * @template T - The service type (inferred from constructor)
+     * @param key - The shared key for this group of services
+     * @param serviceType - The service constructor
+     * @param dependencies - Optional dependency keys
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    addTransient<K extends string, T>(
+        key: K,
+        serviceType: new (...args: any[]) => T,
+        ...dependencies: string[]
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        return this.addTypeSafe(key, serviceType, dependencies, new TransientLifecycle());
+    }
+
+    /**
+     * Appends a factory-based singleton under a multi-registration key.
+     * Multiple services can be registered under the same key and resolved together via `getAll()`.
+     * Cannot be mixed with `register*()` for the same key.
+     *
+     * @template K - The string key for the multi-registration
+     * @template T - The service type (inferred from factory return)
+     * @param key - The shared key for this group of services
+     * @param factory - Factory function that creates the service with type-safe provider access
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    addSingletonFactory<K extends string, T>(
+        key: K,
+        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        return this.addFactoryTypeSafe(key, factory, new SingletonLifecycle());
+    }
+
+    /**
+     * Appends a factory-based scoped service under a multi-registration key.
+     * Multiple services can be registered under the same key and resolved together via `getAll()`.
+     * Cannot be mixed with `register*()` for the same key.
+     *
+     * @template K - The string key for the multi-registration
+     * @template T - The service type (inferred from factory return)
+     * @param key - The shared key for this group of services
+     * @param factory - Factory function that creates the service with type-safe provider access
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    addScopedFactory<K extends string, T>(
+        key: K,
+        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        return this.addFactoryTypeSafe(key, factory, new ScopedLifecycle());
+    }
+
+    /**
+     * Appends a factory-based transient service under a multi-registration key.
+     * Multiple services can be registered under the same key and resolved together via `getAll()`.
+     * Cannot be mixed with `register*()` for the same key.
+     *
+     * @template K - The string key for the multi-registration
+     * @template T - The service type (inferred from factory return)
+     * @param key - The shared key for this group of services
+     * @param factory - Factory function that creates the service with type-safe provider access
+     * @returns A new ContainerBuilder with the updated registry type
+     */
+    addTransientFactory<K extends string, T>(
+        key: K,
+        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        return this.addFactoryTypeSafe(key, factory, new TransientLifecycle());
     }
 
     // =================
@@ -274,12 +393,17 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         this.ensureNotBuilt();
         this.markAsBuilt();
 
-        if (this.registrations.size === 0) {
+        if (this.registrations.size === 0 && this.multiRegistrations.size === 0) {
             this.logWarning("Building ServiceProvider with no registered services");
         }
 
         const registrationsObject = Object.fromEntries(this.registrations);
-        return new ServiceProvider<TRegistry>(registrationsObject);
+        const multiRegistrationsObject: Record<string, ServiceWrapper[]> = {};
+        this.multiRegistrations.forEach((wrappers, key) => {
+            multiRegistrationsObject[key] = [...wrappers];
+        });
+
+        return new ServiceProvider<TRegistry>(registrationsObject, multiRegistrationsObject);
     }
 
     // =================
@@ -299,12 +423,51 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
 
         const registrar = new TypeSafeRegistrarImpl<T>(key);
         configurator(registrar);
-        
+
         const serviceWrapper = registrar.build(lifecycle);
         this.validateServiceName(key);
         this.registerService(key, serviceWrapper);
 
         // Return this instance with updated type (cast)
         return this as unknown as ContainerBuilder<TRegistry & Record<K, T>>;
+    }
+
+    /**
+     * Internal helper for constructor-based multi-registration.
+     * @private
+     */
+    private addTypeSafe<K extends string, T>(
+        key: K,
+        serviceType: new (...args: any[]) => T,
+        dependencies: string[],
+        lifecycle: Container
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        this.ensureNotBuilt();
+
+        const registrar = new TypeSafeRegistrarImpl<T>(key);
+        registrar.useType(serviceType, ...dependencies);
+        const serviceWrapper = registrar.build(lifecycle);
+        this.addMultiService(key, serviceWrapper);
+
+        return this as unknown as ContainerBuilder<AddToRegistry<TRegistry, K, T>>;
+    }
+
+    /**
+     * Internal helper for factory-based multi-registration.
+     * @private
+     */
+    private addFactoryTypeSafe<K extends string, T>(
+        key: K,
+        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T,
+        lifecycle: Container
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
+        this.ensureNotBuilt();
+
+        const registrar = new TypeSafeRegistrarImpl<T>(key);
+        registrar.useFactory(factory as Factory<T>);
+        const serviceWrapper = registrar.build(lifecycle);
+        this.addMultiService(key, serviceWrapper);
+
+        return this as unknown as ContainerBuilder<AddToRegistry<TRegistry, K, T>>;
     }
 }

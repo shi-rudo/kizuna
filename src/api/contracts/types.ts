@@ -110,6 +110,25 @@ export type ServiceKey<T = any> = string | (new (...args: any[]) => T);
 export type ServiceRegistry = Record<string, any>;
 
 /**
+ * Utility type that adds a service to the registry under a multi-registration key.
+ *
+ * - If K is new, creates `Record<K, T[]>` (new multi-key).
+ * - If K already exists and holds an array type, widens the union: `(U | T)[]`.
+ * - If K already exists but is NOT an array (single-registration collision), resolves to `never`
+ *   which produces a compile-time error.
+ *
+ * @template TRegistry - The current service registry
+ * @template K - The string key for the service
+ * @template T - The service type being added
+ */
+export type AddToRegistry<TRegistry, K extends string, T> =
+    K extends keyof TRegistry
+        ? TRegistry[K] extends (infer U)[]
+            ? Omit<TRegistry, K> & Record<K, (U | T)[]>
+            : never
+        : TRegistry & Record<K, T[]>;
+
+/**
  * Type-safe registrar interface that provides simplified registration methods.
  * This replaces the complex ServiceBuilderFactory for the new type-safe API.
  * 
