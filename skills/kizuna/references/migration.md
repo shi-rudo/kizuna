@@ -188,3 +188,57 @@ const container = new ContainerBuilder()
 ```
 
 NestJS `@Module` organizes providers into feature modules. Kizuna has no module system — organize registrations into separate builder functions and compose them manually.
+
+## Migrating multi-provider patterns
+
+Other DI frameworks use different syntax for registering multiple implementations.
+
+### inversify multi-binding
+
+```typescript
+// inversify
+container.bind<IPlugin>(TYPES.Plugin).to(AuthPlugin);
+container.bind<IPlugin>(TYPES.Plugin).to(LoggingPlugin);
+const plugins = container.getAll<IPlugin>(TYPES.Plugin);
+```
+
+```typescript
+// Kizuna
+const container = new ContainerBuilder()
+  .addSingleton('plugins', AuthPlugin)
+  .addSingleton('plugins', LoggingPlugin)
+  .build();
+
+const plugins = container.getAll('plugins');
+```
+
+### NestJS multi-provider
+
+```typescript
+// NestJS
+@Module({
+  providers: [
+    { provide: 'PLUGINS', useClass: AuthPlugin, multi: true },
+    { provide: 'PLUGINS', useClass: LoggingPlugin, multi: true },
+  ],
+})
+```
+
+```typescript
+// Kizuna
+const container = new ContainerBuilder()
+  .addSingleton('plugins', AuthPlugin)
+  .addSingleton('plugins', LoggingPlugin)
+  .build();
+
+const plugins = container.getAll('plugins');
+```
+
+### Key differences
+
+| Framework | Multi-registration | Resolution |
+| --- | --- | --- |
+| inversify | Multiple `.bind()` to same symbol | `container.getAll(symbol)` |
+| NestJS | `multi: true` in provider config | `@Inject('TOKEN')` returns array |
+| tsyringe | `registerSingleton` with same token | `resolveAll(token)` |
+| Kizuna | `addSingleton` / `addScoped` / `addTransient` | `container.getAll('key')` |

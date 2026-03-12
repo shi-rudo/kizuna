@@ -18,12 +18,15 @@ skills:
     description: >
       Use @shirudo/kizuna to wire up services with type-safe dependency injection.
       Covers ContainerBuilder, registerSingleton, registerSingletonInterface,
-      registerSingletonFactory, registerScoped, registerTransient, build(),
-      validate(), get(), startScope(), dispose(), TypeSafeServiceLocator,
-      SingletonLifecycle, ScopedLifecycle, TransientLifecycle,
-      disableStrictParameterValidation. Activate when registering services,
-      choosing lifecycles, managing request scopes, debugging validation errors,
-      testing with mock containers, or integrating with web frameworks.
+      registerSingletonFactory, registerScoped, registerTransient, addSingleton,
+      addScoped, addTransient, addSingletonFactory, addScopedFactory,
+      addTransientFactory, build(), validate(), get(), getAll(), startScope(),
+      dispose(), remove(), getRegisteredServiceNames(), TypeSafeServiceLocator,
+      SingletonLifecycle, ScopedLifecycle,
+      TransientLifecycle, disableStrictParameterValidation. Activate when
+      registering services, choosing lifecycles, managing request scopes,
+      registering multiple implementations under one key, debugging validation
+      errors, testing with mock containers, or integrating with web frameworks.
     requires: []
     sources:
       - 'shi-rudo/kizuna:src/api/container-builder.ts'

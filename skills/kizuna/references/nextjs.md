@@ -12,9 +12,20 @@ In Express, you create a scope in middleware and dispose it on response end. In 
 - **Server components** are rendered by React — you have no lifecycle hooks for cleanup.
 - **Server actions** can be called from anywhere — scope boundary is unclear.
 
+## Which pattern where
+
+| Context | Pattern | Scope sharing | Disposal |
+| --- | --- | --- | --- |
+| Route handler (`GET`, `POST`) | Scope at top of handler | Within handler only | `finally` block |
+| Server component | Scope per component | Not shared between components | `finally` block |
+| Server action | Scope per action | Within action only | `finally` block |
+| Multiple components need shared state | `withScope` helper + pass data down | Via return value, not scope | `finally` in helper |
+
+**Key insight:** In Next.js, every entry point gets its own scope. There is no way to share a scope across server components in the same render.
+
 ## Route handlers
 
-Route handlers are the simplest case. Create a scope at the top, dispose it at the end.
+The simplest case. Create a scope at the top, dispose at the end.
 
 ```typescript
 // app/api/users/[id]/route.ts
@@ -38,7 +49,7 @@ export async function GET(
 
 ## Server components
 
-Server components are functions called by React. You cannot control when React disposes them. The safest pattern: create a scope per component render, use it, and dispose immediately.
+Create a scope per component render, use it, dispose immediately.
 
 ```typescript
 // app/users/[id]/page.tsx
@@ -61,11 +72,11 @@ export default async function UserPage({
 }
 ```
 
-The drawback: if multiple server components on the same page each create scopes, scoped services are not shared between them. Each component gets its own instance. This is correct isolation behavior but means scoped services cannot coordinate across components in the same render.
+**Tradeoff:** Multiple server components on the same page each get their own scope. Scoped services cannot coordinate across components in the same render. If you need shared data, resolve it in a parent and pass it via props.
 
 ## Server actions
 
-Server actions are invoked individually. Scope per action invocation.
+Scope per action invocation.
 
 ```typescript
 // app/actions.ts
@@ -85,7 +96,9 @@ export async function createUser(formData: FormData) {
 }
 ```
 
-## Helper to reduce boilerplate
+## withScope helper — reducing boilerplate
+
+When every entry point follows the same try/finally pattern, extract a helper:
 
 ```typescript
 // lib/with-scope.ts
@@ -116,6 +129,18 @@ export default async function UserPage({ params }: { params: Promise<{ id: strin
   return <div>{user.name}</div>;
 }
 ```
+
+**When `withScope` makes sense:** When you have 3+ entry points that all follow the same scope-per-call pattern. For a single route handler, inline try/finally is clearer.
+
+## When to use singletons vs. scoped
+
+| Service type | Lifecycle | Why |
+| --- | --- | --- |
+| DB connection pool | Singleton | Shared across all renders, never recreated |
+| Logger | Singleton | Stateless, no reason to scope |
+| User context / auth | Scoped | Different per request/render |
+| Request ID | Scoped factory | Unique per scope: `.registerScopedFactory('requestId', () => crypto.randomUUID())` |
+| Stateless utility | Transient | No caching needed |
 
 ## What does NOT work
 

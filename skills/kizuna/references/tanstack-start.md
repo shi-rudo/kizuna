@@ -10,6 +10,28 @@ TanStack Start has server middleware, loaders, and actions — each with differe
 - **Actions** run individually, so scoping per action is straightforward.
 - **Server middleware** exists in TanStack Start but has a different API surface than Express-style middleware.
 
+## Which pattern where
+
+| Context | Pattern | Scope sharing | Disposal |
+| --- | --- | --- | --- |
+| Middleware available | `createMiddleware().server()` | All loaders/actions in same request share one scope | `finally` in middleware |
+| No middleware | Scope per server function | Each function gets its own scope | `finally` in handler |
+
+**Key decision:** Use middleware when parallel loaders need to share scoped services (e.g., same DB transaction). Use per-function scopes when isolation is preferred.
+
+```
+Middleware scope (shared):
+  Request → Middleware creates scope
+              ├── Loader A → scope.get('tx') ─┐
+              ├── Loader B → scope.get('tx') ─┤ same transaction
+              └── finally → scope.dispose()
+
+Per-function scope (isolated):
+  Request → Loader A → own scope → dispose
+          → Loader B → own scope → dispose
+          (each loader gets a different transaction)
+```
+
 ## Server middleware
 
 TanStack Start's `createMiddleware` can manage scopes across loaders and actions.
@@ -89,7 +111,17 @@ const getUser = createServerFn({ method: 'GET' })
   });
 ```
 
-The tradeoff: parallel loaders for the same route each get independent scopes. Scoped services are not shared between them.
+**When per-function makes sense:** Simple CRUD operations where loaders don't need shared state. Avoids middleware complexity for straightforward cases.
+
+## When to use singletons vs. scoped
+
+| Service type | Lifecycle | Why |
+| --- | --- | --- |
+| DB connection pool | Singleton | Shared across all requests |
+| Logger | Singleton | Stateless |
+| DB transaction | Scoped + middleware | Shared across parallel loaders in same request |
+| User context | Scoped | Different per request |
+| Request ID | Scoped factory | `.registerScopedFactory('requestId', () => crypto.randomUUID())` |
 
 ## Key differences from Express
 

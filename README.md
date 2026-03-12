@@ -1,11 +1,9 @@
 # Kizuna 絆
 
-> **⚠️ Beta Release Notice**  
-> Kizuna is currently in beta. While the core functionality is stable and production use can be considered, there may be small API changes and improvements based on community feedback. We recommend thorough testing before production deployment.
+> **Release Candidate**
+> Kizuna is approaching a stable 1.0 release. The API surface is finalized and production use is encouraged. Please report any issues or feedback via GitHub.
 
 A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with comprehensive type safety and IDE autocompletion.
-
-> **AI Agent Support** — If you use an AI coding agent, run `npx @tanstack/intent@latest install` to teach it idiomatic Kizuna patterns.
 
 ## ✨ Features
 
@@ -328,18 +326,25 @@ app.get('/users/:id', (req, res) => {
 ### 💾 **Database Transactions**
 
 ```typescript
-async function withTransaction<T>(work: (scope: ServiceLocator) => Promise<T>): Promise<T> {
+// Register a scoped connection factory — each scope gets its own connection
+const container = new ContainerBuilder()
+  .registerSingleton('Config', ConfigService)
+  .registerScopedFactory('Connection', (provider) => {
+    const config = provider.get('Config');
+    return createConnection(config.databaseUrl);
+  })
+  .registerScoped('UserRepository', UserRepository, 'Connection')
+  .registerScoped('OrderRepository', OrderRepository, 'Connection')
+  .build();
+
+async function withTransaction<T>(work: (scope: TypeSafeServiceLocator<any>) => Promise<T>): Promise<T> {
   const transactionScope = container.startScope();
-  
+  const connection = transactionScope.get('Connection');
+
   try {
-    // Register transaction-specific connection
-    const connection = await createConnection();
-    transactionScope.registerInstance('Connection', connection);
-    
     await connection.beginTransaction();
     const result = await work(transactionScope);
     await connection.commit();
-    
     return result;
   } catch (error) {
     await connection.rollback();
@@ -349,11 +354,11 @@ async function withTransaction<T>(work: (scope: ServiceLocator) => Promise<T>): 
   }
 }
 
-// Usage
+// Usage — repositories in the same scope share the same connection
 await withTransaction(async (txScope) => {
-  const userRepo = txScope.get('UserRepository'); // Uses transaction connection
-  const orderRepo = txScope.get('OrderRepository'); // Same transaction
-  
+  const userRepo = txScope.get('UserRepository');
+  const orderRepo = txScope.get('OrderRepository');
+
   const user = await userRepo.create({ name: 'John' });
   await orderRepo.create({ userId: user.id, total: 100 });
 });
@@ -496,12 +501,14 @@ The main class for configuring your dependency injection container.
 #### Container Management
 
 ```typescript
-.build(): TypeSafeServiceLocator<TRegistry>        // Build the container
-.validate(): string[]                              // Validate configuration
-.clear(): ContainerBuilder                         // Clear all registrations
+.build(): TypeSafeServiceLocator<TRegistry>            // Build the container
+.validate(): string[]                                  // Validate configuration
+.remove(key: string): boolean                          // Remove a registration
+.clear(): ContainerBuilder                             // Clear all registrations
 .disableStrictParameterValidation(): ContainerBuilder  // Disable parameter name validation
-.count: number                                    // Number of registered services
-.isRegistered(key: string): boolean               // Check if service is registered
+.count: number                                         // Number of registered services
+.isRegistered(key: string): boolean                    // Check if service is registered
+.getRegisteredServiceNames(): string[]                 // List all registered keys
 ```
 
 ### TypeSafeServiceLocator

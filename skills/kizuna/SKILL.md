@@ -3,11 +3,15 @@ name: kizuna
 description: >
   Use @shirudo/kizuna to wire up services with type-safe dependency injection.
   Covers ContainerBuilder, registerSingleton, registerSingletonInterface,
-  registerSingletonFactory, registerScoped, registerTransient, build(),
-  validate(), get(), startScope(), dispose(), TypeSafeServiceLocator,
-  disableStrictParameterValidation. Activate when registering services,
-  choosing lifecycles, managing request scopes, debugging validation errors,
-  testing with mock containers, or integrating with web frameworks.
+  registerSingletonFactory, registerScoped, registerTransient, addSingleton,
+  addScoped, addTransient, addSingletonFactory, addScopedFactory,
+  addTransientFactory, build(), validate(), get(), getAll(), startScope(),
+  dispose(), remove(), getRegisteredServiceNames(), TypeSafeServiceLocator,
+  disableStrictParameterValidation.
+  Activate when registering services, choosing lifecycles, managing request
+  scopes, registering multiple implementations under one key, debugging
+  validation errors, testing with mock containers, or integrating with web
+  frameworks.
 type: core
 library: kizuna
 library_version: "0.0.15"
@@ -15,6 +19,8 @@ sources:
   - "shi-rudo/kizuna:src/api/container-builder.ts"
   - "shi-rudo/kizuna:src/api/base-container-builder.ts"
   - "shi-rudo/kizuna:src/api/service-provider.ts"
+  - "shi-rudo/kizuna:src/api/contracts/interfaces.ts"
+  - "shi-rudo/kizuna:src/api/contracts/types.ts"
   - "shi-rudo/kizuna:src/core/scopes/singleton.ts"
   - "shi-rudo/kizuna:src/core/scopes/scoped.ts"
   - "shi-rudo/kizuna:src/core/scopes/transient.ts"
@@ -24,7 +30,7 @@ sources:
 
 # Kizuna — Dependency Injection
 
-Kizuna is a zero-dependency, type-safe DI container for TypeScript. Services are plain classes — no decorators, no base classes. The `ContainerBuilder` provides a fluent API with three registration patterns (constructor, interface, factory) across three lifecycles (singleton, scoped, transient). All type inference flows through the builder chain.
+Kizuna is a zero-dependency, type-safe DI container for TypeScript. Services are plain classes — no decorators, no base classes. The `ContainerBuilder` provides a fluent API with three registration patterns (constructor, interface, factory) across three lifecycles (singleton, scoped, transient), plus multi-registration for plugin/middleware patterns. All type inference flows through the builder chain.
 
 ## Setup
 
@@ -101,6 +107,41 @@ const container = new ContainerBuilder()
   .build();
 ```
 
+### Multi-registration with add* / getAll
+
+Use `add*()` methods to register multiple implementations under the same key. Resolve all of them with `getAll()`. This is the pattern for plugin systems, middleware pipelines, event handlers, and validation rule sets.
+
+```typescript
+import { ContainerBuilder } from '@shirudo/kizuna';
+
+interface Validator {
+  validate(input: string): boolean;
+}
+
+class LengthValidator implements Validator {
+  validate(input: string) { return input.length >= 3; }
+}
+
+class FormatValidator implements Validator {
+  validate(input: string) { return /^[a-z]+$/.test(input); }
+}
+
+const container = new ContainerBuilder()
+  .addSingleton('validators', LengthValidator)
+  .addSingleton('validators', FormatValidator)
+  .build();
+
+const validators = container.getAll('validators'); // Type: (LengthValidator | FormatValidator)[]
+const allValid = validators.every(v => v.validate('hello')); // true
+```
+
+**Key rules:**
+- `add*()` and `register*()` cannot share the same key — pick one pattern per key
+- `getAll()` returns an array; `get()` on a multi-key also returns the array
+- Each implementation can have its own lifecycle (mix singleton + scoped under one key)
+- Factory variants available: `addSingletonFactory`, `addScopedFactory`, `addTransientFactory`
+- `validate()` checks multi-registration dependencies and circular deps
+
 ### Request scoping for web servers
 
 Create a scope per request. Scoped services share one instance within the scope. Singletons are shared across all scopes.
@@ -146,6 +187,47 @@ const issues = builder.validate();
 // ]
 ```
 
+### Disposal
+
+Calling `container.dispose()` disposes all lifecycle managers and their instances:
+- **Singleton**: Calls `instance.dispose()` if it exists, then marks lifecycle as permanently disposed
+- **Scoped**: Calls `instance.dispose()` if it exists, clears instance reference
+- **Transient**: Clears factory reference (individual instances are not tracked)
+
+After disposal, `get()`, `getAll()`, and `startScope()` throw `"Cannot access services from a disposed container"`. Disposal is idempotent — calling it twice is safe.
+
+```typescript
+const container = builder.build();
+const pool = container.get('dbPool');
+// ... use container ...
+
+container.dispose(); // pool.dispose() is called automatically if it exists
+
+// container.get('dbPool'); // throws: Cannot access services from a disposed container
+```
+
+## Container Inspection & Modification
+
+```typescript
+const builder = new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .registerSingleton('database', DatabaseService, 'logger')
+  .registerScoped('userService', UserService, 'database', 'logger');
+
+// Inspect registered services
+builder.getRegisteredServiceNames(); // ['logger', 'database', 'userService']
+
+// Remove a registration (before build)
+builder.remove('database'); // returns true
+builder.remove('nonExistent'); // returns false
+
+// Validate after removal — catches broken dependencies
+builder.validate();
+// ["Service 'userService' depends on unregistered service 'database'"]
+```
+
+`remove()` works on both single-registration and multi-registration keys. It disposes the removed service wrappers and returns `false` if the key wasn't registered.
+
 ## Common Mistakes
 
 ### CRITICAL Omitting the mandatory string key
@@ -166,7 +248,7 @@ new ContainerBuilder()
   .build();
 ```
 
-Every registration method requires a string key as the first argument. There is no overload that accepts only a class. Agents trained on tsyringe, inversify, or NestJS generate the keyless form.
+Every registration method (including `add*`) requires a string key as the first argument. There is no overload that accepts only a class. Agents trained on tsyringe, inversify, or NestJS generate the keyless form.
 
 Source: container-builder.ts method signatures
 
@@ -194,7 +276,7 @@ const container = builder.build();
 
 `build()` creates a ServiceProvider without checking for missing dependencies, circular dependencies, or parameter mismatches. Errors surface at resolution time.
 
-Source: container-builder.ts:273-283
+Source: container-builder.ts:392-407
 
 ### CRITICAL Captive dependency — singleton holds scoped service
 
@@ -241,6 +323,36 @@ Correct:
 Constructor registration is shorter, declares dependencies explicitly for `validate()`, and lets Kizuna handle the wiring. Factories hide dependencies from validation.
 
 Source: maintainer interview
+
+### HIGH Mixing add* and register* on the same key
+
+Wrong:
+
+```typescript
+new ContainerBuilder()
+  .registerSingleton('handler', DefaultHandler)
+  .addSingleton('handler', ExtraHandler) // throws at build time
+  .build();
+```
+
+Correct:
+
+```typescript
+// Use ONLY add* for multi-registration keys
+new ContainerBuilder()
+  .addSingleton('handlers', DefaultHandler)
+  .addSingleton('handlers', ExtraHandler)
+  .build();
+
+// Use register* for single-registration keys
+new ContainerBuilder()
+  .registerSingleton('handler', DefaultHandler)
+  .build();
+```
+
+A key must be either single-registration (`register*`) or multi-registration (`add*`). Mixing them on the same key throws an error.
+
+Source: base-container-builder.ts
 
 ### HIGH Using registerSingletonInterface unnecessarily
 
@@ -320,29 +432,30 @@ Strict parameter validation (enabled by default) checks that dependency keys mat
 
 Source: base-container-builder.ts:171-193
 
-### HIGH Null factory return breaks singleton caching
+### HIGH Importing the stale Factory<T> type
 
 Wrong:
 
 ```typescript
-.registerSingletonFactory('optionalConfig', () => {
-  return process.env.CONFIG_PATH ? loadConfig() : null;
-})
-// null → lifecycle thinks "never created" → re-runs factory every get()
+import { Factory } from '@shirudo/kizuna';
+const myFactory: Factory<UserService> = (provider) => {
+  return new UserService(provider.get('database'));
+};
 ```
 
 Correct:
 
 ```typescript
-.registerSingletonFactory('optionalConfig', () => {
-  return process.env.CONFIG_PATH ? loadConfig() : undefined;
+// Let TypeScript infer the factory type from the registration method
+.registerSingletonFactory('userService', (provider) => {
+  const db = provider.get('database'); // Type-safe!
+  return new UserService(db);
 })
-// undefined is cached correctly
 ```
 
-Both SingletonLifecycle and ScopedLifecycle use `if (this._instance === null)` to check for cached instances. A factory returning `null` makes a singleton behave as transient.
+`Factory<T>` in types.ts is leftover from the pre-unified API. It references `ServiceLocator` instead of `TypeSafeServiceLocator`, producing type errors. Let TypeScript infer the type from the registration method.
 
-Source: singleton.ts:112, scoped.ts:141
+Source: types.ts vs container-builder.ts factory signatures
 
 ### HIGH Using non-existent APIs from examples
 
@@ -372,6 +485,31 @@ Correct:
 The examples and docs reference `registerInterface()`, `registerFactory()`, `registerInstance()`, and `scope.reset()` as planned features (ADR-003) that were never implemented.
 
 Source: examples/unified-container-example.ts:109,113; docs/concurrency-patterns.md:229,582
+
+### HIGH Using get() instead of getAll() for multi-registration keys
+
+Wrong:
+
+```typescript
+const container = new ContainerBuilder()
+  .addSingleton('validators', LengthValidator)
+  .addSingleton('validators', FormatValidator)
+  .build();
+
+const validator = container.get('validators');
+// Returns the ARRAY, not a single validator — confusing
+```
+
+Correct:
+
+```typescript
+const validators = container.getAll('validators');
+// Explicitly returns Validator[] — intent is clear
+```
+
+`get()` on a multi-registration key returns the array (same as `getAll()`), but `getAll()` communicates intent. For single-registration keys, `getAll()` wraps the result in a single-element array.
+
+Source: service-provider.ts:40-62
 
 ## References
 

@@ -5,15 +5,16 @@
 This is the single most important fact about Kizuna. The `build()` method creates a `ServiceProvider` without any checks:
 
 ```typescript
-// container-builder.ts:273-283
+// container-builder.ts:392-407
 build(): TypeSafeServiceLocator<TRegistry> {
     this.ensureNotBuilt();
     this.markAsBuilt();
-    if (this.registrations.size === 0) {
+    if (this.registrations.size === 0 && this.multiRegistrations.size === 0) {
         this.logWarning("Building ServiceProvider with no registered services");
     }
     const registrationsObject = Object.fromEntries(this.registrations);
-    return new ServiceProvider<TRegistry>(registrationsObject);
+    const multiRegistrationsObject = ...;
+    return new ServiceProvider<TRegistry>(registrationsObject, multiRegistrationsObject);
 }
 ```
 
@@ -36,8 +37,8 @@ const container = builder.build();
 
 ## What validate() checks
 
-1. **Missing dependencies** — a registered service declares a dependency that is not registered.
-2. **Circular dependencies** — A depends on B depends on A (detected via DFS).
+1. **Missing dependencies** — a registered service declares a dependency that is not registered (checks both single and multi-registrations).
+2. **Circular dependencies** — A depends on B depends on A (detected via DFS, includes multi-registration dependency graphs).
 3. **Parameter name mismatches** (strict mode, enabled by default) — dependency keys don't match constructor parameter names positionally.
 4. **Disposed registrations** — a service wrapper that has been disposed.
 
@@ -45,7 +46,8 @@ const container = builder.build();
 
 - **Lifecycle mismatches** (captive dependencies) — singleton depending on scoped.
 - **Factory dependencies** — dependencies resolved inside factories are invisible.
-- **Runtime resolution errors** — factory throws, async factory returns Promise, null return.
+- **Runtime resolution errors** — factory throws, async factory returns Promise.
+- **add*/register* key conflicts** — these are caught at registration time, not by validate().
 
 ## Error types and debugging
 

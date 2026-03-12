@@ -6,7 +6,7 @@ Every registration in Kizuna has one of three lifecycles. The lifecycle controls
 
 | Lifecycle | Instance creation | Sharing | Disposal | Use for |
 | --- | --- | --- | --- | --- |
-| Singleton | Lazy, on first `get()` | One instance forever | No-op (intentional) | DB pools, config, loggers |
+| Singleton | Lazy, on first `get()` | One instance forever | Calls `dispose()` on instance when root container is disposed | DB pools, config, loggers |
 | Scoped | Lazy, on first `get()` within scope | One per scope | Calls `dispose()` on instance if it exists | Per-request state, transactions |
 | Transient | Every `get()` call | Never shared | Not tracked | Stateless services, timestamps, UUIDs |
 
@@ -20,10 +20,17 @@ Every registration in Kizuna has one of three lifecycles. The lifecycle controls
 
 - Created on first `get()`, cached forever.
 - Shared across all scopes — `container.get('logger') === scope.get('logger')`.
-- `dispose()` is a **silent no-op** (singleton.ts:179). When you call `container.dispose()`, singleton instances are NOT cleaned up. If a singleton holds a database pool, that pool stays open.
-- `isDisposed` always returns `false`.
+- When the **root container** is disposed, `SingletonLifecycle.dispose()` calls `instance.dispose()` if the instance has that method. The singleton is then permanently marked as disposed.
+- **Child scope disposal does NOT dispose singletons** — `ServiceWrapper` sets `ownsLifecycle = false` for shared singleton lifecycles, preventing child scopes from triggering singleton cleanup.
+- After disposal, `get()` throws `"Cannot resolve from a disposed singleton lifecycle"`.
 
-For shutdown cleanup, explicitly close singleton resources before calling `container.dispose()`.
+```typescript
+const container = builder.build();
+const pool = container.get('dbPool');
+
+container.dispose(); // pool.dispose() is called automatically if it exists
+// container.get('dbPool'); // throws: Cannot access services from a disposed container
+```
 
 ## Scoped
 
@@ -35,7 +42,8 @@ For shutdown cleanup, explicitly close singleton resources before calling `conta
 
 - Created on first `get()` within each scope, cached for that scope.
 - Different scopes get different instances.
-- `dispose()` calls `instance.dispose()` if the instance has that method (scoped.ts:226-228). Always dispose scopes when done.
+- `dispose()` calls `instance.dispose()` if the instance has that method (scoped.ts:233-249). Always dispose scopes when done.
+- After disposal, `get()` throws `"Cannot resolve from a disposed scoped lifecycle"`.
 
 ## Transient
 
@@ -46,6 +54,7 @@ For shutdown cleanup, explicitly close singleton resources before calling `conta
 
 - Created fresh on every `get()` call. Never cached.
 - Instances are not tracked by the lifecycle — the container does not hold references and cannot dispose them.
+- After disposal, `get()` throws `"Cannot resolve from a disposed transient lifecycle"`.
 
 ## Choosing the right lifecycle
 
@@ -83,37 +92,24 @@ new ContainerBuilder()
 | Scoped | Singleton, Scoped |
 | Transient | Singleton, Scoped, Transient |
 
-## Null factory return breaks caching
+## Factory return values
 
-Both `SingletonLifecycle` and `ScopedLifecycle` use `if (this._instance === null)` to detect uncreated instances. If a factory returns `null`, the lifecycle re-runs the factory on every `get()` call.
-
-```typescript
-// BAD: null breaks caching — "singleton" becomes transient
-.registerSingletonFactory('optionalConfig', () => {
-  return process.env.CONFIG ? loadConfig() : null;
-})
-
-// GOOD: undefined is cached correctly
-.registerSingletonFactory('optionalConfig', () => {
-  return process.env.CONFIG ? loadConfig() : undefined;
-})
-```
-
-## Singleton dispose is a no-op
+Both `SingletonLifecycle` and `ScopedLifecycle` use a boolean `_initialized` flag to track whether an instance has been created. This means **any return value is cached correctly** — including `null`, `undefined`, `0`, and `false`. There is no "null breaks caching" issue.
 
 ```typescript
-const container = builder.build();
-const pool = container.get('dbPool');
-
-container.dispose();
-// pool is still open — SingletonLifecycle.dispose() does nothing
-// The ServiceWrapper nulls its lifecycle reference, making the wrapper unusable,
-// but the singleton instance itself is never cleaned up.
-
-// For proper shutdown:
-pool.close(); // manually close before dispose
-container.dispose();
+// All of these work correctly — value is cached after first call
+.registerSingletonFactory('maybeNull', () => null)      // cached as null
+.registerSingletonFactory('maybeUndef', () => undefined) // cached as undefined
+.registerSingletonFactory('zero', () => 0)               // cached as 0
 ```
+
+## Disposal behavior
+
+All three lifecycles implement idempotent `dispose()` — calling it twice is safe (second call is a no-op). All check `_isDisposed` before `_factory` in `getInstance()`, so after disposal you always get a clear "disposed" error, not a misleading "no factory" error.
+
+The `ServiceProvider` (container) also tracks disposal state:
+- `get()`, `getAll()`, `startScope()` all throw `"Cannot access services from a disposed container"` after `container.dispose()`.
+- `dispose()` clears internal registration maps to allow GC of all service wrappers and lifecycle objects.
 
 ## startScope() allocates O(n) objects
 

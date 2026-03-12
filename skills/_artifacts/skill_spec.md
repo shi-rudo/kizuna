@@ -1,22 +1,22 @@
 # @shirudo/kizuna -- Skill Spec
 
-A lightweight, zero-dependency, type-safe dependency injection container for TypeScript and JavaScript. Provides a fluent `ContainerBuilder` API with constructor, interface, and factory registration patterns across singleton, scoped, and transient lifecycles.
+A lightweight, zero-dependency, type-safe dependency injection container for TypeScript and JavaScript. Provides a fluent `ContainerBuilder` API with constructor, interface, and factory registration patterns across singleton, scoped, and transient lifecycles, plus multi-registration for plugin/middleware patterns.
 
 ## Domains
 
 | Domain | Description | Skills |
 | --- | --- | --- |
-| dependency injection | Building, configuring, and using a DI container -- registration, lifecycles, scoping, validation, testing, framework integration | kizuna |
+| dependency injection | Building, configuring, and using a DI container -- registration, lifecycles, scoping, multi-registration, validation, testing, framework integration | kizuna |
 
 ## Skill Inventory
 
 | Skill | Type | Domain | What it covers | Failure modes |
 | --- | --- | --- | --- | --- |
-| kizuna | core | dependency-injection | ContainerBuilder, TypeSafeServiceLocator, 9 registration methods, 3 lifecycles, validate(), scoping, disposal, testing, framework integration, migration | 14 |
+| kizuna | core | dependency-injection | ContainerBuilder, TypeSafeServiceLocator, 15 registration methods (9 single + 6 multi), 3 lifecycles, validate(), getAll(), scoping, disposal, testing, framework integration, migration | 15 |
 
 ## Failure Mode Inventory
 
-### Kizuna (14 failure modes)
+### Kizuna (15 failure modes)
 
 | # | Mistake | Priority | Source | Cross-skill? |
 | --- | --- | --- | --- | --- |
@@ -27,13 +27,14 @@ A lightweight, zero-dependency, type-safe dependency injection container for Typ
 | 5 | Using registerSingletonInterface when registerSingleton works | HIGH | maintainer interview | -- |
 | 6 | Adding decorators that do not exist | HIGH | maintainer interview | -- |
 | 7 | Parameter name vs registration name mismatch | HIGH | maintainer interview; base-container-builder.ts:171-193 | -- |
-| 8 | Null factory return breaks singleton/scoped caching | HIGH | maintainer interview; singleton.ts:112, scoped.ts:141 | -- |
+| 8 | Believing null factory return breaks caching (myth — code uses _initialized flag) | MEDIUM | singleton.ts:54,132; scoped.ts:68,150 | -- |
 | 9 | Using non-existent APIs from examples and docs | HIGH | examples/unified-container-example.ts; concurrency-patterns.md | -- |
 | 10 | Using the stale Factory<T> type alias | MEDIUM | types.ts:57 vs container-builder.ts | -- |
-| 11 | Singleton dispose does not clean up resources | MEDIUM | maintainer interview; singleton.ts:179-183 | -- |
+| 11 | Assuming singleton dispose is a no-op (it now disposes correctly) | MEDIUM | singleton.ts:187-203 | -- |
 | 12 | Async factory returns Promise instead of resolved value | MEDIUM | maintainer interview; ADR-001 | -- |
 | 13 | startScope() is O(n) on total registrations | MEDIUM | maintainer interview; service-provider.ts:49-57 | -- |
 | 14 | Over-wrapping build() in try-catch | MEDIUM | maintainer interview | -- |
+| 15 | Mixing add* and register* on the same key | HIGH | base-container-builder.ts | -- |
 
 ## Tensions
 
