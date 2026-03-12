@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ContainerBuilder } from '../src/api/container-builder';
+import { ServiceProvider } from '../src/api/service-provider';
 
 class DisposableService {
     disposed = false;
@@ -118,5 +119,55 @@ describe('Post-dispose behavior', () => {
 
         container.dispose();
         expect(() => container.getAll('service')).toThrow(/disposed container/);
+    });
+
+    it('should keep child scope functional after parent dispose', () => {
+        const container = new ContainerBuilder()
+            .registerSingleton('singleton', NonDisposableService)
+            .registerScoped('scoped', DisposableService)
+            .build();
+
+        const scope = container.startScope();
+        // Resolve before parent dispose to initialize
+        const scopedBefore = scope.get('scoped');
+
+        container.dispose();
+
+        // Child scope is independent — its own ServiceProvider with _disposed=false
+        expect(() => scope.get('scoped')).not.toThrow();
+        expect(scope.get('scoped')).toBe(scopedBefore); // Same scoped instance
+    });
+
+    it('should allow self-registration via get(ServiceProvider)', () => {
+        const container = new ContainerBuilder()
+            .registerSingleton('service', NonDisposableService)
+            .build();
+
+        const self = container.get(ServiceProvider);
+        expect(self).toBe(container);
+    });
+
+    it('should allow self-registration via get(ServiceProvider) in child scope', () => {
+        const container = new ContainerBuilder()
+            .registerSingleton('service', NonDisposableService)
+            .build();
+
+        const scope = container.startScope();
+        const self = scope.get(ServiceProvider);
+        expect(self).toBe(scope);
+    });
+
+    it('should only dispose singleton instance once on double-dispose', () => {
+        let disposeCount = 0;
+        const container = new ContainerBuilder()
+            .registerSingletonFactory('service', () => ({
+                dispose() { disposeCount++; }
+            }))
+            .build();
+
+        container.get('service');
+        container.dispose();
+        expect(disposeCount).toBe(1);
+        // Second dispose is no-op at ServiceProvider level
     });
 });

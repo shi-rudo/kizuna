@@ -115,6 +115,9 @@ export class TransientLifecycle implements Container {
      * ```
      */
     public getInstance<T>(...args: any[]): T {
+        if (this._isDisposed) {
+            throw new Error('Cannot resolve from a disposed transient lifecycle');
+        }
         if (!this._factory) {
             throw new Error('No factory registered for this lifecycle');
         }

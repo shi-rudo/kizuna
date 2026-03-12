@@ -79,12 +79,12 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
                 return [resolver.resolve(this)];
             } catch (error) {
                 throw new Error(
-                    `Failed to resolve service ${typeName}: ${error instanceof Error ? error.message : String(error)}`,
+                    `Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
                 );
             }
         }
 
-        throw new Error(`No service registered for key: ${typeName}`);
+        throw new Error(`No service registered for key: ${String(typeName)}`);
     }
 
     startScope(): TypeSafeServiceLocator<TRegistry> {
