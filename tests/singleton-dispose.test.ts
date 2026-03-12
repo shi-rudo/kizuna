@@ -168,6 +168,8 @@ describe('Post-dispose behavior', () => {
         container.get('service');
         container.dispose();
         expect(disposeCount).toBe(1);
-        // Second dispose is no-op at ServiceProvider level
+
+        container.dispose(); // Second dispose is no-op
+        expect(disposeCount).toBe(1);
     });
 });
