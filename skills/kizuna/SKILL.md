@@ -14,7 +14,7 @@ description: >
   frameworks.
 type: core
 library: kizuna
-library_version: "0.0.15"
+library_version: "1.0.0-rc.0"
 sources:
   - "shi-rudo/kizuna:src/api/container-builder.ts"
   - "shi-rudo/kizuna:src/api/base-container-builder.ts"
