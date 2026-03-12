@@ -22,12 +22,7 @@ export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBu
     ): void {
         this.constructorFn = constructor;
         this.dependencies = dependencies;
-        this.factory = (...args: any[]) => {
-            if (dependencies.length === 0) {
-                return new constructor();
-            }
-            return new constructor(...args);
-        };
+        this.factory = (...args: any[]) => new constructor(...args);
     }
 
     useFactory(factory: Factory<T>): void {

@@ -29,6 +29,9 @@ export class ServiceWrapper {
         }
 
         if (this._dependencies.length === 0) {
+            if (this.isConstructorBased()) {
+                return this._lifecycle.getInstance();
+            }
             return this._lifecycle.getInstance(serviceProvider);
         }
 
