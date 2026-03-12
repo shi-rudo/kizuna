@@ -79,7 +79,7 @@ export class TransientLifecycle implements Container {
      */
     public setFactory(factory: (...args: any[]) => any): void {
         if (this._isDisposed) {
-            throw new Error('Cannot use factory on disposed lifecycle');
+            throw new Error('Cannot set factory on a disposed transient lifecycle');
         }
         if (!factory || typeof factory !== 'function') {
             throw new Error('Factory must be a valid function');
@@ -115,6 +115,9 @@ export class TransientLifecycle implements Container {
      * ```
      */
     public getInstance<T>(...args: any[]): T {
+        if (this._isDisposed) {
+            throw new Error('Cannot resolve from a disposed transient lifecycle');
+        }
         if (!this._factory) {
             throw new Error('No factory registered for this lifecycle');
         }

@@ -1,4 +1,9 @@
-import type { Container, ServiceLocator } from '../../api/contracts/interfaces';
+import type { Container } from '../../api/contracts/interfaces';
+
+/** Minimal contract for dependency resolution within ServiceWrapper. */
+interface ServiceResolver {
+    get(key: string): any;
+}
 
 /**
  * Wraps a service with its scope, dependencies, and lifecycle management.
@@ -8,12 +13,14 @@ export class ServiceWrapper {
     private _lifecycle: Container | null;
     private _dependencies: readonly string[];
     private _constructorFn?: new (...args: any[]) => any;
+    private _ownsLifecycle: boolean;
 
-    constructor(name: string, lifecycle: Container, dependencies: string[], constructorFn?: new (...args: any[]) => any) {
+    constructor(name: string, lifecycle: Container, dependencies: string[], constructorFn?: new (...args: any[]) => any, ownsLifecycle = true) {
         this._name = name;
         this._lifecycle = lifecycle;
         this._dependencies = Object.freeze([...dependencies]); // Immutable copy
         this._constructorFn = constructorFn;
+        this._ownsLifecycle = ownsLifecycle;
     }
 
     /**
@@ -21,12 +28,15 @@ export class ServiceWrapper {
      * @param serviceProvider The service provider for dependency resolution
      * @returns The resolved service instance
      */
-    resolve(serviceProvider: ServiceLocator): any {
+    resolve(serviceProvider: ServiceResolver): any {
         if (!this._lifecycle) {
             throw new Error(`Cannot resolve disposed service '${this._name}'`);
         }
 
         if (this._dependencies.length === 0) {
+            if (this.isConstructorBased()) {
+                return this._lifecycle.getInstance();
+            }
             return this._lifecycle.getInstance(serviceProvider);
         }
 
@@ -60,11 +70,15 @@ export class ServiceWrapper {
             throw new Error(`Cannot create new scope for disposed service '${this._name}'`);
         }
 
+        const scopedLifecycle = this._lifecycle.createScope();
+        const isShared = scopedLifecycle === this._lifecycle;
+
         return new ServiceWrapper(
             this._name,
-            this._lifecycle.createScope(),
+            scopedLifecycle,
             [...this._dependencies],
-            this._constructorFn
+            this._constructorFn,
+            !isShared
         );
     }
 
@@ -72,7 +86,7 @@ export class ServiceWrapper {
      * Disposes the resolver and its lifecycle.
      */
     dispose(): void {
-        if (this._lifecycle) {
+        if (this._lifecycle && this._ownsLifecycle) {
             this._lifecycle.dispose();
             this._lifecycle = null;
         }

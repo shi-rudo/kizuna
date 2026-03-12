@@ -169,20 +169,20 @@ export interface ServiceLocator {
      * @throws {Error} If no service is registered for the given type
      */
     get<T extends new (...args: any) => any>(objToImplement: T): InstanceType<T>;
-    
+
     /**
      * Creates a new scope for isolated service resolution.
-     * 
+     *
      * Scoped services will have new instances created within the new scope,
      * while singleton services remain shared across all scopes.
-     * 
+     *
      * @returns A new ServiceLocator instance representing the new scope
      */
     startScope(): ServiceLocator;
-    
+
     /**
      * Disposes of all services and cleans up resources.
-     * 
+     *
      * This method should be called when the service locator is no longer needed
      * to ensure proper cleanup of disposable services and prevent resource leaks.
      */
@@ -206,16 +206,27 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
     
     /**
      * Resolves a service by constructor type.
-     * 
+     *
      * @template T - The constructor type of the service
      * @param objToImplement - The constructor function of the service
      * @returns An instance of the requested service
      */
     get<T extends new (...args: any) => any>(objToImplement: T): InstanceType<T>;
-    
+
+    /**
+     * Resolves all implementations registered under a key as an array.
+     * For multi-registration keys, returns the array of all implementations.
+     * For single-registration keys, wraps the result in a single-element array.
+     *
+     * @template K - The string key from the registry
+     * @param key - The string key identifying the services
+     * @returns An array of service instances
+     */
+    getAll<K extends string & keyof TRegistry>(key: K): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
+
     /**
      * Creates a new scope with the same type safety.
-     * 
+     *
      * @returns A new TypeSafeServiceLocator instance with the same registry
      */
     startScope(): TypeSafeServiceLocator<TRegistry>;

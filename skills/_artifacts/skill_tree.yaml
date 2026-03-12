@@ -1,0 +1,54 @@
+# skills/_artifacts/skill_tree.yaml
+library:
+  name: '@shirudo/kizuna'
+  version: '0.0.15'
+  repository: 'https://github.com/shi-rudo/kizuna'
+  description: 'A lightweight, zero-dependency, type-safe dependency injection container for TypeScript and JavaScript.'
+generated_from:
+  domain_map: 'skills/_artifacts/domain_map.yaml'
+  skill_spec: 'skills/_artifacts/skill_spec.md'
+generated_at: '2026-03-12'
+
+skills:
+  - name: 'Kizuna'
+    slug: 'kizuna'
+    type: 'core'
+    domain: 'dependency-injection'
+    path: 'skills/kizuna/SKILL.md'
+    description: >
+      Use @shirudo/kizuna to wire up services with type-safe dependency injection.
+      Covers ContainerBuilder, registerSingleton, registerSingletonInterface,
+      registerSingletonFactory, registerScoped, registerTransient, addSingleton,
+      addScoped, addTransient, addSingletonFactory, addScopedFactory,
+      addTransientFactory, build(), validate(), get(), getAll(), startScope(),
+      dispose(), remove(), getRegisteredServiceNames(), TypeSafeServiceLocator,
+      SingletonLifecycle, ScopedLifecycle,
+      TransientLifecycle, disableStrictParameterValidation. Activate when
+      registering services, choosing lifecycles, managing request scopes,
+      registering multiple implementations under one key, debugging validation
+      errors, testing with mock containers, or integrating with web frameworks.
+    requires: []
+    sources:
+      - 'shi-rudo/kizuna:src/api/container-builder.ts'
+      - 'shi-rudo/kizuna:src/api/base-container-builder.ts'
+      - 'shi-rudo/kizuna:src/api/service-provider.ts'
+      - 'shi-rudo/kizuna:src/api/contracts/interfaces.ts'
+      - 'shi-rudo/kizuna:src/api/contracts/types.ts'
+      - 'shi-rudo/kizuna:src/core/scopes/singleton.ts'
+      - 'shi-rudo/kizuna:src/core/scopes/scoped.ts'
+      - 'shi-rudo/kizuna:src/core/scopes/transient.ts'
+      - 'shi-rudo/kizuna:src/core/services/service-wrapper.ts'
+      - 'shi-rudo/kizuna:docs/concurrency-patterns.md'
+      - 'shi-rudo/kizuna:docs/adr/003-unified-container-api.md'
+      - 'shi-rudo/kizuna:docs/adr/007-fail-fast-error-handling.md'
+      - 'shi-rudo/kizuna:README.md'
+    subsystems: []
+    references:
+      - 'references/registration-patterns.md'
+      - 'references/lifecycle-guide.md'
+      - 'references/validation-errors.md'
+      - 'references/scoping-and-middleware.md'
+      - 'references/testing.md'
+      - 'references/nextjs.md'
+      - 'references/tanstack-start.md'
+      - 'references/migration.md'
