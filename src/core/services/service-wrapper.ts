@@ -1,4 +1,9 @@
-import type { Container, ServiceLocator } from '../../api/contracts/interfaces';
+import type { Container } from '../../api/contracts/interfaces';
+
+/** Minimal contract for dependency resolution within ServiceWrapper. */
+interface ServiceResolver {
+    get(key: string): any;
+}
 
 /**
  * Wraps a service with its scope, dependencies, and lifecycle management.
@@ -23,7 +28,7 @@ export class ServiceWrapper {
      * @param serviceProvider The service provider for dependency resolution
      * @returns The resolved service instance
      */
-    resolve(serviceProvider: ServiceLocator): any {
+    resolve(serviceProvider: ServiceResolver): any {
         if (!this._lifecycle) {
             throw new Error(`Cannot resolve disposed service '${this._name}'`);
         }

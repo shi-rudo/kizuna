@@ -159,28 +159,29 @@ export class SingletonLifecycle implements Container {
     }
 
     /**
-     * Disposes the singleton lifecycle.
-     * 
-     * **Important:** This method is intentionally empty for singleton lifecycles.
-     * Singletons are designed to live for the entire application lifetime and should
-     * not be disposed when individual scopes are disposed. Disposing a singleton
-     * would break the contract that it remains available throughout the application.
-     * 
-     * If you need to clean up singleton resources, this should be done when the
-     * entire application is shutting down, not when individual scopes are disposed.
-     * 
+     * Disposes the singleton lifecycle and its managed instance.
+     *
+     * This method is called when the root container is disposed (application shutdown).
+     * If the singleton instance has a `dispose()` method, it will be called to allow
+     * resource cleanup. After disposal, the instance is cleared and the lifecycle is
+     * reset, allowing a new instance to be created if `getInstance()` is called again.
+     *
+     * **Note:** Child scope disposal does NOT trigger this — only the root container
+     * disposes singletons. This is because `createScope()` returns `this`, so child
+     * scopes share the same lifecycle instance as the root.
+     *
      * @example
      * ```typescript
      * const lifecycle = new SingletonLifecycle();
      * lifecycle.setFactory(() => new DatabaseService());
      * const db = lifecycle.getInstance();
-     * 
-     * // This does nothing - singletons are not disposed
+     *
+     * // Disposes the singleton and calls db.dispose() if it exists
      * lifecycle.dispose();
-     * 
-     * // The instance is still available
+     *
+     * // A new instance will be created on next access
      * const db2 = lifecycle.getInstance();
-     * console.log(db === db2); // true
+     * console.log(db === db2); // false
      * ```
      */
     public dispose(): void {
@@ -196,24 +197,17 @@ export class SingletonLifecycle implements Container {
     }
 
     /**
-     * Indicates whether the singleton lifecycle has been disposed.
-     * 
-     * For singleton lifecycles, this always returns false because singletons
-     * are never considered disposed during normal application operation. They
-     * are designed to live for the entire application lifetime.
-     * 
-     * @returns {boolean} Always returns false for singleton lifecycles
-     * 
-     * @example
-     * ```typescript
-     * const lifecycle = new SingletonLifecycle();
-     * console.log(lifecycle.isDisposed); // false
-     * 
-     * lifecycle.dispose(); // Does nothing
-     * console.log(lifecycle.isDisposed); // Still false
-     * ```
+     * Always returns false for singleton lifecycles.
+     *
+     * This is intentional: `ServiceWrapper` tracks disposal via its own
+     * `_lifecycle === null` check, not via this getter. Returning false here
+     * ensures that singletons remain resolvable across all scopes — child scope
+     * disposal must never mark the shared singleton as "disposed", since
+     * `createScope()` returns `this`.
+     *
+     * @returns {boolean} Always false — disposal state is managed by ServiceWrapper
      */
     public get isDisposed(): boolean {
-        return false; // Singletons are never considered disposed
+        return false;
     }
 }

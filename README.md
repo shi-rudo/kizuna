@@ -5,6 +5,8 @@
 
 A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with comprehensive type safety and IDE autocompletion.
 
+> **AI Agent Support** — If you use an AI coding agent, run `npx @tanstack/intent@latest install` to teach it idiomatic Kizuna patterns.
+
 ## ✨ Features
 
 - **🎯 Comprehensive Type Safety**: Full TypeScript support with automatic type inference
@@ -157,6 +159,49 @@ const container = new ContainerBuilder()
   
   .build();
 ```
+
+### 📦 **Multi-Registration** (Multiple Implementations per Key)
+
+For registering multiple implementations under the same key — plugin systems, middleware pipelines, event handlers, and validation chains:
+
+```typescript
+// Register multiple handlers under one key
+const container = new ContainerBuilder()
+  .addSingleton('handlers', HandlerA)
+  .addSingleton('handlers', HandlerB)
+  .addSingleton('handlers', HandlerC)
+  .build();
+
+// Resolve all implementations as an array
+const handlers = container.getAll('handlers'); // [HandlerA, HandlerB, HandlerC]
+handlers.forEach(h => h.handle(event));
+```
+
+All lifecycles are supported — use `addSingleton`, `addScoped`, or `addTransient` for constructor-based registration, and `addSingletonFactory`, `addScopedFactory`, or `addTransientFactory` for factory-based registration:
+
+```typescript
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+
+  // Constructor-based multi-registration with dependencies
+  .addSingleton('middleware', AuthMiddleware, 'Logger')
+  .addSingleton('middleware', LoggingMiddleware)
+
+  // Factory-based multi-registration
+  .addTransientFactory('validators', () => new EmailValidator())
+  .addTransientFactory('validators', () => new PhoneValidator())
+
+  .build();
+
+const middleware = container.getAll('middleware');  // [AuthMiddleware, LoggingMiddleware]
+const validators = container.getAll('validators'); // New instances each time
+```
+
+**Key rules:**
+- `add*()` and `register*()` cannot be mixed for the same key — each key is either single or multi
+- `getAll()` returns an array; `get()` on a multi-key also returns the array
+- `getAll()` on a single-registration key wraps the result in a single-element array
+- Registration order is preserved in the returned array
 
 ## 🎯 Comprehensive Type Safety
 
@@ -436,6 +481,18 @@ The main class for configuring your dependency injection container.
 .registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
 
+#### Multi-Registration Methods
+
+```typescript
+// Append services under a shared key (resolved via getAll())
+.addSingleton<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.addScoped<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.addTransient<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.addSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.addScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.addTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+```
+
 #### Container Management
 
 ```typescript
@@ -453,9 +510,10 @@ The built container interface for service resolution.
 
 ```typescript
 interface TypeSafeServiceLocator<TRegistry> {
-  get<K extends keyof TRegistry>(key: K): TRegistry[K];  // Resolve service
-  startScope(): TypeSafeServiceLocator<TRegistry>;      // Create new scope
-  dispose(): void;                                      // Cleanup resources
+  get<K extends keyof TRegistry>(key: K): TRegistry[K];      // Resolve service
+  getAll<K extends keyof TRegistry>(key: K): TRegistry[K][]; // Resolve all implementations as array
+  startScope(): TypeSafeServiceLocator<TRegistry>;            // Create new scope
+  dispose(): void;                                            // Cleanup resources
 }
 ```
 

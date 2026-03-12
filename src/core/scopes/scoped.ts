@@ -140,6 +140,9 @@ export class ScopedLifecycle implements Container {
      * ```
      */
     public getInstance<T>(...args: any[]): T {
+        if (this._isDisposed) {
+            throw new Error('Cannot resolve from a disposed scoped lifecycle');
+        }
         if (!this._factory) {
             throw new Error('No factory registered for this lifecycle');
         }
