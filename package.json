@@ -4,7 +4,7 @@
   "description": "A powerful and flexible dependency injection library for TypeScript and JavaScript.",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shi-rudo/kizuna"
+    "url": "git+https://github.com/shi-rudo/kizuna.git"
   },
   "keywords": [
     "Dependency Injection",
@@ -53,6 +53,6 @@
     "vitest": "^3.2.4"
   },
   "bin": {
-    "intent": "./bin/intent.js"
+    "intent": "bin/intent.js"
   }
 }
