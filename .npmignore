@@ -25,3 +25,13 @@ coverage/
 # Tooling
 biome.json
 vite.config.ts
+
+# AI
+.agents
+.claude
+skills/
+bin/
+
+# Issues
+.beads
+
