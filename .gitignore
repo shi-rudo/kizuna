@@ -92,3 +92,7 @@ pids
 # Repomix packaging output
 # ────────────────
 repomix-output.* 
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db

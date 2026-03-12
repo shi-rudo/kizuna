@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "kizuna",
+  "project_id": "b1bd223b-900b-4056-bdff-8c852a63040d"
+}
