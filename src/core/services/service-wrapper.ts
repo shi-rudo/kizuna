@@ -93,6 +93,17 @@ export class ServiceWrapper {
     }
 
     /**
+     * Asynchronously disposes the resolver and awaits its lifecycle's async dispose.
+     */
+    async disposeAsync(): Promise<void> {
+        if (this._lifecycle && this._ownsLifecycle) {
+            const lifecycle = this._lifecycle;
+            this._lifecycle = null;
+            await lifecycle.disposeAsync();
+        }
+    }
+
+    /**
      * Checks if the resolver has been disposed.
      * @returns true if disposed, false otherwise
      */

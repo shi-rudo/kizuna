@@ -45,6 +45,15 @@ export interface Container {
      * This method should clean up cached instances, close connections, etc.
      */
     dispose(): void;
+
+    /**
+     * Asynchronously disposes of any resources held by this container.
+     *
+     * Use this when the underlying instance's dispose returns a Promise
+     * (e.g. `await pool.end()`) or implements `[Symbol.asyncDispose]`.
+     * The sync `dispose()` cannot await these and will leak unhandled rejections.
+     */
+    disposeAsync(): Promise<void>;
 }
 
 /**
@@ -185,8 +194,34 @@ export interface ServiceLocator {
      *
      * This method should be called when the service locator is no longer needed
      * to ensure proper cleanup of disposable services and prevent resource leaks.
+     *
+     * Note: services whose `dispose()` returns a Promise will have their
+     * rejections logged but not awaited. For async cleanup use `disposeAsync()`.
      */
     dispose(): void;
+
+    /**
+     * Asynchronously disposes of all services and awaits any returned Promises.
+     *
+     * Services may implement `[Symbol.asyncDispose]` or return a Promise from
+     * `dispose()`. This method calls all dispose handlers in parallel via
+     * `Promise.allSettled` and resolves once they all settle. Individual
+     * rejections are logged to `console.error` but do not abort disposal of
+     * other services.
+     */
+    disposeAsync(): Promise<void>;
+
+    /**
+     * TC39 explicit-resource-management hook for the `using` syntax.
+     * Equivalent to `dispose()`.
+     */
+    [Symbol.dispose](): void;
+
+    /**
+     * TC39 explicit-resource-management hook for the `await using` syntax.
+     * Equivalent to `disposeAsync()`.
+     */
+    [Symbol.asyncDispose](): Promise<void>;
 }
 
 /**
@@ -233,6 +268,30 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
     
     /**
      * Disposes of all services and cleans up resources.
+     *
+     * Note: services whose `dispose()` returns a Promise will have their
+     * rejections logged but not awaited. For async cleanup use `disposeAsync()`.
      */
     dispose(): void;
+
+    /**
+     * Asynchronously disposes of all services and awaits any returned Promises.
+     *
+     * Services may implement `[Symbol.asyncDispose]` or return a Promise from
+     * `dispose()`. Dispose handlers run in parallel; individual rejections are
+     * logged to `console.error` but do not abort disposal of other services.
+     */
+    disposeAsync(): Promise<void>;
+
+    /**
+     * TC39 explicit-resource-management hook for the `using` syntax.
+     * Equivalent to `dispose()`.
+     */
+    [Symbol.dispose](): void;
+
+    /**
+     * TC39 explicit-resource-management hook for the `await using` syntax.
+     * Equivalent to `disposeAsync()`.
+     */
+    [Symbol.asyncDispose](): Promise<void>;
 }

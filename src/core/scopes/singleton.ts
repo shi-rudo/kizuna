@@ -1,4 +1,5 @@
 import type { Container } from '../../api/contracts/interfaces';
+import { invokeAsyncDispose } from '../services/async-dispose';
 
 /**
  * Singleton lifecycle implementation that maintains one instance for the entire application lifetime.
@@ -192,7 +193,36 @@ export class SingletonLifecycle implements Container {
 
         if (this._initialized && this._instance && typeof this._instance === 'object' && 'dispose' in this._instance) {
             try {
-                (this._instance as { dispose?: () => void }).dispose?.();
+                const result = (this._instance as { dispose?: () => unknown }).dispose?.();
+                // Attach rejection logger so an async dispose called from the sync path
+                // does not surface as an UnhandledPromiseRejection.
+                if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+                    (result as Promise<unknown>).catch((error) => {
+                        console.warn('Error disposing singleton instance asynchronously (call disposeAsync() for proper awaiting):', error);
+                    });
+                }
+            } catch (error) {
+                console.warn('Error disposing singleton instance:', error);
+            }
+        }
+        this._instance = undefined;
+        this._initialized = false;
+        this._factory = null;
+    }
+
+    /**
+     * Asynchronously disposes the singleton lifecycle, awaiting the instance's
+     * own async dispose (`[Symbol.asyncDispose]` or `dispose()` returning a Promise).
+     */
+    public async disposeAsync(): Promise<void> {
+        if (this._isDisposed) {
+            return;
+        }
+        this._isDisposed = true;
+
+        if (this._initialized && this._instance && typeof this._instance === 'object') {
+            try {
+                await invokeAsyncDispose(this._instance);
             } catch (error) {
                 console.warn('Error disposing singleton instance:', error);
             }

@@ -212,6 +212,16 @@ export class TransientLifecycle implements Container {
     }
 
     /**
+     * Asynchronously disposes the transient lifecycle.
+     *
+     * Transient lifecycles do not track created instances, so this only clears
+     * the factory reference. Provided for `Container` interface conformance.
+     */
+    public async disposeAsync(): Promise<void> {
+        this.dispose();
+    }
+
+    /**
      * Indicates whether this transient lifecycle has been disposed.
      * 
      * Once a transient lifecycle is disposed, it cannot be used to create

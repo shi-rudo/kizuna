@@ -127,7 +127,70 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             }
         });
 
-        // Clear references to allow GC
+        this.clearRegistrations();
+    }
+
+    /**
+     * Asynchronously disposes the provider and awaits all service-owned async
+     * dispose handlers (Promise-returning `dispose()` or `[Symbol.asyncDispose]`).
+     *
+     * Dispose handlers run in parallel via `Promise.allSettled`. Individual
+     * rejections are logged to `console.error` but do not abort disposal.
+     * Idempotent — safe to call multiple times.
+     */
+    async disposeAsync(): Promise<void> {
+        if (this._disposed) {
+            return;
+        }
+        this._disposed = true;
+
+        const tasks: Promise<unknown>[] = [];
+
+        for (const resolver of Object.values(this.registrations)) {
+            const task = this.runResolverDisposeAsync(resolver, "resolver");
+            if (task) tasks.push(task);
+        }
+
+        for (const resolvers of Object.values(this.multiRegistrations)) {
+            for (const resolver of resolvers) {
+                const task = this.runResolverDisposeAsync(resolver, "multi-registration resolver");
+                if (task) tasks.push(task);
+            }
+        }
+
+        await Promise.allSettled(tasks);
+
+        this.clearRegistrations();
+    }
+
+    /**
+     * TC39 `using` hook — equivalent to `dispose()`.
+     */
+    [Symbol.dispose](): void {
+        this.dispose();
+    }
+
+    /**
+     * TC39 `await using` hook — equivalent to `disposeAsync()`.
+     */
+    async [Symbol.asyncDispose](): Promise<void> {
+        await this.disposeAsync();
+    }
+
+    private runResolverDisposeAsync(resolver: ServiceWrapper, label: string): Promise<unknown> | undefined {
+        try {
+            const result = resolver.disposeAsync?.();
+            if (!result) return undefined;
+            return result.catch((error) => {
+                console.error(`Error disposing ${label}:`, error);
+            });
+        } catch (error) {
+            console.error(`Error disposing ${label}:`, error);
+            return undefined;
+        }
+    }
+
+    private clearRegistrations(): void {
         const regs = this.registrations as Record<string, ServiceWrapper>;
         for (const key of Object.keys(regs)) {
             delete regs[key];

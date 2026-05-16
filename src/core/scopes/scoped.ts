@@ -1,11 +1,12 @@
 import type { Container } from '../../api/contracts/interfaces';
+import { invokeAsyncDispose } from '../services/async-dispose';
 
 /**
  * Interface for disposable services that can clean up their resources.
  * @private
  */
-interface Disposable {
-    dispose?(): void;
+interface SyncDisposable {
+    dispose?(): unknown;
 }
 
 /**
@@ -235,18 +236,46 @@ export class ScopedLifecycle implements Container {
             // Dispose the instance if it implements IDisposable
             if (this._instance && typeof this._instance === 'object' && 'dispose' in this._instance) {
                 try {
-                    (this._instance as Disposable).dispose?.();
+                    const result = (this._instance as SyncDisposable).dispose?.();
+                    if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+                        (result as Promise<unknown>).catch((error) => {
+                            console.warn('Error disposing scoped instance asynchronously (call disposeAsync() for proper awaiting):', error);
+                        });
+                    }
                 } catch (error) {
                     // Log error but don't throw to avoid disposal chain breaking
                     console.warn('Error disposing scoped instance:', error);
                 }
             }
-            
+
             this._instance = undefined;
             this._initialized = false;
             this._factory = null;
             this._isDisposed = true;
         }
+    }
+
+    /**
+     * Asynchronously disposes the scoped lifecycle, awaiting the instance's
+     * own async dispose if present.
+     */
+    public async disposeAsync(): Promise<void> {
+        if (this._isDisposed) {
+            return;
+        }
+        this._isDisposed = true;
+
+        if (this._instance && typeof this._instance === 'object') {
+            try {
+                await invokeAsyncDispose(this._instance);
+            } catch (error) {
+                console.warn('Error disposing scoped instance:', error);
+            }
+        }
+
+        this._instance = undefined;
+        this._initialized = false;
+        this._factory = null;
     }
 
     /**
