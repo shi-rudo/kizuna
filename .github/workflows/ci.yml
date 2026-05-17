@@ -32,9 +32,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build
+        # Build first so dist/index.mjs is available for the edge-compat
+        # tests, which boot the built bundle inside workerd via miniflare.
+        run: pnpm build
+
       - name: Run tests
         run: pnpm test
-
-      - name: Build
-        run: pnpm build
 

@@ -42,11 +42,17 @@
     "access": "public"
   },
   "packageManager": "pnpm@10.13.1",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "workerd"
+    ]
+  },
   "devDependencies": {
     "@biomejs/biome": "2.1.2",
     "@tanstack/intent": "^0.0.14",
     "@types/node": "^24.0.15",
     "@vitest/coverage-v8": "^3.2.4",
+    "miniflare": "^4.20260515.0",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
     "vite": "^7.0.5",

@@ -593,12 +593,16 @@ const container = new ContainerBuilder()
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const scope = container.startScope();
-
-    // disposeAsync awaits any async service cleanup (DB pools, KV batches).
-    // ctx.waitUntil lets cleanup run after the response is sent.
-    ctx.waitUntil(scope.disposeAsync());
-
-    return handle(req, scope);
+    try {
+      // Use the scope synchronously inside the handler
+      return await handle(req, scope);
+    } finally {
+      // Schedule async cleanup AFTER the scope was used. ctx.waitUntil lets it
+      // run after the response is sent, without adding latency to the request.
+      // (Calling disposeAsync earlier would mark the scope disposed and break
+      // any service resolution still happening in handle().)
+      ctx.waitUntil(scope.disposeAsync());
+    }
   }
 };
 ```
