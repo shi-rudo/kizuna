@@ -98,6 +98,7 @@ repomix-output.*
 # ────────────────
 .agents
 .claude
+AGENTS.md
 
 # Dolt database files (added by bd init)
 .dolt/
