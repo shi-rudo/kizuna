@@ -8,106 +8,24 @@
  * Guards against regressions of:
  *   - accidental Node-API usage (e.g. ungated process.X, Buffer, fs)
  *   - broken Symbol.dispose / Symbol.asyncDispose semantics under workerd V8
- *   - strictParameterValidation no longer auto-skipping in production
+ *   - strictParameterValidation no longer auto-skipping when process is undefined
+ *
+ * Deliberately runs without `nodejs_compat` so that any Node-API access in the
+ * library would fail module-load — exactly what we want to catch.
  */
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const kizunaBundle = resolve(__dirname, '..', 'dist', 'index.mjs');
+const workerFixture = resolve(__dirname, 'fixtures', 'edge-worker.mjs');
 
-const workerSource = `
-import { ContainerBuilder } from "./kizuna.mjs";
-
-class Logger {
-    log(msg) { return msg; }
-}
-
-class RequestContext {
-    constructor() {
-        this.id = crypto.randomUUID();
-    }
-}
-
-class AsyncDisposable {
-    constructor() {
-        this.disposed = false;
-    }
-    async dispose() {
-        await new Promise(r => setTimeout(r, 5));
-        this.disposed = true;
-    }
-}
-
-const disposedFlags = new Set();
-
-const container = new ContainerBuilder()
-    .registerSingleton("Logger", Logger)
-    .registerScoped("RequestContext", RequestContext)
-    .registerScopedFactory("AsyncDisposable", () => {
-        const d = new AsyncDisposable();
-        // expose dispose state so we can assert across requests
-        d.dispose = async () => {
-            await new Promise(r => setTimeout(r, 5));
-            disposedFlags.add(d);
-        };
-        return d;
-    })
-    .build();
-
-export default {
-    async fetch(req, env, ctx) {
-        const url = new URL(req.url);
-
-        if (url.pathname === "/scope-id") {
-            const scope = container.startScope();
-            try {
-                return new Response(scope.get("RequestContext").id);
-            } finally {
-                ctx.waitUntil(scope.disposeAsync());
-            }
-        }
-
-        if (url.pathname === "/await-using") {
-            // Exercise TC39 Symbol.asyncDispose path under workerd V8
-            let resolvedId;
-            {
-                await using scope = container.startScope();
-                resolvedId = scope.get("RequestContext").id;
-            }
-            return new Response(resolvedId);
-        }
-
-        if (url.pathname === "/validate") {
-            // Validation in workerd: process is undefined → isDevelopment() returns false
-            // → strict param check must auto-skip. We register a deliberate mismatch
-            // and assert no parameter-named issues come back.
-            const b = new ContainerBuilder()
-                .registerSingleton("Logger", Logger)
-                .registerSingleton("RequestContext", RequestContext, "DefinitelyWrongName");
-            const issues = b.validate();
-            return Response.json({
-                issues,
-                paramIssues: issues.filter(i => i.includes("parameter") && i.includes("named")),
-            });
-        }
-
-        if (url.pathname === "/dispose-async") {
-            const scope = container.startScope();
-            // Resolve so the AsyncDisposable instance exists
-            scope.get("AsyncDisposable");
-            const before = disposedFlags.size;
-            await scope.disposeAsync();
-            return Response.json({ disposedBefore: before, disposedAfter: disposedFlags.size });
-        }
-
-        return new Response("not found", { status: 404 });
-    },
-};
-`;
+// workerd compat date: this is the date the test was written against. Update
+// alongside intentional behavior changes after re-running locally.
+const COMPATIBILITY_DATE = '2024-10-01';
 
 let mf: Miniflare;
 
@@ -118,19 +36,25 @@ beforeAll(async () => {
             `or run \`pnpm test\` from CI where build runs first.`,
         );
     }
+
     const kizunaSrc = readFileSync(kizunaBundle, 'utf-8');
+    const workerSrc = readFileSync(workerFixture, 'utf-8');
+
     mf = new Miniflare({
         modules: [
-            { type: 'ESModule', path: 'index.mjs', contents: workerSource },
+            { type: 'ESModule', path: 'index.mjs', contents: workerSrc },
             { type: 'ESModule', path: 'kizuna.mjs', contents: kizunaSrc },
         ],
-        compatibilityDate: '2024-10-01',
-        compatibilityFlags: ['nodejs_compat'],
+        compatibilityDate: COMPATIBILITY_DATE,
+        // NOTE: nodejs_compat is intentionally NOT enabled. The whole point of
+        // these tests is to verify kizuna works in workerd's stock environment
+        // without Node polyfills.
     });
-    // Force isolate spin-up before the test suite starts so the module-load path
-    // is exercised — this is what catches accidental Node-API leakage.
+
+    // Force isolate spin-up before the test suite starts so the module-load
+    // path is exercised — this is what catches accidental Node-API leakage.
     await mf.ready;
-});
+}, 30_000);
 
 afterAll(async () => {
     await mf?.dispose();
@@ -138,8 +62,8 @@ afterAll(async () => {
 
 describe('Workers compatibility (workerd via miniflare)', () => {
     it('builds the container at module-load without Node-API errors', async () => {
-        // If the module-load failed (Node-only imports, ungated process.X), the
-        // isolate would refuse to start and dispatchFetch would throw.
+        // If module-load failed (Node-only imports, ungated process.X), the
+        // isolate would refuse to start and dispatchFetch would throw or 500.
         const res = await mf.dispatchFetch('http://localhost/scope-id');
         expect(res.status).toBe(200);
     });
@@ -160,14 +84,29 @@ describe('Workers compatibility (workerd via miniflare)', () => {
 
     it('auto-skips strict parameter validation when process is undefined', async () => {
         const res = await mf.dispatchFetch('http://localhost/validate');
-        const body = (await res.json()) as { issues: string[]; paramIssues: string[] };
-        // Strict param check would otherwise complain that param 'logger' got 'DefinitelyWrongName'
+        const body = (await res.json()) as {
+            issues: string[];
+            paramIssues: string[];
+            processIsUndefined: boolean;
+        };
+
+        // Sanity-check the precondition we are actually testing — without
+        // nodejs_compat, workerd has no `process` global, which is what makes
+        // isDevelopment() return false.
+        expect(body.processIsUndefined).toBe(true);
+
+        // UserService(logger) registered with 'DefinitelyWrongName' would
+        // normally trip the strict param check ("param 0 is named 'logger' but
+        // dependency 'DefinitelyWrongName' is provided"). It must auto-skip here.
         expect(body.paramIssues).toEqual([]);
     });
 
     it('awaits service-owned async dispose via disposeAsync()', async () => {
         const res = await mf.dispatchFetch('http://localhost/dispose-async');
-        const body = (await res.json()) as { disposedBefore: number; disposedAfter: number };
-        expect(body.disposedAfter).toBe(body.disposedBefore + 1);
+        const body = (await res.json()) as {
+            disposeCountBefore: number;
+            disposeCountAfter: number;
+        };
+        expect(body.disposeCountAfter).toBe(body.disposeCountBefore + 1);
     });
 });
