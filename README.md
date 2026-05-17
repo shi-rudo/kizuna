@@ -350,7 +350,9 @@ async function withTransaction<T>(work: (scope: TypeSafeServiceLocator<any>) => 
     await connection.rollback();
     throw error;
   } finally {
-    transactionScope.dispose(); // Always cleanup
+    // Await async cleanup so the connection's dispose (e.g. pool.release())
+    // settles before this function resolves.
+    await transactionScope.disposeAsync();
   }
 }
 
@@ -363,6 +365,36 @@ await withTransaction(async (txScope) => {
   await orderRepo.create({ userId: user.id, total: 100 });
 });
 ```
+
+### 🧹 **Async Disposal**
+
+When services hold async resources (DB pools, file handles, network sockets), use `disposeAsync()` — the sync `dispose()` cannot await Promise-returning dispose handlers and any rejection is logged but lost.
+
+```typescript
+class DatabasePool {
+  async dispose() {
+    await this.pool.end(); // async cleanup
+  }
+}
+
+const container = new ContainerBuilder()
+  .registerSingleton('Pool', DatabasePool)
+  .build();
+
+// Sync — fine for purely synchronous services
+container.dispose();
+
+// Async — awaits each service's dispose, runs them in parallel
+await container.disposeAsync();
+
+// TC39 explicit resource management
+{
+  await using scope = container.startScope();
+  // ...work...
+} // scope.disposeAsync() called automatically at block exit
+```
+
+Services may implement either `dispose()` (sync or returning a Promise) or `[Symbol.asyncDispose]()`. Kizuna prefers `Symbol.asyncDispose` → `Symbol.dispose` → `dispose()` when calling cleanup.
 
 ## 🏗️ Advanced Patterns
 
@@ -520,7 +552,10 @@ interface TypeSafeServiceLocator<TRegistry> {
   get<K extends keyof TRegistry>(key: K): TRegistry[K];      // Resolve service
   getAll<K extends keyof TRegistry>(key: K): TRegistry[K][]; // Resolve all implementations as array
   startScope(): TypeSafeServiceLocator<TRegistry>;            // Create new scope
-  dispose(): void;                                            // Cleanup resources
+  dispose(): void;                                            // Synchronous cleanup
+  disposeAsync(): Promise<void>;                              // Await async cleanup (DB pools, etc.)
+  [Symbol.dispose](): void;                                   // TC39 `using` syntax
+  [Symbol.asyncDispose](): Promise<void>;                     // TC39 `await using` syntax
 }
 ```
 

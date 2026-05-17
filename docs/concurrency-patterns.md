@@ -230,9 +230,9 @@ app.use((req, res, next) => {
     req.services.registerInstance('UserId', userId);
     req.services.registerInstance('RequestTime', Date.now());
     
-    // Cleanup
+    // Cleanup — disposeAsync() awaits any async service cleanup (DB pools, etc.)
     res.on('finish', async () => {
-        await req.services.dispose();
+        await req.services.disposeAsync();
     });
     
     next();
