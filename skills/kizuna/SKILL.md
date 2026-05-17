@@ -226,7 +226,9 @@ await container.disposeAsync();
 } // scope.disposeAsync() called automatically on block exit
 ```
 
-Resolution priority when picking the cleanup method on each instance: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`.
+**Per-API resolution rules:**
+- `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
+- `dispose()` (sync) **only** calls `instance.dispose()`. It does not look for `[Symbol.dispose]` or `[Symbol.asyncDispose]`. A service that implements `[Symbol.dispose]` instead of `dispose()` will NOT be cleaned up by sync `container.dispose()`. (TC39 `using` reaches the container's own `[Symbol.dispose]` hook, which then calls `container.dispose()` internally — but per-service Symbol hooks are async-only.)
 
 **When sync `dispose()` is wrong:** if any instance's `dispose()` returns a Promise (DB pool teardown, file handle close, network connection drain), `dispose()` invokes it but does not await it. Rejections are logged via a `.catch` attached internally to surface them, but the cleanup may still be in flight when the next operation runs. Always use `disposeAsync()` (or `await using`) when services hold async resources.
 
@@ -456,7 +458,7 @@ Strict parameter validation (enabled by default in development) checks that depe
 
 The check is **auto-disabled when `NODE_ENV === "production"`** (or when `process` is unavailable, e.g. in Cloudflare Workers / Vercel Edge) because bundler minification mangles parameter names into `a`, `b`, `c` — running the check there would produce false positives. No opt-out needed for production builds. Call `.disableStrictParameterValidation()` only if you also want to skip the check in development.
 
-Source: base-container-builder.ts:168-220
+Source: `BaseContainerBuilder.validate()` in base-container-builder.ts
 
 ### HIGH Importing the stale Factory<T> type
 

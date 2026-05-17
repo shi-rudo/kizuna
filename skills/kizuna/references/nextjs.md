@@ -115,9 +115,10 @@ export async function withScope<T>(
   try {
     return await fn(scope);
   } finally {
-    // Awaits async cleanup (DB pools, etc.) so callers don't return before
-    // resources settle. Use scope.dispose() instead if you don't have any
-    // services with Promise-returning dispose handlers.
+    // Default to async: awaits cleanup for DB pools, transactions, etc. so
+    // callers don't return before resources settle. If your container only
+    // registers services with synchronous dispose() (or none), swap the line
+    // below to `scope.dispose()` to skip the microtask roundtrip.
     await scope.disposeAsync();
   }
 }

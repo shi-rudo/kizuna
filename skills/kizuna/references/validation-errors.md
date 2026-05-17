@@ -116,7 +116,7 @@ const builder = new ContainerBuilder()
 
 This disables only the parameter name check. Missing dependency and circular dependency checks still run. Avoid disabling in development unless you have a specific reason — the mismatch warnings catch real bugs.
 
-**Source:** `base-container-builder.ts:168-220` (the check is gated on `isDevelopment()` which returns true unless `NODE_ENV === "production"` or `__DEV__` is explicitly false / `process` is undefined).
+**Source:** `BaseContainerBuilder.validate()` in `base-container-builder.ts` (the check is gated on `isDevelopment()`, which returns false when `NODE_ENV === "production"` or `process` is undefined).
 
 ## How parameter name extraction works
 

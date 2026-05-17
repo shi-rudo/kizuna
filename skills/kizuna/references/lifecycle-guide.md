@@ -6,8 +6,8 @@ Every registration in Kizuna has one of three lifecycles. The lifecycle controls
 
 | Lifecycle | Instance creation | Sharing | Disposal | Use for |
 | --- | --- | --- | --- | --- |
-| Singleton | Lazy, on first `get()` | One instance forever | Calls `dispose()` / `[Symbol.asyncDispose]` on instance when root container is disposed | DB pools, config, loggers |
-| Scoped | Lazy, on first `get()` within scope | One per scope | Calls `dispose()` / `[Symbol.asyncDispose]` on instance if it exists | Per-request state, transactions |
+| Singleton | Lazy, on first `get()` | One instance forever | Instance cleanup runs when root container is disposed (see [Disposal behavior](#disposal-behavior) for sync vs async resolution rules) | DB pools, config, loggers |
+| Scoped | Lazy, on first `get()` within scope | One per scope | Instance cleanup runs when scope is disposed (see [Disposal behavior](#disposal-behavior)) | Per-request state, transactions |
 | Transient | Every `get()` call | Never shared | Not tracked | Stateless services, timestamps, UUIDs |
 
 ## Singleton
@@ -116,7 +116,9 @@ The `ServiceProvider` (container) also exposes TC39 hooks:
 - `[Symbol.dispose]()` — alias for `dispose()`. Enables `using` syntax.
 - `[Symbol.asyncDispose]()` — alias for `disposeAsync()`. Enables `await using` syntax.
 
-When picking the cleanup method on each service instance, kizuna prefers `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`.
+**Per-API resolution rules:**
+- `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
+- `dispose()` (sync) **only** calls `instance.dispose()`. It does NOT look for `[Symbol.dispose]` or `[Symbol.asyncDispose]` on instances. A service that implements `[Symbol.dispose]` instead of `dispose()` will not be cleaned up by sync `container.dispose()`. (The container's own `[Symbol.dispose]` hook is used by TC39 `using` syntax and calls `container.dispose()` internally — but per-service Symbol hooks are async-only.)
 
 After `container.dispose()` or `container.disposeAsync()`:
 - `get()`, `getAll()`, `startScope()` throw `"Cannot access services from a disposed container"`.

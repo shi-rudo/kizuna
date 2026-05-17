@@ -144,9 +144,15 @@ app.use('*', async (c, next) => {
   try {
     await next();
   } finally {
-    // Awaits async cleanup (DB pools, transactions) before the request resolves.
-    // Use scope.dispose() if all your services are synchronous.
+    // Node / Bun / Deno: await the cleanup before the request resolves.
     await scope.disposeAsync();
+
+    // Workers / Vercel Edge variant — fire-and-forget via the platform's
+    // executionCtx so cleanup doesn't add latency to the response:
+    //
+    //   c.executionCtx.waitUntil(scope.disposeAsync());
+    //
+    // Choose ONE branch based on your deployment target.
   }
 });
 

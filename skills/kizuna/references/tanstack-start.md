@@ -51,8 +51,9 @@ export const withScope = createMiddleware().server(async ({ next }) => {
     const result = await next({ context: { scope } });
     return result;
   } finally {
-    // Awaits async cleanup (e.g. transaction rollback/commit) before the
-    // request resolves. Use scope.dispose() instead for purely-sync services.
+    // Default to async: awaits cleanup (e.g. transaction rollback/commit)
+    // before the request resolves. If your container only registers services
+    // with synchronous dispose() (or none), use `scope.dispose()` instead.
     await scope.disposeAsync();
   }
 });

@@ -45,9 +45,12 @@ export const config = { runtime: 'edge' };
 
 export default async function handler(req: Request): Promise<Response> {
   // `await using` ensures disposeAsync runs on every code path (including throws),
-  // and blocks the response until cleanup completes. Acceptable when cleanup is fast;
-  // if you need fire-and-forget cleanup on a platform without ctx.waitUntil, fall back
-  // to try/finally with a non-awaited disposeAsync().
+  // and blocks the response until cleanup completes. Acceptable when cleanup is fast.
+  //
+  // For fire-and-forget post-response cleanup, Vercel exposes waitUntil via
+  // `import { waitUntil } from '@vercel/functions'` — use a try/finally pattern
+  // like the Workers example and pass scope.disposeAsync() to waitUntil() instead
+  // of awaiting it inline.
   await using scope = container.startScope();
   return handle(req, scope);
 }

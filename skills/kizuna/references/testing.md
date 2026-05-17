@@ -1,5 +1,7 @@
 # Testing
 
+**Sync vs async disposal in tests:** examples below use `scope.dispose()` because most test stubs are synchronous. If a test registers a service with async cleanup — Promise-returning `dispose()` or `[Symbol.asyncDispose]` (e.g. a real DB pool wrapping testcontainers, an async-clean mock that flushes a queue) — switch the matching line to `await scope.disposeAsync()`. Otherwise the test may complete before cleanup runs, leaking resources across tests in the same file.
+
 ## Create a test container with stubs
 
 Build a separate container for tests with mock implementations registered via factories.
