@@ -574,6 +574,71 @@ Kizuna works across different JavaScript environments:
 - **Edge Environments**: Cloudflare Workers, Vercel Edge Functions, etc.
 - **Other Runtimes**: Deno, Bun, and other JavaScript runtimes
 
+### 🌐 Edge Runtimes (Workers, Vercel Edge)
+
+Kizuna is built for edge runtimes: **~10 KB gzipped**, zero Node-API dependencies (only `process.env` access is guarded behind a `typeof process` check), no module-level mutable state that could leak across isolate-reused requests.
+
+**Recommended Cloudflare Workers pattern:**
+
+```typescript
+import { ContainerBuilder } from '@shirudo/kizuna';
+
+// Built once per isolate at module load — cheap (no service is instantiated here)
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerScoped('RequestContext', RequestContext)
+  .registerScoped('UserService', UserService, 'Logger', 'RequestContext')
+  .disableStrictParameterValidation()  // see ⚠️ below
+  .build();
+
+export default {
+  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const scope = container.startScope();
+
+    // disposeAsync awaits any async service cleanup (DB pools, KV batches).
+    // ctx.waitUntil lets cleanup run after the response is sent.
+    ctx.waitUntil(scope.disposeAsync());
+
+    return handle(req, scope);
+  }
+};
+```
+
+**Vercel Edge Function pattern:**
+
+```typescript
+import { ContainerBuilder } from '@shirudo/kizuna';
+
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerScoped('RequestContext', RequestContext)
+  .disableStrictParameterValidation()
+  .build();
+
+export const config = { runtime: 'edge' };
+
+export default async function handler(req: Request): Promise<Response> {
+  // `await using` ensures disposeAsync runs even on throw
+  await using scope = container.startScope();
+  return handle(req, scope);
+}
+```
+
+#### ⚠️ Isolate reuse: don't put request state in singletons
+
+Edge runtimes reuse the same isolate across requests. A `Singleton` lives for the lifetime of the isolate — **across users**. If a singleton accidentally captures request-specific state (auth tokens, user IDs, tenant data), that state leaks to the next request served by the same isolate.
+
+This is not a Kizuna bug — it's the definition of `Singleton`. But the failure mode is more dangerous on the edge than on a per-process server, because isolate-sharing is invisible by default.
+
+**Rule of thumb:**
+- `Singleton`: stateless services, configuration, infrastructure clients with their own pooling (DB clients, KV bindings, loggers)
+- `Scoped`: anything touching the current request (`RequestContext`, per-request DB transactions, auth state)
+- `Transient`: lightweight per-call helpers (UUID generators, timestamps)
+
+#### ⚠️ Strict parameter validation under minification
+
+`strictParameterValidation` (on by default) inspects `constructor.toString()` to match dependency names to parameter names. Edge bundlers (esbuild, webpack) mangle parameter names during minification, which breaks the check and can produce false warnings. Call `.disableStrictParameterValidation()` on the builder for production bundles. _(Tracked: this default will likely flip before 1.0 stable.)_
+
 ## ⚡ Concurrency Considerations
 
 **Important**: Kizuna is optimized for JavaScript's single-threaded model and is **not thread-safe**. For concurrent environments:
