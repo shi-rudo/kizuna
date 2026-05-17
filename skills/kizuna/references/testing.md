@@ -1,5 +1,7 @@
 # Testing
 
+**Sync vs async disposal in tests:** examples below use `scope.dispose()` because most test stubs are synchronous. If a test registers a service with async cleanup — Promise-returning `dispose()` or `[Symbol.asyncDispose]` (e.g. a real DB pool wrapping testcontainers, an async-clean mock that flushes a queue) — switch the matching line to `await scope.disposeAsync()`. Otherwise the test may complete before cleanup runs, leaking resources across tests in the same file.
+
 ## Create a test container with stubs
 
 Build a separate container for tests with mock implementations registered via factories.
@@ -36,6 +38,35 @@ describe('UserService', () => {
 
     expect(user).toEqual({ id: '1', name: 'Alice' });
     scope.dispose();
+  });
+});
+```
+
+### With async-cleanup services
+
+When a test stub has async cleanup — a testcontainers-backed DB pool, a queue mock that flushes on dispose, anything where `dispose()` returns a Promise — switch the disposal line to `await scope.disposeAsync()` so the test does not finish before cleanup runs:
+
+```typescript
+class FakeQueue {
+  flushed = false;
+  async dispose() {
+    // Simulate async drain (e.g. await producer.flush())
+    await new Promise(r => setImmediate(r));
+    this.flushed = true;
+  }
+}
+
+describe('publisher', () => {
+  it('flushes the queue on scope disposal', async () => {
+    const container = new ContainerBuilder()
+      .registerScopedFactory('queue', () => new FakeQueue())
+      .build();
+    const scope = container.startScope();
+    const queue = scope.get('queue');
+
+    await scope.disposeAsync();
+
+    expect(queue.flushed).toBe(true);
   });
 });
 ```
