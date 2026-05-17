@@ -4,6 +4,8 @@ Next.js does not have a middleware chain like Express. The scoping question beco
 
 **Status:** These patterns are recommendations based on Next.js architecture constraints. They are not documented in Kizuna's official docs.
 
+**Runtime:** Patterns below assume the default Node.js runtime. If a route, server component, or action declares `export const runtime = 'edge'`, the disposal primitive changes — fire-and-forget via `waitUntil` instead of `await scope.disposeAsync()` — to avoid blocking the response. See [edge-runtimes.md](edge-runtimes.md).
+
 ## The core challenge
 
 In Express, you create a scope in middleware and dispose it on response end. In Next.js:
@@ -22,6 +24,8 @@ In Express, you create a scope in middleware and dispose it on response end. In 
 | Multiple components need shared state | `withScope` helper + pass data down | Via return value, not scope | `finally` in helper |
 
 **Key insight:** In Next.js, every entry point gets its own scope. There is no way to share a scope across server components in the same render.
+
+**Sync vs async disposal:** the examples below use `scope.dispose()` (sync) for brevity. If any registered service has async cleanup — `dispose()` that returns a Promise, or implements `[Symbol.asyncDispose]` — use `await scope.disposeAsync()` instead. Sync `dispose()` invokes async handlers but does not await them; the cleanup may still be running when the response is sent. Common services that need async disposal: DB connection pools, file handles, network sockets, queue producers.
 
 ## Route handlers
 
@@ -111,7 +115,10 @@ export async function withScope<T>(
   try {
     return await fn(scope);
   } finally {
-    scope.dispose();
+    // Awaits async cleanup (DB pools, etc.) so callers don't return before
+    // resources settle. Use scope.dispose() instead if you don't have any
+    // services with Promise-returning dispose handlers.
+    await scope.disposeAsync();
   }
 }
 ```

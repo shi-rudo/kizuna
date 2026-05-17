@@ -102,7 +102,11 @@ class UserService {
 
 Pick one convention and use it consistently across the project.
 
-### Disabling strict parameter validation
+### Strict parameter validation: auto-skip and opt-out
+
+The parameter name check is **automatically disabled when `NODE_ENV === "production"`** (or when `process` is unavailable, e.g. in Cloudflare Workers / Vercel Edge). Bundler minification mangles parameter names into `a`, `b`, `c` — running the check there would produce false positives. No opt-out needed for production builds.
+
+To also skip the check in development (rarely needed):
 
 ```typescript
 const builder = new ContainerBuilder()
@@ -110,7 +114,9 @@ const builder = new ContainerBuilder()
   .registerSingleton('UserService', UserService, 'DatabaseConnection');
 ```
 
-This disables only the parameter name check. Missing dependency and circular dependency checks still run. Avoid disabling unless you have a specific reason — the mismatch warnings catch real bugs.
+This disables only the parameter name check. Missing dependency and circular dependency checks still run. Avoid disabling in development unless you have a specific reason — the mismatch warnings catch real bugs.
+
+**Source:** `base-container-builder.ts:168-220` (the check is gated on `isDevelopment()` which returns true unless `NODE_ENV === "production"` or `__DEV__` is explicitly false / `process` is undefined).
 
 ## How parameter name extraction works
 

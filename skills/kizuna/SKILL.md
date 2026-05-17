@@ -6,15 +6,17 @@ description: >
   registerSingletonFactory, registerScoped, registerTransient, addSingleton,
   addScoped, addTransient, addSingletonFactory, addScopedFactory,
   addTransientFactory, build(), validate(), get(), getAll(), startScope(),
-  dispose(), remove(), getRegisteredServiceNames(), TypeSafeServiceLocator,
+  dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose, remove(),
+  getRegisteredServiceNames(), TypeSafeServiceLocator,
   disableStrictParameterValidation.
   Activate when registering services, choosing lifecycles, managing request
   scopes, registering multiple implementations under one key, debugging
-  validation errors, testing with mock containers, or integrating with web
+  validation errors, testing with mock containers, deploying to edge
+  runtimes (Cloudflare Workers, Vercel Edge), or integrating with web
   frameworks.
 type: core
 library: kizuna
-library_version: "1.0.0-rc.0"
+library_version: "1.0.0-rc.2"
 sources:
   - "shi-rudo/kizuna:src/api/container-builder.ts"
   - "shi-rudo/kizuna:src/api/base-container-builder.ts"
@@ -25,6 +27,7 @@ sources:
   - "shi-rudo/kizuna:src/core/scopes/scoped.ts"
   - "shi-rudo/kizuna:src/core/scopes/transient.ts"
   - "shi-rudo/kizuna:src/core/services/service-wrapper.ts"
+  - "shi-rudo/kizuna:src/core/services/async-dispose.ts"
   - "shi-rudo/kizuna:README.md"
 ---
 
@@ -189,22 +192,43 @@ const issues = builder.validate();
 
 ### Disposal
 
-Calling `container.dispose()` disposes all lifecycle managers and their instances:
-- **Singleton**: Calls `instance.dispose()` if it exists, then marks lifecycle as permanently disposed
-- **Scoped**: Calls `instance.dispose()` if it exists, clears instance reference
+Two disposal APIs:
+- `container.dispose()` — synchronous. Calls each instance's `dispose()` method (if any) without awaiting Promises.
+- `container.disposeAsync()` — awaits service-owned async cleanup. Runs handlers in parallel via `Promise.allSettled`.
+
+Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
+
+For each lifecycle, disposal does:
+- **Singleton**: Calls `instance.dispose()` (or `Symbol.asyncDispose` on async path) if it exists, then marks lifecycle as permanently disposed
+- **Scoped**: Same on a per-scope basis, clears instance reference
 - **Transient**: Clears factory reference (individual instances are not tracked)
 
-After disposal, `get()`, `getAll()`, and `startScope()` throw `"Cannot access services from a disposed container"`. Disposal is idempotent — calling it twice is safe.
+After disposal, `get()`, `getAll()`, and `startScope()` throw `"Cannot access services from a disposed container"`. Disposal is idempotent — calling it (or `disposeAsync`) twice is safe.
 
 ```typescript
+class DatabasePool {
+  async dispose() { await this.pool.end(); } // returns Promise — needs disposeAsync
+}
+
 const container = builder.build();
 const pool = container.get('dbPool');
-// ... use container ...
 
-container.dispose(); // pool.dispose() is called automatically if it exists
+// Sync — fine for synchronous-only services
+container.dispose();
 
-// container.get('dbPool'); // throws: Cannot access services from a disposed container
+// Async — awaits each service's dispose, runs them in parallel
+await container.disposeAsync();
+
+// TC39 explicit resource management
+{
+  await using scope = container.startScope();
+  // ...
+} // scope.disposeAsync() called automatically on block exit
 ```
+
+Resolution priority when picking the cleanup method on each instance: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`.
+
+**When sync `dispose()` is wrong:** if any instance's `dispose()` returns a Promise (DB pool teardown, file handle close, network connection drain), `dispose()` invokes it but does not await it. Rejections are logged via a `.catch` attached internally to surface them, but the cleanup may still be in flight when the next operation runs. Always use `disposeAsync()` (or `await using`) when services hold async resources.
 
 ## Container Inspection & Modification
 
@@ -428,9 +452,11 @@ new ContainerBuilder()
   .registerSingleton('UserService', UserService, 'db')
 ```
 
-Strict parameter validation (enabled by default) checks that dependency keys match constructor parameter names positionally. Pick one naming convention and stick with it.
+Strict parameter validation (enabled by default in development) checks that dependency keys match constructor parameter names positionally. Pick one naming convention and stick with it.
 
-Source: base-container-builder.ts:171-193
+The check is **auto-disabled when `NODE_ENV === "production"`** (or when `process` is unavailable, e.g. in Cloudflare Workers / Vercel Edge) because bundler minification mangles parameter names into `a`, `b`, `c` — running the check there would produce false positives. No opt-out needed for production builds. Call `.disableStrictParameterValidation()` only if you also want to skip the check in development.
+
+Source: base-container-builder.ts:168-220
 
 ### HIGH Importing the stale Factory<T> type
 
@@ -520,4 +546,5 @@ Source: service-provider.ts:40-62
 - [Testing — test containers, stubs, scope isolation](references/testing.md)
 - [Next.js integration — scoping without middleware](references/nextjs.md)
 - [TanStack Start integration — loader and action scoping](references/tanstack-start.md)
+- [Edge runtimes — Cloudflare Workers, Vercel Edge patterns](references/edge-runtimes.md)
 - [Migration — from manual wiring, from decorator-based DI](references/migration.md)

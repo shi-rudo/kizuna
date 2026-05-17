@@ -4,6 +4,8 @@ TanStack Start has server middleware, loaders, and actions — each with differe
 
 **Status:** These patterns are recommendations based on TanStack Start architecture constraints. They are not documented in Kizuna's official docs.
 
+**Runtime:** Patterns below assume a Node.js deployment target. If TanStack Start runs on an edge runtime (Cloudflare Workers, Vercel Edge), use fire-and-forget cleanup via the platform's `waitUntil` instead of `await scope.disposeAsync()` — awaiting disposal in the request path adds latency for what is fundamentally post-response work. See [edge-runtimes.md](edge-runtimes.md).
+
 ## The core challenge
 
 - **Loaders** can run in parallel for the same route. If each loader creates its own scope, scoped services are not shared between sibling loaders.
@@ -18,6 +20,8 @@ TanStack Start has server middleware, loaders, and actions — each with differe
 | No middleware | Scope per server function | Each function gets its own scope | `finally` in handler |
 
 **Key decision:** Use middleware when parallel loaders need to share scoped services (e.g., same DB transaction). Use per-function scopes when isolation is preferred.
+
+**Sync vs async disposal:** the examples below use `scope.dispose()` for brevity. If your services have async cleanup (DB pool teardown, transaction rollback, file handle close, anything where `dispose()` returns a Promise or `[Symbol.asyncDispose]` is implemented), use `await scope.disposeAsync()` instead — the sync variant invokes async handlers but does not await them. For shared DB transactions in particular, awaiting disposal ensures rollback/commit completes before the request resolves.
 
 ```
 Middleware scope (shared):
@@ -47,7 +51,9 @@ export const withScope = createMiddleware().server(async ({ next }) => {
     const result = await next({ context: { scope } });
     return result;
   } finally {
-    scope.dispose();
+    // Awaits async cleanup (e.g. transaction rollback/commit) before the
+    // request resolves. Use scope.dispose() instead for purely-sync services.
+    await scope.disposeAsync();
   }
 });
 ```

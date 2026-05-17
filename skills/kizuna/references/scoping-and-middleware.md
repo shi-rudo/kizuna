@@ -2,13 +2,17 @@
 
 Request scoping creates a fresh set of scoped service instances per request while sharing singletons across all requests.
 
+**Runtime:** Express, Fastify, and NestJS are Node-only. Hono is multi-runtime (Node, Bun, Deno, Workers, Vercel Edge). On edge runtimes the disposal primitive changes — use `c.executionCtx.waitUntil(scope.disposeAsync())` for fire-and-forget cleanup instead of `await scope.disposeAsync()` in `finally`, to avoid blocking the response with post-request work. See [edge-runtimes.md](edge-runtimes.md).
+
 ## The pattern
 
 1. Call `container.startScope()` at request start.
 2. Use `scope.get()` / `scope.getAll()` to resolve services within the request.
-3. Call `scope.dispose()` when the request completes.
+3. Call `scope.dispose()` (sync) or `await scope.disposeAsync()` (async) when the request completes.
 
 Scoped services share one instance within the scope. Different scopes get different instances. Singletons are shared across all scopes.
+
+**Sync vs async disposal:** use `disposeAsync()` whenever any registered service has Promise-returning `dispose()` or implements `[Symbol.asyncDispose]` (DB connection pools, file handles, transaction rollback, queue producers). The sync variant invokes async handlers but does not await them — cleanup may still be running when the next operation begins. Some framework hooks (Express `res.on('finish')`, Fastify `done`-callback hooks) cannot `await` directly; those are noted inline.
 
 ## Which framework pattern
 
@@ -72,10 +76,16 @@ import { container } from './lib/container';
 
 const app = express();
 
-// Scope middleware — creates and disposes scope per request
+// Scope middleware — creates and disposes scope per request.
+// res.on('finish') is a sync callback that cannot await; if services have
+// async cleanup, fire-and-forget disposeAsync() (rejections go to console).
 app.use((req, res, next) => {
   req.scope = container.startScope();
-  res.on('finish', () => req.scope.dispose());
+  res.on('finish', () => {
+    void req.scope.disposeAsync().catch((err) => {
+      console.error('Async scope disposal failed:', err);
+    });
+  });
   next();
 });
 
@@ -97,9 +107,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  container.dispose(); // Disposes all singletons (logger, config, middleware)
+// Graceful shutdown — awaits async singleton cleanup (DB pools etc.)
+// before exiting.
+process.on('SIGTERM', async () => {
+  await container.disposeAsync();
   process.exit(0);
 });
 
@@ -133,7 +144,9 @@ app.use('*', async (c, next) => {
   try {
     await next();
   } finally {
-    scope.dispose();
+    // Awaits async cleanup (DB pools, transactions) before the request resolves.
+    // Use scope.dispose() if all your services are synchronous.
+    await scope.disposeAsync();
   }
 });
 
@@ -178,9 +191,13 @@ fastify.addHook('onRequest', (request, reply, done) => {
   done();
 });
 
+// onResponse uses a `done` callback rather than returning a Promise, so we
+// chain disposeAsync via .then/.catch. Use scope.dispose() (sync) if all
+// services are synchronous.
 fastify.addHook('onResponse', (request, reply, done) => {
-  request.scope.dispose();
-  done();
+  request.scope.disposeAsync()
+    .catch((err) => request.log.error({ err }, 'scope dispose failed'))
+    .finally(() => done());
 });
 
 fastify.get('/users/:id', (request, reply) => {
@@ -194,10 +211,11 @@ fastify.get('/users/:id', (request, reply) => {
   reply.send(user);
 });
 
-// Graceful shutdown
+// Graceful shutdown — awaits async singleton cleanup before Fastify exits.
 fastify.addHook('onClose', (instance, done) => {
-  container.dispose();
-  done();
+  container.disposeAsync()
+    .catch((err) => instance.log.error({ err }, 'container dispose failed'))
+    .finally(() => done());
 });
 
 // TypeScript: extend request

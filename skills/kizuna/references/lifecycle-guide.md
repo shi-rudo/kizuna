@@ -6,8 +6,8 @@ Every registration in Kizuna has one of three lifecycles. The lifecycle controls
 
 | Lifecycle | Instance creation | Sharing | Disposal | Use for |
 | --- | --- | --- | --- | --- |
-| Singleton | Lazy, on first `get()` | One instance forever | Calls `dispose()` on instance when root container is disposed | DB pools, config, loggers |
-| Scoped | Lazy, on first `get()` within scope | One per scope | Calls `dispose()` on instance if it exists | Per-request state, transactions |
+| Singleton | Lazy, on first `get()` | One instance forever | Calls `dispose()` / `[Symbol.asyncDispose]` on instance when root container is disposed | DB pools, config, loggers |
+| Scoped | Lazy, on first `get()` within scope | One per scope | Calls `dispose()` / `[Symbol.asyncDispose]` on instance if it exists | Per-request state, transactions |
 | Transient | Every `get()` call | Never shared | Not tracked | Stateless services, timestamps, UUIDs |
 
 ## Singleton
@@ -105,11 +105,24 @@ Both `SingletonLifecycle` and `ScopedLifecycle` use a boolean `_initialized` fla
 
 ## Disposal behavior
 
-All three lifecycles implement idempotent `dispose()` — calling it twice is safe (second call is a no-op). All check `_isDisposed` before `_factory` in `getInstance()`, so after disposal you always get a clear "disposed" error, not a misleading "no factory" error.
+Two disposal APIs on every lifecycle and on the container:
 
-The `ServiceProvider` (container) also tracks disposal state:
-- `get()`, `getAll()`, `startScope()` all throw `"Cannot access services from a disposed container"` after `container.dispose()`.
-- `dispose()` clears internal registration maps to allow GC of all service wrappers and lifecycle objects.
+- `dispose()` — synchronous. Calls each instance's `dispose()` without awaiting Promises. Rejections from Promise-returning `dispose` are logged via a `.catch` attached internally, but not awaited.
+- `disposeAsync()` — awaits service-owned async cleanup. Runs handlers in parallel via `Promise.allSettled`.
+
+Both are idempotent (second call is a no-op). All check `_isDisposed` before `_factory` in `getInstance()`, so after disposal you always get a clear "disposed" error, not a misleading "no factory" error.
+
+The `ServiceProvider` (container) also exposes TC39 hooks:
+- `[Symbol.dispose]()` — alias for `dispose()`. Enables `using` syntax.
+- `[Symbol.asyncDispose]()` — alias for `disposeAsync()`. Enables `await using` syntax.
+
+When picking the cleanup method on each service instance, kizuna prefers `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`.
+
+After `container.dispose()` or `container.disposeAsync()`:
+- `get()`, `getAll()`, `startScope()` throw `"Cannot access services from a disposed container"`.
+- Internal registration maps are cleared to allow GC of all service wrappers and lifecycle objects.
+
+**Pick the async variant when:** any registered service's `dispose` returns a Promise (e.g. `await pool.end()`, `await kafkaProducer.disconnect()`), or implements `Symbol.asyncDispose`. The sync `dispose()` cannot await these and the cleanup may be in flight when the next operation runs.
 
 ## startScope() allocates O(n) objects
 
