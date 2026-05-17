@@ -109,4 +109,27 @@ describe('Workers compatibility (workerd via miniflare)', () => {
         };
         expect(body.disposeCountAfter).toBe(body.disposeCountBefore + 1);
     });
+
+    it('exercises every public API surface in workerd without throwing', async () => {
+        // Smoke test for paths the documented patterns don't hit: sync dispose,
+        // getAll, multi-registration, builder mutations (remove/clear/count/
+        // isRegistered/getRegisteredServiceNames), and the sync Symbol.dispose
+        // hook used by TC39 `using`. Catches Node-API leaks in these paths.
+        const res = await mf.dispatchFetch('http://localhost/exercise-all');
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as {
+            ok: boolean;
+            beforeRemoveCount: number;
+            afterRemoveCount: number;
+            wasRegistered: boolean;
+            namesLength: number;
+            allPluginsLength: number;
+            usingScopeIdShape: string;
+        };
+        expect(body.ok).toBe(true);
+        expect(body.wasRegistered).toBe(true);
+        expect(body.afterRemoveCount).toBe(body.beforeRemoveCount - 1);
+        expect(body.allPluginsLength).toBe(2);
+        expect(body.usingScopeIdShape).toBe('string');
+    });
 });
