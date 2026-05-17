@@ -42,6 +42,35 @@ describe('UserService', () => {
 });
 ```
 
+### With async-cleanup services
+
+When a test stub has async cleanup — a testcontainers-backed DB pool, a queue mock that flushes on dispose, anything where `dispose()` returns a Promise — switch the disposal line to `await scope.disposeAsync()` so the test does not finish before cleanup runs:
+
+```typescript
+class FakeQueue {
+  flushed = false;
+  async dispose() {
+    // Simulate async drain (e.g. await producer.flush())
+    await new Promise(r => setImmediate(r));
+    this.flushed = true;
+  }
+}
+
+describe('publisher', () => {
+  it('flushes the queue on scope disposal', async () => {
+    const container = new ContainerBuilder()
+      .registerScopedFactory('queue', () => new FakeQueue())
+      .build();
+    const scope = container.startScope();
+    const queue = scope.get('queue');
+
+    await scope.disposeAsync();
+
+    expect(queue.flushed).toBe(true);
+  });
+});
+```
+
 ## Override a single registration
 
 Build a helper that creates the production container but swaps one service.

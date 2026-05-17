@@ -213,18 +213,26 @@ class DatabasePool {
 const container = builder.build();
 const pool = container.get('dbPool');
 
-// Sync — fine for synchronous-only services
+// Pick ONE of the patterns below — they are alternatives, not steps.
+// Once disposed, a container cannot be used again.
+
+// Option A — Sync. Fine only for purely-synchronous services.
 container.dispose();
 
-// Async — awaits each service's dispose, runs them in parallel
+// Option B — Async. Awaits each service's dispose in parallel.
+//            Use this whenever any service has async cleanup.
 await container.disposeAsync();
 
-// TC39 explicit resource management
+// Option C — TC39 explicit resource management (scoped to a block).
+//            Best for per-request scopes; the container itself can
+//            still be disposed separately at shutdown.
 {
   await using scope = container.startScope();
-  // ...
+  // ...use scope...
 } // scope.disposeAsync() called automatically on block exit
 ```
+
+> **Note:** `await using` requires TypeScript ≥ 5.2 and a modern V8 runtime (Node ≥ 22, Bun, Deno, Cloudflare Workers, Vercel Edge). On older Node versions use the explicit `try/finally + await disposeAsync()` pattern.
 
 **Per-API resolution rules:**
 - `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
