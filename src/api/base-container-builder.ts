@@ -190,8 +190,10 @@ export abstract class BaseContainerBuilder {
                 }
             });
 
-            // Validate parameter names match dependencies for constructor-based registrations
-            if (this.strictParameterValidation) {
+            // Validate parameter names match dependencies for constructor-based registrations.
+            // Skipped in production builds where minification mangles parameter names — the
+            // check would produce false positives (e.g. constructor(a, b) after esbuild).
+            if (this.strictParameterValidation && isDevelopment()) {
                 if (resolver.isConstructorBased()) {
                     const constructor = resolver.getConstructor();
                     if (constructor) {

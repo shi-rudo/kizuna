@@ -269,9 +269,9 @@ correctBuilder.validate(); // Returns: [] (no issues)
 
 **Benefits:**
 - **Helps Prevent Runtime Errors**: Catches dependency order mismatches at validation time
-- **Enabled by Default**: Works automatically with no setup required
+- **Enabled by Default in Development**: Works automatically; auto-disabled in production (`NODE_ENV=production`) because minification mangles parameter names and the check would produce false positives
 - **Helpful Suggestions**: Provides corrected registration examples in error messages
-- **Opt-out Available**: Can be disabled if needed with `.disableStrictParameterValidation()`
+- **Opt-out Available**: Can be disabled explicitly with `.disableStrictParameterValidation()` (useful if you want to disable it in development too)
 
 **When Parameter Validation Helps:**
 ```typescript
@@ -537,7 +537,7 @@ The main class for configuring your dependency injection container.
 .validate(): string[]                                  // Validate configuration
 .remove(key: string): boolean                          // Remove a registration
 .clear(): ContainerBuilder                             // Clear all registrations
-.disableStrictParameterValidation(): ContainerBuilder  // Disable parameter name validation
+.disableStrictParameterValidation(): ContainerBuilder  // Disable param name validation (auto-off in production)
 .count: number                                         // Number of registered services
 .isRegistered(key: string): boolean                    // Check if service is registered
 .getRegisteredServiceNames(): string[]                 // List all registered keys
@@ -588,7 +588,6 @@ const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   .registerScoped('RequestContext', RequestContext)
   .registerScoped('UserService', UserService, 'Logger', 'RequestContext')
-  .disableStrictParameterValidation()  // see ⚠️ below
   .build();
 
 export default {
@@ -612,7 +611,6 @@ import { ContainerBuilder } from '@shirudo/kizuna';
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   .registerScoped('RequestContext', RequestContext)
-  .disableStrictParameterValidation()
   .build();
 
 export const config = { runtime: 'edge' };
@@ -635,9 +633,9 @@ This is not a Kizuna bug — it's the definition of `Singleton`. But the failure
 - `Scoped`: anything touching the current request (`RequestContext`, per-request DB transactions, auth state)
 - `Transient`: lightweight per-call helpers (UUID generators, timestamps)
 
-#### ⚠️ Strict parameter validation under minification
+#### Strict parameter validation under minification
 
-`strictParameterValidation` (on by default) inspects `constructor.toString()` to match dependency names to parameter names. Edge bundlers (esbuild, webpack) mangle parameter names during minification, which breaks the check and can produce false warnings. Call `.disableStrictParameterValidation()` on the builder for production bundles. _(Tracked: this default will likely flip before 1.0 stable.)_
+`strictParameterValidation` inspects `constructor.toString()` to match dependency names to parameter names. Edge bundlers mangle parameter names during minification, which would produce false warnings — so Kizuna **auto-disables this check when `NODE_ENV === 'production'`**. No opt-out required for edge deploys; the check still runs in development to catch real ordering bugs early.
 
 ## ⚡ Concurrency Considerations
 
