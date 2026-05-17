@@ -79,8 +79,13 @@ export abstract class BaseContainerBuilder {
 
     /**
      * Disables strict parameter name validation for constructor-based registrations.
-     * By default, validation checks that dependency names match constructor parameter names.
-     * This method allows you to disable that validation if needed.
+     *
+     * By default, `validate()` checks that dependency names match constructor parameter
+     * names — but only in development. The check is automatically skipped when
+     * `NODE_ENV === "production"` (or when `process` is unavailable, e.g. in edge
+     * runtimes) because minification mangles parameter names and the check would
+     * produce false positives. Call this method to also opt out in development.
+     *
      * @returns {this} The container builder for method chaining
      */
     disableStrictParameterValidation(): this {
@@ -167,6 +172,7 @@ export abstract class BaseContainerBuilder {
      */
     validate(): string[] {
         const issues: string[] = [];
+        const strictParamCheckEnabled = this.strictParameterValidation && isDevelopment();
 
         // Basic validation of service registrations
         this.registrations.forEach((resolver, name) => {
@@ -193,7 +199,7 @@ export abstract class BaseContainerBuilder {
             // Validate parameter names match dependencies for constructor-based registrations.
             // Skipped in production builds where minification mangles parameter names — the
             // check would produce false positives (e.g. constructor(a, b) after esbuild).
-            if (this.strictParameterValidation && isDevelopment()) {
+            if (strictParamCheckEnabled) {
                 if (resolver.isConstructorBased()) {
                     const constructor = resolver.getConstructor();
                     if (constructor) {
