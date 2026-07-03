@@ -11,9 +11,6 @@ importers:
       '@biomejs/biome':
         specifier: 2.1.2
         version: 2.1.2
-      '@tanstack/intent':
-        specifier: ^0.0.14
-        version: 0.0.14
       '@types/node':
         specifier: ^24.0.15
         version: 24.0.15
@@ -589,10 +586,6 @@ packages:
 
   '@speed-highlight/core@1.2.15':
     resolution: {integrity: sha512-BMq1K3DsElxDWawkX6eLg9+CKJrTVGCBAWVuHXVUV2u0s2711qiChLSId6ikYPfxhdYocLNt3wWwSvDiTvFabw==}
-
-  '@tanstack/intent@0.0.14':
-    resolution: {integrity: sha512-83cjen+tYll6z0MIN0JC9GuMljUkfYfHFDOLhmROz4XMmbD/0ZjvKNOsFgpO7eq957XHB/qyK+hCO+3OS/D6HQ==}
-    hasBin: true
 
   '@types/chai@5.2.2':
     resolution: {integrity: sha512-8kB30R7Hwqf40JPiKhVzodJs2Qc1ZJ5zuT3uzw5Hq/dhNCl3G3l83jfpdI1e20BP348+fV7VIL/+FxaXkqBmWg==}
@@ -1618,10 +1611,6 @@ snapshots:
 
   '@speed-highlight/core@1.2.15': {}
 
-  '@tanstack/intent@0.0.14':
-    dependencies:
-      yaml: 2.8.2
-
   '@types/chai@5.2.2':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -2303,7 +2292,8 @@ snapshots:
 
   ws@8.18.0: {}
 
-  yaml@2.8.2: {}
+  yaml@2.8.2:
+    optional: true
 
   youch-core@0.3.3:
     dependencies:
