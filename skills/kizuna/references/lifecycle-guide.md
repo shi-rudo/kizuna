@@ -82,7 +82,7 @@ new ContainerBuilder()
   .build();
 ```
 
-`validate()` does NOT check for lifecycle mismatches. You must audit this manually.
+`validate()` reports this as a captive dependency issue (singleton depending on scoped) — run it before `build()`.
 
 **Rule:** A service should only depend on services with equal or longer lifetimes.
 
@@ -118,7 +118,7 @@ The `ServiceProvider` (container) also exposes TC39 hooks:
 
 **Per-API resolution rules:**
 - `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
-- `dispose()` (sync) **only** calls `instance.dispose()`. It does NOT look for `[Symbol.dispose]` or `[Symbol.asyncDispose]` on instances. A service that implements `[Symbol.dispose]` instead of `dispose()` will not be cleaned up by sync `container.dispose()`. (The container's own `[Symbol.dispose]` hook is used by TC39 `using` syntax and calls `container.dispose()` internally — but per-service Symbol hooks are async-only.)
+- `dispose()` (sync) picks by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort invoked fire-and-forget (rejections logged, not awaited) — use `disposeAsync()` for genuinely async cleanup.
 
 After `container.dispose()` or `container.disposeAsync()`:
 - `get()`, `getAll()`, `startScope()` throw `"Cannot access services from a disposed container"`.

@@ -82,13 +82,14 @@ function createContainerWithOverride<T>(
   key: string,
   mockFactory: () => T,
 ) {
-  return new ContainerBuilder()
+  const builder = new ContainerBuilder()
     .registerSingleton('logger', Logger)
     .registerSingleton('database', DatabaseService, 'logger')
-    .registerScoped('userService', UserService, 'database', 'logger')
-    // Override: re-register with mock — last registration wins
-    .registerSingletonFactory(key, mockFactory as any)
-    .build();
+    .registerScoped('userService', UserService, 'database', 'logger');
+
+  // Override: re-registering an existing key throws, so remove it first
+  builder.remove(key);
+  return builder.registerSingletonFactory(key, mockFactory as any).build();
 }
 
 describe('UserService with mock database', () => {
@@ -105,7 +106,7 @@ describe('UserService with mock database', () => {
 });
 ```
 
-Kizuna logs a warning when overwriting a registration but allows it. This is the simplest way to swap a single dependency for testing.
+Re-registering an existing key throws — `remove(key)` followed by a fresh registration is the supported way to swap a single dependency for testing.
 
 ## Test scoped lifecycle isolation
 

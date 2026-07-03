@@ -339,7 +339,7 @@ async function bootstrap() {
 ## Disposal behavior
 
 - **Scoped instances:** If the instance has a `dispose()` method, it is called when the scope is disposed.
-- **Singleton instances:** Disposed only when the **root container** is disposed (not when child scopes are disposed). If the singleton instance has a `dispose()` method, it is called automatically.
+- **Singleton instances:** Disposed only when the **root container** is disposed (not when child scopes are disposed). If the singleton instance has a `[Symbol.dispose]` or `dispose()` method, it is called automatically.
 - **Transient instances:** Not tracked. The lifecycle holds no references.
 - **Multi-registrations:** Each implementation follows its own lifecycle's disposal rules.
 

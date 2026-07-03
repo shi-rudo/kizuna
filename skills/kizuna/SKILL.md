@@ -8,7 +8,7 @@ description: >
   addTransientFactory, build(), validate(), get(), getAll(), startScope(),
   dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose, remove(),
   getRegisteredServiceNames(), TypeSafeServiceLocator,
-  disableStrictParameterValidation.
+  disableStrictParameterValidation, CircularDependencyError.
   Activate when registering services, choosing lifecycles, managing request
   scopes, registering multiple implementations under one key, debugging
   validation errors, testing with mock containers, deploying to edge
@@ -143,7 +143,7 @@ const allValid = validators.every(v => v.validate('hello')); // true
 - `getAll()` returns an array; `get()` on a multi-key also returns the array
 - Each implementation can have its own lifecycle (mix singleton + scoped under one key)
 - Factory variants available: `addSingletonFactory`, `addScopedFactory`, `addTransientFactory`
-- `validate()` checks multi-registration dependencies and circular deps
+- `validate()` checks multi-registration dependencies, circular deps, and captive dependencies
 
 ### Request scoping for web servers
 
@@ -175,7 +175,7 @@ app.get('/users/:id', (req, res) => {
 
 ### Validate before building
 
-`build()` does NOT validate. Call `validate()` explicitly to catch missing dependencies, circular dependencies, and parameter name mismatches at startup.
+`build()` does NOT validate. Call `validate()` explicitly to catch missing dependencies, circular dependencies, captive dependencies (singleton depending on scoped), and parameter name mismatches at startup.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -193,13 +193,13 @@ const issues = builder.validate();
 ### Disposal
 
 Two disposal APIs:
-- `container.dispose()` — synchronous. Calls each instance's `dispose()` method (if any) without awaiting Promises.
+- `container.dispose()` — synchronous. Invokes each instance's sync dispose hook (see priority below) without awaiting Promises.
 - `container.disposeAsync()` — awaits service-owned async cleanup. Runs handlers in parallel via `Promise.allSettled`.
 
 Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
 
 For each lifecycle, disposal does:
-- **Singleton**: Calls `instance.dispose()` (or `Symbol.asyncDispose` on async path) if it exists, then marks lifecycle as permanently disposed
+- **Singleton**: Invokes the instance's dispose hook (sync or async path, see priority below) if present, then marks lifecycle as permanently disposed
 - **Scoped**: Same on a per-scope basis, clears instance reference
 - **Transient**: Clears factory reference (individual instances are not tracked)
 
@@ -234,9 +234,9 @@ await container.disposeAsync();
 
 > **Note:** `await using` requires TypeScript ≥ 5.2 and a modern V8 runtime (Node ≥ 22, Bun, Deno, Cloudflare Workers, Vercel Edge). On older Node versions use the explicit `try/finally + await disposeAsync()` pattern.
 
-**Per-API resolution rules:**
+**Per-API resolution rules (exactly one hook is invoked per instance):**
 - `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
-- `dispose()` (sync) **only** calls `instance.dispose()`. It does not look for `[Symbol.dispose]` or `[Symbol.asyncDispose]`. A service that implements `[Symbol.dispose]` instead of `dispose()` will NOT be cleaned up by sync `container.dispose()`. (TC39 `using` reaches the container's own `[Symbol.dispose]` hook, which then calls `container.dispose()` internally — but per-service Symbol hooks are async-only.)
+- `dispose()` (sync) picks by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort and is invoked fire-and-forget (rejections are logged, not awaited) — services with genuinely async cleanup should be disposed via `disposeAsync()`.
 
 **When sync `dispose()` is wrong:** if any instance's `dispose()` returns a Promise (DB pool teardown, file handle close, network connection drain), `dispose()` invokes it but does not await it. Rejections are logged via a `.catch` attached internally to surface them, but the cleanup may still be in flight when the next operation runs. Always use `disposeAsync()` (or `await using`) when services hold async resources.
 
@@ -261,6 +261,8 @@ builder.validate();
 ```
 
 `remove()` works on both single-registration and multi-registration keys. It disposes the removed service wrappers and returns `false` if the key wasn't registered.
+
+Re-registering an existing `register*()` key throws (silent overwriting would contradict the inferred type registry). To replace a registration, call `remove(key)` first, then register again.
 
 ## Common Mistakes
 
@@ -308,9 +310,9 @@ if (issues.length > 0) throw new Error(issues.join('\n'));
 const container = builder.build();
 ```
 
-`build()` creates a ServiceProvider without checking for missing dependencies, circular dependencies, or parameter mismatches. Errors surface at resolution time.
+`build()` creates a ServiceProvider without checking for missing dependencies, circular dependencies, or parameter mismatches. Errors surface at resolution time. Dependency cycles fail fast there: the first resolution touching a cycle throws a `CircularDependencyError` (exported) whose message and `.chain` property show the full path, e.g. `Circular dependency detected: a -> b -> a`.
 
-Source: container-builder.ts:392-407
+Source: container-builder.ts, service-provider.ts
 
 ### CRITICAL Captive dependency — singleton holds scoped service
 
@@ -332,9 +334,9 @@ new ContainerBuilder()
   .build();
 ```
 
-A singleton captures the first scope's instance and holds it forever. Subsequent requests see stale state. `validate()` does not check lifecycle mismatches.
+A singleton captures the first scope's instance and holds it forever — after that scope is disposed, every consumer sees the disposed instance. `validate()` reports this as a captive dependency (`Service 'userService' is a singleton but depends on scoped service 'requestContext' (captive dependency): ...`) — one more reason to always run it before `build()`.
 
-Source: maintainer interview
+Source: base-container-builder.ts validate()
 
 ### HIGH Using factories when constructor registration works
 

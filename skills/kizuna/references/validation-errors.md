@@ -41,10 +41,10 @@ const container = builder.build();
 2. **Circular dependencies** — A depends on B depends on A (detected via DFS, includes multi-registration dependency graphs).
 3. **Parameter name mismatches** (strict mode, enabled by default) — dependency keys don't match constructor parameter names positionally.
 4. **Disposed registrations** — a service wrapper that has been disposed.
+5. **Captive dependencies** — a singleton depending on a scoped service (the scoped instance would be captured beyond its scope).
 
 ## What validate() does NOT check
 
-- **Lifecycle mismatches** (captive dependencies) — singleton depending on scoped.
 - **Factory dependencies** — dependencies resolved inside factories are invisible.
 - **Runtime resolution errors** — factory throws, async factory returns Promise.
 - **add*/register* key conflicts** — these are caught at registration time, not by validate().
