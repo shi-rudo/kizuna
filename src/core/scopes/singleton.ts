@@ -25,7 +25,7 @@ import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose
  * @example
  * ```typescript
  * // Register a singleton service
- * builder.addSingleton(r => r.fromType(DatabaseService));
+ * builder.registerSingleton('DatabaseService', DatabaseService);
  *
  * // All requests return the same instance
  * const db1 = container.get(DatabaseService);
@@ -139,7 +139,7 @@ export class SingletonLifecycle implements Container {
                 if (error instanceof CircularDependencyError) {
                     throw error;
                 }
-                throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
+                throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
             }
         }
 

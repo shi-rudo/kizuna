@@ -188,15 +188,14 @@ describe('ContainerBuilder Validation', () => {
             }).toThrow();
         });
 
-        it('should warn about duplicate service registrations', () => {
+        it('should reject duplicate service registrations', () => {
             builder.registerSingleton('DuplicateService', ServiceWithNoDeps);
-            
-            // Second registration should override but may warn
-            builder.registerSingleton('DuplicateService', ServiceWithOneDep, 'SomeDep');
-            
-            const issues = builder.validate();
-            // Should have issues due to missing 'SomeDep', but duplicate is allowed
-            expect(issues.some(issue => issue.includes('SomeDep'))).toBe(true);
+
+            // A second registration under the same key would silently win at
+            // runtime while the type registry claims the intersection of both
+            expect(() => {
+                builder.registerSingleton('DuplicateService', ServiceWithOneDep, 'SomeDep');
+            }).toThrow(/already registered/);
         });
     });
 
@@ -388,16 +387,18 @@ describe('ContainerBuilder Validation', () => {
     });
 
     describe('Integration with Service Management', () => {
-        it('should maintain accurate validation during service overwrites', () => {
+        it('should maintain accurate validation when a service is replaced via remove()', () => {
             // Register service with missing dependency
             builder.registerSingleton('Service', ServiceWithOneDep, 'MissingDep');
             expect(builder.validate().length).toBeGreaterThan(0);
 
-            // Overwrite with valid service
+            // Replace with valid service (remove first — overwriting throws)
+            builder.remove('Service');
             builder.registerSingleton('Service', ServiceWithNoDeps);
             expect(builder.validate()).toEqual([]);
 
-            // Overwrite again with invalid service  
+            // Replace again with invalid service
+            builder.remove('Service');
             builder.registerSingleton('Service', ServiceWithOneDep, 'StillMissing');
             expect(builder.validate().length).toBeGreaterThan(0);
         });

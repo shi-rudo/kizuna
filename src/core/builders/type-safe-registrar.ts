@@ -30,11 +30,6 @@ export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBu
         this.dependencies = [];
     }
 
-    useInstance(instance: T): void {
-        this.factory = () => instance;
-        this.dependencies = [];
-    }
-
     getConstructor(): (new (...args: any[]) => T) | undefined {
         return this.constructorFn;
     }

@@ -69,6 +69,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             }
             throw new Error(
                 `Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }
@@ -95,6 +96,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
                 }
                 throw new Error(
                     `Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
+                    { cause: error },
                 );
             }
         }
@@ -233,6 +235,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             }
             throw new Error(
                 `Failed to resolve multi-service ${typeName}: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
             );
         }
     }

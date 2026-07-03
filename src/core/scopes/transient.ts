@@ -26,7 +26,7 @@ import { CircularDependencyError } from '../errors';
  * @example
  * ```typescript
  * // Register a transient service
- * builder.addTransient(r => r.fromType(Logger));
+ * builder.registerTransient('Logger', Logger);
  * 
  * // Every request creates a new instance
  * const logger1 = container.get(Logger);
@@ -128,7 +128,7 @@ export class TransientLifecycle implements Container {
             if (error instanceof CircularDependencyError) {
                 throw error;
             }
-            throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
         }
     }
 

@@ -35,19 +35,6 @@ export abstract class BaseContainerBuilder {
     protected strictParameterValidation: boolean = true;
 
     /**
-     * Creates a new instance of BaseContainerBuilder.
-     *
-     * @param {unknown} [patch] - Optional patch object for configuration.
-     *   If provided, the patch object will be processed to configure function names
-     *   for better debugging support in development environments.
-     */
-    constructor(patch?: unknown) {
-        if (patch && typeof patch === "object" && patch !== null) {
-            this.patch(patch as Record<string, unknown>);
-        }
-    }
-
-    /**
      * Checks if a service is registered.
      * @template T - The service type
      * @param {string | T} serviceName - The name of the service or its constructor
@@ -299,13 +286,7 @@ export abstract class BaseContainerBuilder {
      * @throws {Error} If the service name is invalid
      */
     protected validateServiceName(serviceName: string): void {
-        if (
-            !serviceName ||
-            typeof serviceName !== "string" ||
-            serviceName.trim() === ""
-        ) {
-            throw new Error("Service registration must have a valid name");
-        }
+        this.ensureValidServiceName(serviceName);
 
         if (this.multiRegistrations.has(serviceName)) {
             throw new Error(
@@ -315,9 +296,25 @@ export abstract class BaseContainerBuilder {
         }
 
         if (this.registrationNames.has(serviceName)) {
-            this.logWarning(
-                `Service '${serviceName}' is already registered. Overwriting existing registration.`,
+            throw new Error(
+                `Service '${serviceName}' is already registered. ` +
+                `Silently overwriting would contradict the type registry — remove() it first or use a different key.`,
             );
+        }
+    }
+
+    /**
+     * Ensures a service name is a non-empty string.
+     * @private
+     * @throws {Error} If the service name is invalid
+     */
+    private ensureValidServiceName(serviceName: string): void {
+        if (
+            !serviceName ||
+            typeof serviceName !== "string" ||
+            serviceName.trim() === ""
+        ) {
+            throw new Error("Service registration must have a valid name");
         }
     }
 
@@ -340,6 +337,8 @@ export abstract class BaseContainerBuilder {
      * @param {ServiceWrapper} resolver - The service wrapper to append
      */
     protected addMultiService(serviceName: string, resolver: ServiceWrapper): void {
+        this.ensureValidServiceName(serviceName);
+
         if (this.registrations.has(serviceName)) {
             throw new Error(
                 `Key '${serviceName}' is already registered as a single service. ` +
@@ -441,91 +440,6 @@ export abstract class BaseContainerBuilder {
         });
 
         return issues;
-    }
-
-    /**
-     * Helper function to check if a value is a plain object
-     * @private
-     */
-    private isPlainObject(obj: unknown): obj is Record<string, unknown> {
-        return (
-            obj !== null &&
-            typeof obj === "object" &&
-            Object.prototype.toString.call(obj) === "[object Object]" &&
-            Object.getPrototypeOf(obj) === Object.prototype
-        );
-    }
-
-    /**
-     * Sets the display name of a function for better debugging.
-     * @private
-     * @param {Function} fn - The function to name
-     * @param {string} name - The name to set
-     */
-    private setFunctionName(fn: Function, name: string): void {
-        if (typeof fn !== "function" || !name) {
-            return;
-        }
-
-        try {
-            // Try to set the display name if the environment supports it
-            if ("displayName" in fn) {
-                (fn as { displayName?: string }).displayName = name;
-            }
-
-            // Set the name property if configurable
-            try {
-                Object.defineProperty(fn, "name", {
-                    value: name,
-                    configurable: true,
-                });
-            } catch (_) {
-                // In some environments, the name property might not be configurable
-                if (isDevelopment()) {
-                    this.logWarning(`Could not set name for function: ${name}`);
-                }
-            }
-        } catch (error) {
-            if (isDevelopment()) {
-                this.logError(`Error setting function name for ${name}:`, error);
-            }
-        }
-    }
-
-    /**
-     * Patches the service collection with functions from the provided namespace.
-     * @private
-     * @param {Record<string, unknown>} ns - The namespace object to patch from
-     * @param {string} [path] - The current path in the namespace (used for recursion)
-     */
-    private patch(ns: Record<string, unknown>, path: string = ""): void {
-        if (!ns || typeof ns !== "object") {
-            return;
-        }
-
-        try {
-            Object.entries(ns).forEach(([key, value]) => {
-                const currentPath = path ? `${path}.${key}` : key;
-
-                try {
-                    if (this.isPlainObject(value)) {
-                        // Recursively patch plain objects
-                        this.patch(value as Record<string, unknown>, currentPath);
-                    } else if (typeof value === "function") {
-                        // Set function name for functions
-                        this.setFunctionName(value, currentPath);
-                    }
-                } catch (error) {
-                    if (isDevelopment()) {
-                        this.logError(`Error processing '${currentPath}':`, error);
-                    }
-                }
-            });
-        } catch (error) {
-            if (isDevelopment()) {
-                this.logError("Error during patch operation:", error);
-            }
-        }
     }
 
     /**

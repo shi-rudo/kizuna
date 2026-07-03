@@ -43,7 +43,6 @@ export { CircularDependencyError, ServiceProvider } from "./service-provider";
 // Contracts and interfaces
 export {
     Container,
-    PendingService,
     ServiceBuilder,
     ServiceLocator,
     TypeSafeServiceLocator,

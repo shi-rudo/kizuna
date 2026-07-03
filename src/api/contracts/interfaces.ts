@@ -83,62 +83,6 @@ export interface ServiceBuilder {
 }
 
 /**
- * ServiceRegistration interface represents a complete service registration.
- * 
- * This interface extends ServiceBuilder and represents a service that has been
- * fully configured and is ready to be built into a ServiceWrapper. It indicates
- * that all necessary configuration (factory, dependencies, etc.) has been provided.
- * 
- * @extends ServiceBuilder
- * 
- * @example
- * ```typescript
- * // A registration that's ready to be built
- * const registration: ServiceRegistration = builder
- *   .fromType(UserService)
- *   .withDependencies(DatabaseService);
- * ```
- */
-export interface ServiceRegistration extends ServiceBuilder { }
-
-/**
- * PendingService interface represents a service registration that may still need dependencies.
- * 
- * This interface extends ServiceBuilder and provides the ability to configure dependencies
- * before the service registration is complete. It's typically used in the fluent API
- * when a service has been specified but dependencies haven't been configured yet.
- * 
- * @extends ServiceBuilder
- * 
- * @example
- * ```typescript
- * // Create a pending service
- * const pending: PendingService = builder.fromType(UserService);
- * 
- * // Configure dependencies to complete the registration
- * const registration: ServiceRegistration = pending.withDependencies(
- *   DatabaseService, 
- *   'LoggerService'
- * );
- * ```
- */
-export interface PendingService extends ServiceBuilder {
-    /**
-     * Configures the dependencies for this service.
-     * 
-     * @param dependencies - Array of dependency identifiers (constructor functions or string names)
-     * @returns A complete ServiceRegistration ready to be built
-     * 
-     * @example
-     * ```typescript
-     * // Mix of constructor and string dependencies
-     * pending.withDependencies(DatabaseService, 'ILogger', ApiClient);
-     * ```
-     */
-    withDependencies(...dependencies: (string | (new (...args: any) => any))[]): ServiceRegistration;
-}
-
-/**
  * ServiceLocator interface defines the contract for service resolution and container management.
  * 
  * This interface is implemented by ServiceProvider and provides the main API for resolving

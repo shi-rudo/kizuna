@@ -1,28 +1,6 @@
 import type { ServiceLocator } from './interfaces';
 
 /**
- * Constructor type that preserves the exact signature of a constructor function.
- * 
- * This utility type extracts and preserves the parameter types and return type
- * of a constructor function, ensuring type safety when working with service
- * registration and dependency injection.
- * 
- * @template T - The constructor function type to preserve
- * 
- * @example
- * ```typescript
- * class UserService {
- *   constructor(db: DatabaseService, logger: Logger) {}
- * }
- * 
- * // Constructor<typeof UserService> preserves the exact constructor signature
- * type UserServiceConstructor = Constructor<typeof UserService>;
- * // Equivalent to: new (db: DatabaseService, logger: Logger) => UserService
- * ```
- */
-export type Constructor<T extends new (...args: any) => any> = T extends new (...args: infer A) => infer R ? new (...args: A) => R : never;
-
-/**
  * Factory function type for creating service instances.
  * 
  * Factory functions receive the ServiceLocator as a parameter, allowing them
@@ -150,10 +128,4 @@ export interface TypeSafeRegistrar<T> {
      * @param factory - Factory function that creates the service
      */
     useFactory(factory: Factory<T>): void;
-
-    /**
-     * Use an existing instance (singleton pattern).
-     * @param instance - The service instance
-     */
-    useInstance(instance: T): void;
 }

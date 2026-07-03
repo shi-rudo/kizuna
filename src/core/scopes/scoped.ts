@@ -28,7 +28,7 @@ import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose
  * @example
  * ```typescript
  * // Register a scoped service
- * builder.addScoped(r => r.fromType(UserContext));
+ * builder.registerScoped('UserContext', UserContext);
  * 
  * // Within the same scope - same instance
  * const scope1 = container.startScope();
@@ -149,7 +149,7 @@ export class ScopedLifecycle implements Container {
                 if (error instanceof CircularDependencyError) {
                     throw error;
                 }
-                throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
+                throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
             }
         }
         
