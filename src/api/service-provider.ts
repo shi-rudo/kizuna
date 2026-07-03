@@ -1,7 +1,10 @@
+import { CircularDependencyError } from "../core/errors";
 import { SingletonLifecycle } from "../core/scopes/singleton";
 import { ServiceWrapper } from "../core/services/service-wrapper";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces";
 import type { ServiceKey, ServiceRegistry } from "./contracts/types";
+
+export { CircularDependencyError } from "../core/errors";
 
 /**
  * ServiceProvider that provides compile-time safety and IDE autocompletion.
@@ -17,6 +20,12 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     private readonly registrations: Readonly<Record<string, ServiceWrapper>>;
     private readonly multiRegistrations: Readonly<Record<string, ServiceWrapper[]>>;
     private _disposed = false;
+
+    /**
+     * Keys currently being resolved on this provider. Guards against
+     * dependency cycles at resolve time (see {@link CircularDependencyError}).
+     */
+    private readonly _resolutionStack: string[] = [];
 
     constructor(
         registrations: Record<string, ServiceWrapper>,
@@ -53,8 +62,11 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
 
         try {
-            return resolver.resolve(this);
+            return this.trackResolution(typeName, () => resolver.resolve(this));
         } catch (error) {
+            if (error instanceof CircularDependencyError) {
+                throw error;
+            }
             throw new Error(
                 `Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
             );
@@ -76,8 +88,11 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         const resolver = this.registrations[typeName];
         if (resolver) {
             try {
-                return [resolver.resolve(this)];
+                return [this.trackResolution(typeName, () => resolver.resolve(this))];
             } catch (error) {
+                if (error instanceof CircularDependencyError) {
+                    throw error;
+                }
                 throw new Error(
                     `Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
                 );
@@ -209,11 +224,34 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
     private resolveMulti(typeName: string, resolvers: readonly ServiceWrapper[]): any[] {
         try {
-            return resolvers.map(resolver => resolver.resolve(this));
+            return this.trackResolution(typeName, () =>
+                resolvers.map(resolver => resolver.resolve(this))
+            );
         } catch (error) {
+            if (error instanceof CircularDependencyError) {
+                throw error;
+            }
             throw new Error(
                 `Failed to resolve multi-service ${typeName}: ${error instanceof Error ? error.message : String(error)}`,
             );
+        }
+    }
+
+    /**
+     * Runs a resolution step with cycle protection: while `fn` executes,
+     * `typeName` is on the resolution stack; re-entering it (directly or via
+     * transitive dependencies and factories) throws a CircularDependencyError
+     * instead of recursing until the call stack overflows.
+     */
+    private trackResolution<T>(typeName: string, fn: () => T): T {
+        if (this._resolutionStack.includes(typeName)) {
+            throw new CircularDependencyError([...this._resolutionStack, typeName]);
+        }
+        this._resolutionStack.push(typeName);
+        try {
+            return fn();
+        } finally {
+            this._resolutionStack.pop();
         }
     }
 

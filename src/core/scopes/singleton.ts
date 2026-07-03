@@ -1,5 +1,6 @@
 import type { Container } from '../../api/contracts/interfaces';
-import { invokeAsyncDispose } from '../services/async-dispose';
+import { CircularDependencyError } from '../errors';
+import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose';
 
 /**
  * Singleton lifecycle implementation that maintains one instance for the entire application lifetime.
@@ -135,6 +136,9 @@ export class SingletonLifecycle implements Container {
                 this._instance = this._factory(...args);
                 this._initialized = true;
             } catch (error) {
+                if (error instanceof CircularDependencyError) {
+                    throw error;
+                }
                 throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
@@ -191,9 +195,9 @@ export class SingletonLifecycle implements Container {
         }
         this._isDisposed = true;
 
-        if (this._initialized && this._instance && typeof this._instance === 'object' && 'dispose' in this._instance) {
+        if (this._initialized && this._instance && typeof this._instance === 'object') {
             try {
-                const result = (this._instance as { dispose?: () => unknown }).dispose?.();
+                const result = invokeSyncDispose(this._instance);
                 // Attach rejection logger so an async dispose called from the sync path
                 // does not surface as an UnhandledPromiseRejection.
                 if (result && typeof (result as PromiseLike<unknown>).then === 'function') {

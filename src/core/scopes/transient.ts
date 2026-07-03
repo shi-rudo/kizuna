@@ -1,4 +1,5 @@
 import type { Container } from '../../api/contracts/interfaces';
+import { CircularDependencyError } from '../errors';
 
 /**
  * Transient lifecycle implementation that creates a new instance every time.
@@ -124,6 +125,9 @@ export class TransientLifecycle implements Container {
         try {
             return this._factory(...args) as T;
         } catch (error) {
+            if (error instanceof CircularDependencyError) {
+                throw error;
+            }
             throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
         }
     }

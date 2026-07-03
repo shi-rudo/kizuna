@@ -1,9 +1,15 @@
 import type { Container } from '../../api/contracts/interfaces';
+import { ScopedLifecycle } from '../scopes/scoped';
+import { SingletonLifecycle } from '../scopes/singleton';
+import { TransientLifecycle } from '../scopes/transient';
 
 /** Minimal contract for dependency resolution within ServiceWrapper. */
 interface ServiceResolver {
     get(key: string): any;
 }
+
+/** Lifetime classification of a service's lifecycle manager. */
+export type ServiceLifetime = 'singleton' | 'scoped' | 'transient' | 'unknown';
 
 /**
  * Wraps a service with its scope, dependencies, and lifecycle management.
@@ -125,5 +131,17 @@ export class ServiceWrapper {
      */
     isConstructorBased(): boolean {
         return this._constructorFn !== undefined;
+    }
+
+    /**
+     * Classifies the lifetime of the underlying lifecycle manager.
+     * Custom Container implementations report 'unknown'.
+     * @returns The lifetime classification
+     */
+    getLifetime(): ServiceLifetime {
+        if (this._lifecycle instanceof SingletonLifecycle) return 'singleton';
+        if (this._lifecycle instanceof ScopedLifecycle) return 'scoped';
+        if (this._lifecycle instanceof TransientLifecycle) return 'transient';
+        return 'unknown';
     }
 }

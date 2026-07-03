@@ -196,6 +196,20 @@ export abstract class BaseContainerBuilder {
                 }
             });
 
+            // A singleton resolves its dependencies once and keeps them for the
+            // application lifetime — a scoped dependency would be captured
+            // beyond its scope and used after that scope is disposed.
+            if (resolver.getLifetime() === 'singleton') {
+                dependencies.forEach((dep) => {
+                    if (this.isScopedKey(dep)) {
+                        issues.push(
+                            `Service '${name}' is a singleton but depends on scoped service '${dep}' (captive dependency): ` +
+                            `the scoped instance would be captured beyond its scope's lifetime`,
+                        );
+                    }
+                });
+            }
+
             // Validate parameter names match dependencies for constructor-based registrations.
             // Skipped in production builds where minification mangles parameter names — the
             // check would produce false positives (e.g. constructor(a, b) after esbuild).
@@ -240,6 +254,17 @@ export abstract class BaseContainerBuilder {
                         );
                     }
                 });
+
+                if (resolver.getLifetime() === 'singleton') {
+                    dependencies.forEach((dep) => {
+                        if (this.isScopedKey(dep)) {
+                            issues.push(
+                                `Multi-service '${name}' is a singleton but depends on scoped service '${dep}' (captive dependency): ` +
+                                `the scoped instance would be captured beyond its scope's lifetime`,
+                            );
+                        }
+                    });
+                }
             }
         });
 
@@ -248,6 +273,23 @@ export abstract class BaseContainerBuilder {
         issues.push(...circularDependencies);
 
         return issues;
+    }
+
+    /**
+     * Checks whether the given key resolves (fully or partially) to a scoped
+     * lifecycle — for multi-registrations, any scoped element counts.
+     * @private
+     */
+    private isScopedKey(serviceName: string): boolean {
+        const single = this.registrations.get(serviceName);
+        if (single) {
+            return single.getLifetime() === 'scoped';
+        }
+        const multi = this.multiRegistrations.get(serviceName);
+        if (multi) {
+            return multi.some((wrapper) => wrapper.getLifetime() === 'scoped');
+        }
+        return false;
     }
 
     /**
@@ -360,40 +402,41 @@ export abstract class BaseContainerBuilder {
             }
         });
 
-        // Depth-first search to detect cycles
-        const hasCycle = (serviceName: string, path: string[]): boolean => {
+        // Depth-first search to detect cycles. Records a cycle when reaching a
+        // node that is on the current path (in recursionStack) and always
+        // unwinds the stack afterwards — an early return here would leave
+        // stale entries behind and produce phantom cycles for services that
+        // merely depend on a cycle member.
+        const visit = (serviceName: string, path: string[]): void => {
             if (recursionStack.has(serviceName)) {
-                // Found a cycle
                 const cycleStart = path.indexOf(serviceName);
                 const cycle = [...path.slice(cycleStart), serviceName];
                 issues.push(`Circular dependency detected: ${cycle.join(" -> ")}`);
-                return true;
+                return;
             }
 
             if (visited.has(serviceName)) {
-                return false; // Already processed this path
+                return; // Already fully processed
             }
 
             visited.add(serviceName);
             recursionStack.add(serviceName);
+            const currentPath = [...path, serviceName];
 
             const dependencies = dependencyGraph.get(serviceName) || [];
             for (const dependency of dependencies) {
                 if (dependencyGraph.has(dependency)) {
-                    if (hasCycle(dependency, [...path, serviceName])) {
-                        return true;
-                    }
+                    visit(dependency, currentPath);
                 }
             }
 
             recursionStack.delete(serviceName);
-            return false;
         };
 
         // Check each service for cycles
         dependencyGraph.forEach((_, serviceName) => {
             if (!visited.has(serviceName)) {
-                hasCycle(serviceName, []);
+                visit(serviceName, []);
             }
         });
 

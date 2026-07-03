@@ -1,13 +1,6 @@
 import type { Container } from '../../api/contracts/interfaces';
-import { invokeAsyncDispose } from '../services/async-dispose';
-
-/**
- * Interface for disposable services that can clean up their resources.
- * @private
- */
-interface SyncDisposable {
-    dispose?(): unknown;
-}
+import { CircularDependencyError } from '../errors';
+import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose';
 
 /**
  * Scoped lifecycle implementation that maintains one instance per scope.
@@ -153,6 +146,9 @@ export class ScopedLifecycle implements Container {
                 this._instance = this._factory(...args);
                 this._initialized = true;
             } catch (error) {
+                if (error instanceof CircularDependencyError) {
+                    throw error;
+                }
                 throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`);
             }
         }
@@ -233,10 +229,10 @@ export class ScopedLifecycle implements Container {
      */
     public dispose(): void {
         if (!this._isDisposed) {
-            // Dispose the instance if it implements IDisposable
-            if (this._instance && typeof this._instance === 'object' && 'dispose' in this._instance) {
+            // Dispose the instance if it implements a sync or TC39 dispose hook
+            if (this._instance && typeof this._instance === 'object') {
                 try {
-                    const result = (this._instance as SyncDisposable).dispose?.();
+                    const result = invokeSyncDispose(this._instance);
                     if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
                         (result as Promise<unknown>).catch((error) => {
                             console.warn('Error disposing scoped instance asynchronously (call disposeAsync() for proper awaiting):', error);
