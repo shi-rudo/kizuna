@@ -202,7 +202,7 @@ export class TransientLifecycle implements Container {
      * console.log(lifecycle.isDisposed); // true
      * 
      * // This would throw an error
-     * // lifecycle.getInstance(); // Error: Cannot use factory on disposed lifecycle
+     * // lifecycle.getInstance(); // Error: Cannot resolve from a disposed transient lifecycle
      * 
      * // Note: service1 and service2 are still usable if they don't depend
      * // on the lifecycle being active
@@ -249,7 +249,7 @@ export class TransientLifecycle implements Container {
      * try {
      *   lifecycle.getInstance();
      * } catch (error) {
-     *   console.log(error.message); // "Cannot use factory on disposed lifecycle"
+     *   console.log(error.message); // "Cannot resolve from a disposed transient lifecycle"
      * }
      * ```
      */

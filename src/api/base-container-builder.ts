@@ -10,11 +10,16 @@ import type { Container } from "./contracts/interfaces";
  */
 const isDevelopment = (): boolean => {
     try {
-        // Check for common development indicators across environments
+        // Check for common development indicators across environments.
+        // process is read off globalThis so the source does not depend on
+        // Node.js type definitions (the library also targets edge/browser).
+        const proc = (globalThis as {
+            process?: { env?: Record<string, string | undefined> };
+        }).process;
         return (
             (typeof globalThis !== "undefined" &&
                 (globalThis as any).__DEV__ === true) ||
-            (typeof process !== "undefined" && process.env?.NODE_ENV !== "production")
+            (proc !== undefined && proc.env?.NODE_ENV !== "production")
         );
     } catch {
         return false;
@@ -444,6 +449,14 @@ export abstract class BaseContainerBuilder {
 
     /**
      * Extracts parameter names from a constructor function.
+     *
+     * Best-effort regex parsing of `constructor.toString()` — used only for
+     * dev-mode warnings, never for resolution. Known limitations (all fail
+     * soft by returning fewer/no names, which skips the parameter check):
+     * - default values containing commas or parentheses, e.g. `(a = [1, 2])`
+     * - destructured parameters (`{ a, b }`, `[x]`) — intentionally skipped
+     * - computed/exotic syntax the patterns below do not match
+     *
      * @private
      * @param constructor - The constructor function to analyze
      * @returns Array of parameter names

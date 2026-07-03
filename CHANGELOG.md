@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `sideEffects: false` in `package.json`, enabling better tree-shaking in
+  consuming bundlers.
 - `CircularDependencyError` is now exported. It carries the full resolution
   chain (`error.chain`) and a readable message such as
   `Circular dependency detected: a -> b -> a`.
@@ -52,7 +54,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resolution errors now preserve the original error via `Error.cause`, so the
   failing constructor or factory keeps its stack trace.
 - `jsr.json` version is synced with `package.json` (now guarded by a test).
-- Outdated JSDoc examples that referenced a pre-1.0 registration API.
+- Outdated JSDoc examples that referenced a pre-1.0 registration API, and
+  JSDoc snippets quoting error messages that differ from the actual ones.
+- Documented that factories must be synchronous: a Promise-returning factory
+  is cached as-is and its resolved value is never disposed by the container.
+- Development-mode detection no longer requires Node.js type definitions
+  (`process` is read via `globalThis`); runtime behavior is unchanged.
 
 ## [1.0.0-rc.2] and earlier
 

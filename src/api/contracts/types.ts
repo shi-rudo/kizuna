@@ -6,7 +6,13 @@ import type { ServiceLocator } from './interfaces';
  * Factory functions receive the ServiceLocator as a parameter, allowing them
  * to resolve dependencies and create complex service instances. This is useful
  * for services that require custom initialization logic or conditional creation.
- * 
+ *
+ * **Factories must be synchronous.** If a factory returns a Promise (e.g. an
+ * `async` function), the container caches and returns the Promise itself: every
+ * consumer must `await` it, and dispose hooks on the eventually resolved value
+ * are never invoked by the container. Perform async initialization before
+ * building the container and register the resulting value instead.
+ *
  * @template T - The type of service the factory creates
  * @param serviceProvider - The ServiceLocator for resolving dependencies
  * @returns An instance of type T

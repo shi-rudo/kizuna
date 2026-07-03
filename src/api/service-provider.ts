@@ -109,6 +109,11 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
         const newRegistrations: Record<string, ServiceWrapper> = {};
         Object.entries(this.registrations).forEach(([key, resolver]) => {
+            // The new provider registers its own self-resolver in its
+            // constructor — copying this one would be overwritten anyway.
+            if (key === ServiceProvider.name) {
+                return;
+            }
             newRegistrations[key] = resolver.createScope();
         });
 
@@ -266,9 +271,11 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         const lifecycle = new SingletonLifecycle();
         lifecycle.setFactory(() => this);
 
+        // ownsLifecycle=false: the instance is the provider itself — disposing
+        // it through the wrapper would re-enter this.dispose().
         // Use type assertion to bypass readonly modifier for this initialization
         (this.registrations as Record<string, ServiceWrapper>)[
             ServiceProvider.name
-        ] = new ServiceWrapper(ServiceProvider.name, lifecycle, []);
+        ] = new ServiceWrapper(ServiceProvider.name, lifecycle, [], undefined, false);
     }
 }
