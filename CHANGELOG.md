@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0-rc.4
+
+### Patch Changes
+
+- 128b137: Add a SemVer release process that keeps package versions and the changelog in sync.
+
 ## [1.0.0-rc.3] - 2026-07-04
 
 ### Changed (behavior)

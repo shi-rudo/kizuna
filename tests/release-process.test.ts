@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,17 +46,24 @@ describe("Release process", () => {
 		expect(lines[1]).toMatch(/^## /);
 	});
 
-	it("keeps the current release candidate in prerelease mode", () => {
+	it("matches the package version to the configured release channel", () => {
 		const pkg = readJson("../package.json");
-		const prerelease = readJson("../.changeset/pre.json");
+		const prereleaseUrl = new URL("../.changeset/pre.json", import.meta.url);
+
+		if (!existsSync(prereleaseUrl)) {
+			expect(pkg.version).not.toContain("-");
+			return;
+		}
+
+		const prerelease = JSON.parse(readFileSync(prereleaseUrl, "utf8"));
+		const initialVersion = prerelease.initialVersions[pkg.name];
 
 		expect(prerelease).toMatchObject({
 			mode: "pre",
 			tag: "rc",
-			initialVersions: {
-				[pkg.name]: pkg.version,
-			},
 		});
+		expect(initialVersion).toMatch(semVerPattern);
+		expect(pkg.version).toMatch(/-rc\.(0|[1-9]\d*)$/);
 	});
 
 	it("provides explicit version and release commands", () => {

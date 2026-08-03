@@ -1,8 +1,10 @@
 {
-	"mode": "pre",
-	"tag": "rc",
-	"initialVersions": {
-		"@shirudo/kizuna": "1.0.0-rc.3"
-	},
-	"changesets": []
+  "mode": "pre",
+  "tag": "rc",
+  "initialVersions": {
+    "@shirudo/kizuna": "1.0.0-rc.3"
+  },
+  "changesets": [
+    "quiet-tools-release"
+  ]
 }
