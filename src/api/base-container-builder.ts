@@ -1,5 +1,4 @@
 import type { ServiceWrapper } from "../core/services/service-wrapper";
-import type { Container } from "./contracts/interfaces";
 
 /**
  * Environment detection utility for cross-platform compatibility.
@@ -188,28 +187,14 @@ export abstract class BaseContainerBuilder {
                 }
             });
 
-            // A singleton resolves its dependencies once and keeps them for the
-            // application lifetime — a scoped dependency would be captured
-            // beyond its scope and used after that scope is disposed.
-            if (resolver.getLifetime() === 'singleton') {
-                dependencies.forEach((dep) => {
-                    if (this.isScopedKey(dep)) {
-                        issues.push(
-                            `Service '${name}' is a singleton but depends on scoped service '${dep}' (captive dependency): ` +
-                            `the scoped instance would be captured beyond its scope's lifetime`,
-                        );
-                    }
-                });
-            }
-
             // Validate parameter names match dependencies for constructor-based registrations.
             // Skipped in production builds where minification mangles parameter names — the
             // check would produce false positives (e.g. constructor(a, b) after esbuild).
             if (strictParamCheckEnabled) {
                 if (resolver.isConstructorBased()) {
-                    const constructor = resolver.getConstructor();
-                    if (constructor) {
-                        const paramNames = this.extractParameterNames(constructor);
+                    const constructorFn = resolver.getConstructor();
+                    if (constructorFn) {
+                        const paramNames = this.extractParameterNames(constructorFn);
                         const deps = resolver.getDependencies();
                         
                         // Only validate if we have both parameters and dependencies
@@ -220,7 +205,7 @@ export abstract class BaseContainerBuilder {
                                 if (paramName && depName !== paramName) {
                                     issues.push(
                                         `Service '${name}' parameter ${index} is named '${paramName}' but dependency '${depName}' is provided. ` +
-                                        `Consider: .registerSingleton('${name}', ${constructor.name}, ${paramNames.map(p => `'${p}'`).join(', ')})`
+                                        `Consider: .registerSingleton('${name}', ${constructorFn.name}, ${paramNames.map(p => `'${p}'`).join(', ')})`
                                     );
                                 }
                             });
@@ -247,18 +232,10 @@ export abstract class BaseContainerBuilder {
                     }
                 });
 
-                if (resolver.getLifetime() === 'singleton') {
-                    dependencies.forEach((dep) => {
-                        if (this.isScopedKey(dep)) {
-                            issues.push(
-                                `Multi-service '${name}' is a singleton but depends on scoped service '${dep}' (captive dependency): ` +
-                                `the scoped instance would be captured beyond its scope's lifetime`,
-                            );
-                        }
-                    });
-                }
             }
         });
+
+        issues.push(...this.detectCaptiveDependencies());
 
         // Check for circular dependencies
         const circularDependencies = this.detectCircularDependencies();
@@ -282,6 +259,94 @@ export abstract class BaseContainerBuilder {
             return multi.some((wrapper) => wrapper.getLifetime() === 'scoped');
         }
         return false;
+    }
+
+    /**
+     * Detects scoped services captured anywhere below a singleton registration.
+     * @private
+     */
+    private detectCaptiveDependencies(): string[] {
+        const issues: string[] = [];
+
+        const inspectSingleton = (
+            name: string,
+            resolver: ServiceWrapper,
+            serviceLabel: "Service" | "Multi-service",
+        ): void => {
+            if (resolver.getLifetime() !== "singleton") {
+                return;
+            }
+
+            for (const dependency of resolver.getDependencies()) {
+                const path = this.findScopedDependencyPath(
+                    dependency,
+                    [name],
+                    new Set([name]),
+                );
+                if (!path) {
+                    continue;
+                }
+
+                const scopedService = path[path.length - 1];
+                issues.push(
+                    `${serviceLabel} '${name}' is a singleton but depends on scoped service '${scopedService}' (captive dependency) via ${path.join(" -> ")}: ` +
+                        `the scoped instance would be captured beyond its scope's lifetime`,
+                );
+            }
+        };
+
+        this.registrations.forEach((resolver, name) => {
+            inspectSingleton(name, resolver, "Service");
+        });
+        this.multiRegistrations.forEach((resolvers, name) => {
+            for (const resolver of resolvers) {
+                inspectSingleton(name, resolver, "Multi-service");
+            }
+        });
+
+        return issues;
+    }
+
+    /**
+     * Finds the first scoped service reachable from a dependency key.
+     * The visiting set is path-local so shared dependencies can be inspected
+     * from multiple singleton roots while cycles terminate safely.
+     * @private
+     */
+    private findScopedDependencyPath(
+        serviceName: string,
+        path: string[],
+        visiting: ReadonlySet<string>,
+    ): string[] | undefined {
+        const currentPath = [...path, serviceName];
+        if (this.isScopedKey(serviceName)) {
+            return currentPath;
+        }
+        if (visiting.has(serviceName)) {
+            return undefined;
+        }
+
+        const nextVisiting = new Set(visiting);
+        nextVisiting.add(serviceName);
+        const singleResolver = this.registrations.get(serviceName);
+        const resolvers = singleResolver
+            ? [singleResolver]
+            : (this.multiRegistrations.get(serviceName) ?? []);
+
+        for (const resolver of resolvers) {
+            for (const dependency of resolver.getDependencies()) {
+                const scopedPath = this.findScopedDependencyPath(
+                    dependency,
+                    currentPath,
+                    nextVisiting,
+                );
+                if (scopedPath) {
+                    return scopedPath;
+                }
+            }
+        }
+
+        return undefined;
     }
 
     /**
@@ -458,13 +523,13 @@ export abstract class BaseContainerBuilder {
      * - computed/exotic syntax the patterns below do not match
      *
      * @private
-     * @param constructor - The constructor function to analyze
+     * @param constructorFn - The constructor function to analyze
      * @returns Array of parameter names
      */
-    private extractParameterNames(constructor: new (...args: any[]) => any): string[] {
+    private extractParameterNames(constructorFn: new (...args: any[]) => any): string[] {
         try {
             // Convert constructor to string and extract parameter list
-            const constructorStr = constructor.toString();
+            const constructorStr = constructorFn.toString();
             
             
             // Match various constructor patterns
@@ -494,7 +559,7 @@ export abstract class BaseContainerBuilder {
                 .split(',')
                 .map(param => {
                     // Remove TypeScript types, default values, destructuring
-                    let cleaned = param
+                    const cleaned = param
                         .trim()
                         .replace(/:\s*[^=,]+/g, '') // Remove : Type
                         .replace(/\s*=\s*[^,]+/g, '') // Remove = defaultValue

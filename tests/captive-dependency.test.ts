@@ -22,6 +22,31 @@ describe('Captive dependency validation (scoped injected into singleton)', () =>
         expect(captive[0]).toContain("'dep'");
     });
 
+    it('flags a transitive scoped dependency with the complete dependency path', () => {
+        class FirstBridge {
+            constructor(public dep: unknown) {}
+        }
+        class SecondBridge {
+            constructor(public firstBridge: unknown) {}
+        }
+        class RootConsumer {
+            constructor(public secondBridge: unknown) {}
+        }
+
+        const issues = new ContainerBuilder()
+            .registerScoped('dep', Dep)
+            .registerTransient('firstBridge', FirstBridge, 'dep')
+            .registerTransient('secondBridge', SecondBridge, 'firstBridge')
+            .registerSingleton('consumer', RootConsumer, 'secondBridge')
+            .validate();
+
+        const captive = captiveIssues(issues);
+        expect(captive).toHaveLength(1);
+        expect(captive[0]).toContain(
+            'consumer -> secondBridge -> firstBridge -> dep',
+        );
+    });
+
     it('does not flag singleton -> singleton dependencies', () => {
         const issues = new ContainerBuilder()
             .registerSingleton('dep', Dep)
