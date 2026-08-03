@@ -29,4 +29,20 @@ describe("GitHub Actions workflows", () => {
 			}
 		}
 	});
+
+	it("uses packageManager as the single pnpm version source", () => {
+		const pkg = JSON.parse(
+			readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+		);
+
+		expect(pkg.packageManager).toMatch(/^pnpm@\d+\.\d+\.\d+$/);
+
+		for (const file of workflowFiles) {
+			const workflow = readFileSync(new URL(file, workflowDirectory), "utf8");
+
+			expect(workflow, file).not.toMatch(
+				/uses:\s+pnpm\/action-setup@[^\n]+\n\s+with:\n\s+version:/,
+			);
+		}
+	});
 });
