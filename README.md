@@ -685,7 +685,8 @@ Kizuna is built with TypeScript and provides comprehensive type safety. Ensure y
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Add a changeset when a change affects package users.
+See the [release process](./docs/releases.md) for version and changelog rules.
 
 ## 📜 License
 
