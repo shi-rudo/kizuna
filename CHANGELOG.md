@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0-rc.5
+
+### Patch Changes
+
+- 5794d01: Require the literal service key when an interface registration uses explicit type arguments. This prevents the provider registry from widening to every string key. Update calls such as `registerSingletonInterface<ILogger>('logger', ConsoleLogger)` to `registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)`.
+
 ## 1.0.0-rc.4
 
 ### Patch Changes
