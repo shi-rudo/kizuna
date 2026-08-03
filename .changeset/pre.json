@@ -5,6 +5,7 @@
     "@shirudo/kizuna": "1.0.0-rc.3"
   },
   "changesets": [
-    "quiet-tools-release"
+    "quiet-tools-release",
+    "strict-interface-keys"
   ]
 }
