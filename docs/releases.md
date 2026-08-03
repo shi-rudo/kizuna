@@ -25,15 +25,22 @@ does not affect package users.
 
 ## Prepare a version
 
-The release workflow runs after a change reaches `main`. It creates or updates
-one pull request named `Release packages`.
+The release workflow runs after a change reaches `main`. It prepares the
+`changeset-release/main` branch. It creates a pull request when repository
+permissions allow this action.
+
+Otherwise, open a pull request from `changeset-release/main` to `main`
+manually. Use `Release packages (rc)` as the title for a release candidate.
 
 That pull request performs these actions:
 
 1. It applies the highest required SemVer bump.
 2. It updates `package.json` and `CHANGELOG.md`.
 3. It copies the version to `jsr.json`.
-4. It removes the consumed changeset files.
+4. In RC mode, it records consumed changesets in `.changeset/pre.json`.
+
+Changesets keeps the consumed files during RC mode. It removes them when the
+project leaves prerelease mode.
 
 Review and merge that pull request when the release is ready.
 
