@@ -32,8 +32,8 @@ const container = new ContainerBuilder()
   .registerScoped('UserService', UserService, 'Database', 'Logger')
   
   // Interface-based registration (abstraction + type safety)
-  .registerSingletonInterface<IDatabase>('Database', PostgreSQLDatabase, 'Logger')
-  .registerScopedInterface<ICache>('Cache', RedisCache, 'Logger')
+  .registerSingletonInterface<IDatabase, 'Database'>('Database', PostgreSQLDatabase, 'Logger')
+  .registerScopedInterface<ICache, 'Cache'>('Cache', RedisCache, 'Logger')
   
   // Factory-based registration (flexibility + type safety)
   .registerSingletonFactory('Config', (provider) => {
@@ -61,11 +61,11 @@ const container = new ContainerBuilder()
   // .register[Lifecycle][Pattern](key, implementation, ...dependencies)
   
   .registerSingleton('Service1', Service1Class)                    // Constructor
-  .registerSingletonInterface<IService>('Service2', Service2Impl)          // Interface  
+  .registerSingletonInterface<IService, 'Service2'>('Service2', Service2Impl) // Interface
   .registerSingletonFactory('Service3', (provider) => new Service3())      // Factory
   
   // Lifecycle variants work identically across all patterns
-  .registerScopedInterface<ICache>('Cache', CacheImpl)
+  .registerScopedInterface<ICache, 'Cache'>('Cache', CacheImpl)
   .registerTransientFactory('RequestId', () => crypto.randomUUID())
   
   .build();
@@ -77,7 +77,7 @@ const container = new ContainerBuilder()
 // Every registration pattern provides complete type safety
 const container = new ContainerBuilder()
   .registerSingleton('Logger', ConsoleLogger)
-  .registerSingletonInterface<IDatabase>('DB', DatabaseService, 'Logger')
+  .registerSingletonInterface<IDatabase, 'DB'>('DB', DatabaseService, 'Logger')
   .registerSingletonFactory('UserRepo', (provider) => {
     // provider.get() is fully typed based on previous registrations
     const db = provider.get('DB');         // Type: IDatabase ✅
@@ -100,17 +100,17 @@ const container = new ContainerBuilder()
   
   // Singleton services (shared across entire container)
   .registerSingleton('Config', ConfigService)
-  .registerSingletonInterface<ILogger>('Logger', ConsoleLogger)
+  .registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
   .registerSingletonFactory('Database', (provider) => createConnection())
   
   // Scoped services (shared within scope, new per scope)
   .registerScoped('RequestContext', RequestContext)
-  .registerScopedInterface<ICache>('Cache', MemoryCache, 'Logger')
+  .registerScopedInterface<ICache, 'Cache'>('Cache', MemoryCache, 'Logger')
   .registerScopedFactory('UserId', () => generateUserId())
   
   // Transient services (new instance every time)
   .registerTransient('EmailService', EmailService, 'Logger')
-  .registerTransientInterface<IValidator>('Validator', DefaultValidator)
+  .registerTransientInterface<IValidator, 'Validator'>('Validator', DefaultValidator)
   .registerTransientFactory('Timestamp', () => Date.now())
   
   .build();
@@ -153,7 +153,7 @@ const container = new ContainerBuilder()
 ```typescript
 const container = new ContainerBuilder()
   .registerSingleton('UserService', UserService)
-  .registerSingletonInterface<IEmailService>('EmailService', SMTPService)
+  .registerSingletonInterface<IEmailService, 'EmailService'>('EmailService', SMTPService)
   .registerSingletonFactory('Config', () => ({ env: 'prod' }))
   .build();
 
@@ -182,7 +182,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}>
   ): ContainerBuilder<TRegistry & Record<K, T>>;
   
   // Interface-based registration
-  registerSingletonInterface<T, K extends string = string>(
+  registerSingletonInterface<T, K extends string>(
     key: K,
     implementationType: new (...args: any[]) => T,
     ...dependencies: string[]
@@ -325,7 +325,7 @@ builder.validate(); // Catches missing dependency before build
 - Enabling testing with mocks
 
 ```typescript
-.registerSingletonInterface<IEmailService>('EmailService', SMTPEmailService, 'Config')
+.registerSingletonInterface<IEmailService, 'EmailService'>('EmailService', SMTPEmailService, 'Config')
 ```
 
 #### Use Factory Registration When

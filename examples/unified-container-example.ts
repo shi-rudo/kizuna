@@ -107,7 +107,7 @@ const container = new ContainerBuilder()
     
     // 🎯 Interface-based registration
     .registerInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'Logger')
-    .registerScopedInterface<ICache>('ICache', RedisCache, 'Logger')
+    .registerScopedInterface<ICache, 'ICache'>('ICache', RedisCache, 'Logger')
     
     // 🏭 Factory-based registration
     .registerFactory('AppConfig', (provider) => {

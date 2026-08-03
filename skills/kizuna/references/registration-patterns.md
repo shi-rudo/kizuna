@@ -7,7 +7,7 @@ Kizuna has two registration modes: **single-registration** (`register*`) and **m
 | Situation | Pattern | Example |
 | --- | --- | --- |
 | Class with constructor dependencies | Constructor | `registerSingleton('svc', Svc, 'dep1', 'dep2')` |
-| Resolved type should be an interface/abstraction | Interface | `registerSingletonInterface<IFoo>('foo', FooImpl, 'dep')` |
+| Resolved type should be an interface/abstraction | Interface | `registerSingletonInterface<IFoo, 'foo'>('foo', FooImpl, 'dep')` |
 | Needs runtime logic, returns primitive, or needs provider | Factory | `registerSingletonFactory('cfg', (p) => ({ ... }))` |
 | Multiple implementations under one key | Multi-reg | `addSingleton('plugins', PluginA)` then `addSingleton('plugins', PluginB)` |
 | Default choice when unsure | Constructor | Shorter, explicit deps, works with validate() |
@@ -56,7 +56,7 @@ class RedisCache implements ICache {
 
 const container = new ContainerBuilder()
   .registerSingleton('logger', Logger)
-  .registerSingletonInterface<ICache>('cache', RedisCache, 'logger')
+  .registerSingletonInterface<ICache, 'cache'>('cache', RedisCache, 'logger')
   .build();
 
 const cache = container.get('cache'); // Type: ICache (not RedisCache)

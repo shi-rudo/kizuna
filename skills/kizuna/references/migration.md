@@ -1,5 +1,26 @@
 # Migration
 
+## From interface registrations with one type argument
+
+Interface registrations now require the literal key as the second type argument.
+This prevents the provider registry from accepting every string key.
+
+### Before
+
+```typescript
+.registerSingletonInterface<ILogger>('logger', ConsoleLogger)
+```
+
+### After
+
+```typescript
+.registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
+```
+
+Apply the same change to `registerScopedInterface` and
+`registerTransientInterface`. This change affects TypeScript types only. Runtime
+registration behavior does not change.
+
 ## From manual `new` chains
 
 Replace hand-wired dependency graphs with the container.
@@ -74,8 +95,8 @@ class UserService {
 }
 
 const container = new ContainerBuilder()
-  .registerSingletonInterface<IDatabase>('db', PostgresDatabase)
-  .registerSingletonInterface<ILogger>('logger', ConsoleLogger)
+  .registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase)
+  .registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
   .registerSingleton('userService', UserService, 'db', 'logger')
   .build();
 
@@ -132,8 +153,8 @@ class UserService {
 }
 
 const container = new ContainerBuilder()
-  .registerSingletonInterface<IDatabase>('db', PostgresDatabase)
-  .registerSingletonInterface<ILogger>('logger', ConsoleLogger)
+  .registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase)
+  .registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
   .registerScoped('userService', UserService, 'db', 'logger')
   .build();
 ```
@@ -182,7 +203,7 @@ class UserService {
 }
 
 const container = new ContainerBuilder()
-  .registerSingletonInterface<IDatabase>('db', PostgresDatabase)
+  .registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase)
   .registerScoped('userService', UserService, 'db')
   .build();
 ```

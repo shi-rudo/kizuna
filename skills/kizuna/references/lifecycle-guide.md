@@ -14,7 +14,7 @@ Every registration in Kizuna has one of three lifecycles. The lifecycle controls
 
 ```typescript
 .registerSingleton('logger', Logger)
-.registerSingletonInterface<ICache>('cache', RedisCache, 'logger')
+.registerSingletonInterface<ICache, 'cache'>('cache', RedisCache, 'logger')
 .registerSingletonFactory('config', () => loadConfig())
 ```
 
@@ -36,7 +36,7 @@ container.dispose(); // pool.dispose() is called automatically if it exists
 
 ```typescript
 .registerScoped('userService', UserService, 'logger')
-.registerScopedInterface<ITransaction>('tx', DbTransaction, 'pool')
+.registerScopedInterface<ITransaction, 'tx'>('tx', DbTransaction, 'pool')
 .registerScopedFactory('requestId', () => crypto.randomUUID())
 ```
 

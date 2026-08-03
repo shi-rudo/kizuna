@@ -11,6 +11,8 @@ import type {
 import type { AddToRegistry, Factory, ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
 import { ServiceProvider } from "./service-provider";
 
+type LiteralServiceKey<K extends string> = string extends K ? never : K;
+
 /**
  * ContainerBuilder provides a unified, fully type-safe API for dependency injection.
  * Combines all registration patterns with complete type safety and IDE autocompletion.
@@ -34,8 +36,8 @@ import { ServiceProvider } from "./service-provider";
  *   .registerScoped('UserService', UserService, 'Logger')
  *   
  *   // Interface-based registration  
- *   .registerSingletonInterface<IDatabase>('IDatabase', DatabaseService, 'Logger')
- *   .registerScopedInterface<ICache>('ICache', RedisCache, 'Logger')
+ *   .registerSingletonInterface<IDatabase, 'IDatabase'>('IDatabase', DatabaseService, 'Logger')
+ *   .registerScopedInterface<ICache, 'ICache'>('ICache', RedisCache, 'Logger')
  *   
  *   // Factory-based registration
  *   .registerSingletonFactory('Config', (provider) => {
@@ -135,9 +137,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Optional dependency keys
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks When specifying TInterface explicitly, also specify K so the registry keeps the literal key.
      */
-    registerSingletonInterface<TInterface, K extends string = string>(
-        key: K,
+    registerSingletonInterface<TInterface, K extends string>(
+        key: LiteralServiceKey<K>,
         implementationType: new (...args: any[]) => TInterface,
         ...dependencies: string[]
     ): ContainerBuilder<TRegistry & Record<K, TInterface>> {
@@ -156,9 +159,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Optional dependency keys
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks When specifying TInterface explicitly, also specify K so the registry keeps the literal key.
      */
-    registerScopedInterface<TInterface, K extends string = string>(
-        key: K,
+    registerScopedInterface<TInterface, K extends string>(
+        key: LiteralServiceKey<K>,
         implementationType: new (...args: any[]) => TInterface,
         ...dependencies: string[]
     ): ContainerBuilder<TRegistry & Record<K, TInterface>> {
@@ -177,9 +181,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Optional dependency keys
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks When specifying TInterface explicitly, also specify K so the registry keeps the literal key.
      */
-    registerTransientInterface<TInterface, K extends string = string>(
-        key: K,
+    registerTransientInterface<TInterface, K extends string>(
+        key: LiteralServiceKey<K>,
         implementationType: new (...args: any[]) => TInterface,
         ...dependencies: string[]
     ): ContainerBuilder<TRegistry & Record<K, TInterface>> {

@@ -192,8 +192,8 @@ describe('ContainerBuilder - Unified API', () => {
     describe('Interface-Based Registration', () => {
         it('should register and resolve interface implementations', () => {
             const container = builder
-                .registerSingletonInterface<ILogger>('ILogger', ConsoleLogger)
-                .registerSingletonInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'ILogger')
+                .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
+                .registerSingletonInterface<IDatabase, 'IDatabase'>('IDatabase', PostgreSQLDatabase, 'ILogger')
                 .build();
 
             const logger = container.get('ILogger');
@@ -213,8 +213,8 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should handle scoped interface registrations', () => {
             const container = builder
-                .registerSingletonInterface<ILogger>('ILogger', ConsoleLogger)
-                .registerScopedInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'ILogger')
+                .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
+                .registerScopedInterface<IDatabase, 'IDatabase'>('IDatabase', PostgreSQLDatabase, 'ILogger')
                 .build();
 
             const scope1 = container.startScope();
@@ -231,7 +231,7 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should handle transient interface registrations', () => {
             const container = builder
-                .registerTransientInterface<ILogger>('ILogger', ConsoleLogger)
+                .registerTransientInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
                 .build();
 
             const logger1 = container.get('ILogger');
@@ -268,7 +268,7 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should provide type-safe access to registered services in factory', () => {
             const container = builder
-                .registerSingletonInterface<ILogger>('ILogger', ConsoleLogger)
+                .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
                 .registerSingletonFactory('LoggedConfig', (provider) => {
                     const logger = provider.get('ILogger'); // Should be typed as ILogger
                     logger.log('Creating config');
@@ -341,7 +341,7 @@ describe('ContainerBuilder - Unified API', () => {
                 .registerScoped('UserService', ServiceWithDependency, 'Logger')
                 
                 // Interface-based
-                .registerSingletonInterface<ICache>('ICache', MemoryCache)
+                .registerSingletonInterface<ICache, 'ICache'>('ICache', MemoryCache)
                 
                 // Factory-based
                 .registerSingletonFactory('AppConfig', (provider) => {

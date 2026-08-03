@@ -406,7 +406,7 @@ describe('ContainerBuilder - Function Registration', () => {
             }
 
             const container = builder
-                .registerSingletonInterface<ICache>('ICache', MemoryCache)
+                .registerSingletonInterface<ICache, 'ICache'>('ICache', MemoryCache)
                 .registerSingleton('DatabaseService', DatabaseService)
                 .registerSingletonFactory('UserRepository', (provider) => {
                     const cache = provider.get('ICache');
@@ -853,7 +853,7 @@ describe('ContainerBuilder - Function Registration', () => {
                 }))
                 
                 // Interface registration
-                .registerSingletonInterface<ICache>('ICache', MemoryCache)
+                .registerSingletonInterface<ICache, 'ICache'>('ICache', MemoryCache)
                 
                 // Constructor registration depending on both
                 .registerSingleton('ApiClient', ApiClient, 'ApiConfig', 'ICache')

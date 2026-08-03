@@ -85,7 +85,7 @@ class SmtpEmailService implements IEmailService {
 
 const container = new ContainerBuilder()
   .registerSingleton('logger', Logger)
-  .registerSingletonInterface<IEmailService>('emailService', SmtpEmailService, 'logger')
+  .registerSingletonInterface<IEmailService, 'emailService'>('emailService', SmtpEmailService, 'logger')
   .build();
 
 const email = container.get('emailService'); // Type: IEmailService
@@ -396,7 +396,7 @@ Wrong:
 
 ```typescript
 // Logger IS the type you want — Interface variant adds nothing
-.registerSingletonInterface<Logger>('logger', ConsoleLogger)
+.registerSingletonInterface<Logger, 'logger'>('logger', ConsoleLogger)
 ```
 
 Correct:
@@ -405,7 +405,7 @@ Correct:
 // Use plain registerSingleton when resolved type = concrete class
 .registerSingleton('logger', ConsoleLogger)
 // Use Interface ONLY to widen the resolved type to an abstraction
-.registerSingletonInterface<ILogger>('logger', ConsoleLogger)
+.registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
 ```
 
 The Interface variants differ only at the type level — they set the generic return type. At runtime, both do exactly the same thing.
@@ -513,7 +513,7 @@ Correct:
 
 ```typescript
 // All registration methods require a lifecycle prefix
-.registerSingletonInterface<IDatabase>('db', PostgresDatabase, 'logger')
+.registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase, 'logger')
 .registerSingletonFactory('config', () => ({ port: 3000 }))
 
 // Scopes are read-only — use scoped factories for per-request values

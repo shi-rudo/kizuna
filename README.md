@@ -90,8 +90,8 @@ class SMTPEmailService implements IEmailService {
 
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
-  .registerSingletonInterface<IEmailService>('EmailService', SMTPEmailService, 'Logger')
-  .registerScopedInterface<ICache>('Cache', RedisCache, 'Logger')
+  .registerSingletonInterface<IEmailService, 'EmailService'>('EmailService', SMTPEmailService, 'Logger')
+  .registerScopedInterface<ICache, 'Cache'>('Cache', RedisCache, 'Logger')
   .build();
 
 const emailService = container.get('EmailService'); // Type: IEmailService ✨
@@ -142,20 +142,28 @@ Every registration pattern supports all three lifecycles:
 const container = new ContainerBuilder()
   // Singleton services (shared across entire application)
   .registerSingleton('Config', ConfigService)
-  .registerSingletonInterface<ILogger>('Logger', ConsoleLogger)
+  .registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
   .registerSingletonFactory('Database', (provider) => createConnection())
   
   // Scoped services (shared within scope, new per scope)
   .registerScoped('RequestContext', RequestContext, 'Logger')
-  .registerScopedInterface<ICache>('Cache', MemoryCache, 'Logger')
+  .registerScopedInterface<ICache, 'Cache'>('Cache', MemoryCache, 'Logger')
   .registerScopedFactory('RequestId', () => crypto.randomUUID())
   
   // Transient services (new instance every time)
   .registerTransient('EmailService', EmailService, 'Logger')
-  .registerTransientInterface<IValidator>('Validator', DefaultValidator)
+  .registerTransientInterface<IValidator, 'Validator'>('Validator', DefaultValidator)
   .registerTransientFactory('Timestamp', () => Date.now())
   
   .build();
+```
+
+When you specify an interface type, also specify its literal key type. TypeScript
+cannot infer a later type argument after an explicit type argument. The second
+type argument keeps `container.get()` limited to registered keys:
+
+```typescript
+.registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
 ```
 
 ### 📦 **Multi-Registration** (Multiple Implementations per Key)
@@ -407,7 +415,7 @@ For complex applications, separate containers maintain domain boundaries:
 const sharedContainer = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   .registerSingleton('EmailService', EmailService, 'Logger')
-  .registerSingletonInterface<IConfig>('Config', DatabaseConfig)
+  .registerSingletonInterface<IConfig, 'Config'>('Config', DatabaseConfig)
   .build();
 
 // User domain container

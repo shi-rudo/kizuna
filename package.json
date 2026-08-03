@@ -35,6 +35,7 @@
 		"build": "tsup && tsc -p tsconfig.json --emitDeclarationOnly",
 		"changeset": "changeset",
 		"test": "vitest",
+		"test:types": "tsc -p tsconfig.type-tests.json",
 		"coverage": "vitest run --coverage",
 		"sync-version": "node scripts/sync-version.mjs",
 		"version-packages": "changeset version && pnpm sync-version",
