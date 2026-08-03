@@ -45,4 +45,18 @@ describe("GitHub Actions workflows", () => {
 			);
 		}
 	});
+
+	it("writes only the packed tarball name to the E2E environment", () => {
+		const workflow = readFileSync(
+			new URL("e2e.yml", workflowDirectory),
+			"utf8",
+		);
+
+		expect(workflow).toContain(
+			"PKG_PATH=$(pnpm pack --json | jq -r '.filename')",
+		);
+		expect(workflow).toContain(
+			'echo "PKG_FILE=$(basename "$PKG_PATH")" >> "$GITHUB_ENV"',
+		);
+	});
 });
