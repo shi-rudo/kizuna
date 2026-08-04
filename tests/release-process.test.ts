@@ -74,7 +74,7 @@ describe("Release process", () => {
 			changeset: "changeset",
 			"sync-version": "node scripts/sync-version.mjs",
 			"version-packages": "changeset version && pnpm sync-version",
-			release: "pnpm build && changeset publish",
+			release: "pnpm build && node scripts/publish-package.mjs",
 		});
 	});
 
@@ -106,11 +106,35 @@ describe("Release process", () => {
 		}
 	});
 
-	it("creates version pull requests without automatic publishing", () => {
+	it("creates version pull requests and publishes releases with npm OIDC", () => {
 		const workflow = readText("../.github/workflows/release.yml");
 
+		expect(workflow).toContain("workflow_dispatch:");
 		expect(workflow).toContain("uses: changesets/action@");
 		expect(workflow).toContain("version: pnpm version-packages");
-		expect(workflow).not.toMatch(/^\s+publish:/m);
+		expect(workflow).toContain("publish: pnpm release");
+		expect(workflow).toContain("id-token: write");
+		expect(workflow).toContain("run: node scripts/verify-release.mjs");
+		expect(workflow).toContain(
+			"PUBLISHED: $" + "{{ steps.changesets.outputs.published }}",
+		);
+		expect(workflow).toContain(
+			"PUBLISHED_PACKAGES: $" +
+				"{{ steps.changesets.outputs.publishedPackages }}",
+		);
+	});
+
+	it("documents publication targets, npm setup, and emergency recovery", () => {
+		const guide = readText("../docs/releases.md");
+
+		expect(guide).toContain("The automated publication target is npm only.");
+		expect(guide).toContain("JSR is not an automated publication target");
+		expect(guide).toContain("Workflow filename: `release.yml`");
+		expect(guide).toContain("Allowed action: `npm publish`");
+		expect(guide).toContain("## Emergency publication");
+		expect(guide).toContain(
+			'npm view "@shirudo/kizuna@$release_version" version',
+		);
+		expect(guide).toContain("npm view @shirudo/kizuna dist-tags");
 	});
 });

@@ -3,6 +3,43 @@
 Kizuna uses Changesets for Semantic Versioning and changelog entries.
 The current release channel is `rc`.
 
+## Publication targets
+
+The automated publication target is npm only.
+
+- Release candidate versions such as `1.0.0-rc.8` use the npm `rc` dist-tag.
+- Stable versions such as `1.0.0` use the npm `latest` dist-tag.
+- JSR is not an automated publication target. `jsr.json` keeps the same version
+  as `package.json`, but the workflow does not publish or check a remote JSR
+  package.
+
+After the release step, the workflow compares these values:
+
+- the versions in `package.json` and `jsr.json`;
+- the exact version on npm;
+- the expected npm dist-tag;
+- the publication result from the Changesets action.
+
+The workflow fails if these values do not agree.
+
+## Configure npm trusted publishing
+
+An npm package owner must configure this once in the package settings for
+`@shirudo/kizuna`:
+
+- Publisher: GitHub Actions
+- Organization or user: `shi-rudo`
+- Repository: `kizuna`
+- Workflow filename: `release.yml`
+- Allowed action: `npm publish`
+
+Do not add an `NPM_TOKEN` write secret. The workflow uses a short-lived GitHub
+OIDC identity. It runs on Node.js 24 and uses npm CLI to publish. npm creates
+provenance for this public package and repository.
+
+If the npm settings do not match, publication fails with an authentication or
+registry error. npm checks this configuration only during publication.
+
 ## Add a package change
 
 Run this command before you open a pull request:
@@ -20,8 +57,8 @@ Select one bump type:
 Write a short summary for package users. Changesets adds this summary to
 `CHANGELOG.md` during version preparation.
 
-A documentation-only or test-only change does not need a changeset when it
-does not affect package users.
+A documentation-only, test-only, or release-infrastructure change does not need
+a changeset when it does not affect package users.
 
 ## Prepare a version
 
@@ -46,14 +83,44 @@ Review and merge that pull request when the release is ready.
 
 ## Publish to npm
 
-The GitHub workflow does not publish packages. A maintainer publishes the
-reviewed version with this command:
+When no unconsumed changeset remains, the release workflow builds the package
+and publishes an npm version that does not exist yet. It uses `rc` or `latest`
+as described above. A missing trusted-publisher configuration, an npm error, or
+a failed registry check makes the workflow fail.
+
+The `pnpm release` command is for the trusted GitHub workflow. It requests npm
+provenance and is not the local emergency command.
+
+## Emergency publication
+
+First, rerun the `Release` workflow from the GitHub Actions page. The
+`workflow_dispatch` trigger uses the same OIDC identity, provenance, checks,
+and dist-tag rules as the normal run.
+
+Use a local publication only when GitHub Actions is unavailable. This path
+requires a maintainer npm login with two-factor authentication. It does not
+produce GitHub Actions provenance.
+
+1. Check out the exact release commit. Confirm that the worktree is clean.
+2. Confirm that the version is not already on npm.
+3. Install dependencies and build the package.
+4. Publish with the correct dist-tag.
+5. Check the version and all dist-tags.
+
+For a release candidate, run:
 
 ```bash
-pnpm release
+release_version=1.0.0-rc.8
+npm view "@shirudo/kizuna@$release_version" version
+pnpm install --frozen-lockfile
+pnpm build
+npm publish --access public --tag rc
+npm view "@shirudo/kizuna@$release_version" version
+npm view @shirudo/kizuna dist-tags
 ```
 
-This command builds the package before Changesets publishes it to npm.
+For a stable version, replace `--tag rc` with `--tag latest`. Never publish a
+different version from the one in `package.json` and `jsr.json`.
 
 ## Finish the release candidate phase
 
