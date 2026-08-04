@@ -20,12 +20,12 @@ We have **reversed the original automatic self-registration decision**. The
 service provider is not stored in the normal string-key registry.
 
 The `TypeSafeServiceLocator` is passed directly to factory functions at
-resolution time. Infrastructure code can also call `get(ServiceProvider)` to
-get the current root or scoped provider. This lookup uses constructor identity;
-it is not a hidden service registration.
+resolution time. Infrastructure code can also call `get(ServiceProviderToken)`
+to get the current root or scoped provider. This lookup uses an exported unique
+symbol; it is not a hidden service registration.
 
-The constructor token `ServiceProvider` and the string key
-`"ServiceProvider"` are separate. Users can register the string key without
+The symbol token `ServiceProviderToken` and the string key `"ServiceProvider"`
+are separate. Users can register the string key without
 overwriting provider self-resolution. The provider cannot be injected through a
 string dependency unless the user registers a value under that string. No other
 constructor is a resolution token. Registered services are resolved through
@@ -46,8 +46,8 @@ This change was made to enforce a cleaner dependency injection architecture and 
 4.  **Preserves the Power of Factories**: Factory functions receive the current
     provider directly for complex or conditional service creation.
 
-5.  **Prevents Key Collisions**: Constructor identity cannot overwrite a user
-    registration that happens to use the same text as the class name.
+5.  **Prevents Key Collisions**: Symbol identity cannot overwrite a user
+    registration that happens to use the same text as the token description.
 
 ## Implementation Pattern
 
@@ -97,7 +97,7 @@ const service = container.get('ComplexService');
 ### Explicit Infrastructure Lookup
 
 ```typescript
-import { ContainerBuilder, ServiceProvider } from '@shirudo/kizuna';
+import { ContainerBuilder, ServiceProviderToken } from '@shirudo/kizuna';
 
 class DiagnosticService {}
 
@@ -105,8 +105,8 @@ const container = new ContainerBuilder()
   .registerSingleton('ServiceProvider', DiagnosticService)
   .build();
 
-container.get(ServiceProvider);   // The current provider
-container.get('ServiceProvider'); // DiagnosticService
+container.get(ServiceProviderToken); // The current provider
+container.get('ServiceProvider');    // DiagnosticService
 ```
 
 ## Consequences
@@ -139,5 +139,5 @@ container.get('ServiceProvider'); // DiagnosticService
 *   **Description**: Require the user to explicitly register the provider under
     a string key if they want to inject it.
 *   **Reason for Rejection**: This is verbose and enables hidden service-locator
-    dependencies. Factory arguments and explicit constructor-token lookup cover
+    dependencies. Factory arguments and explicit symbol-token lookup cover
     the intended infrastructure use cases.

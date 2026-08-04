@@ -5,6 +5,9 @@ import type { ServiceRegistry } from "./contracts/types";
 
 export { CircularDependencyError } from "../core/errors";
 
+/** Stable identity token for resolving the current service provider. */
+export const ServiceProviderToken: unique symbol = Symbol("ServiceProvider");
+
 /**
  * ServiceProvider that provides compile-time safety and IDE autocompletion.
  *
@@ -43,16 +46,16 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      * Type-safe service resolution with autocompletion and type inference.
      */
     get<K extends keyof TRegistry>(key: K): TRegistry[K];
-    get(token: typeof ServiceProvider): ServiceProvider<TRegistry>;
-    get(keyOrType: keyof TRegistry | typeof ServiceProvider): unknown {
+    get(token: typeof ServiceProviderToken): ServiceProvider<TRegistry>;
+    get(keyOrType: keyof TRegistry | typeof ServiceProviderToken): unknown {
         this.ensureNotDisposed();
 
-        if (keyOrType === ServiceProvider) {
+        if (keyOrType === ServiceProviderToken) {
             return this;
         }
 
         if (typeof keyOrType !== "string") {
-            throw new TypeError("Service keys must be strings or ServiceProvider");
+            throw new TypeError("Service keys must be strings or ServiceProviderToken");
         }
 
         const typeName = keyOrType;

@@ -3,5 +3,6 @@
 ---
 
 Remove arbitrary constructor tokens from `get()`. Resolve registered services
-through their string keys. `get(ServiceProvider)` remains available as the one
-explicit infrastructure-token lookup.
+through their string keys. Use `get(ServiceProviderToken)` for the one explicit
+infrastructure-token lookup. Replace existing `get(ServiceProvider)` calls with
+the new symbol token.

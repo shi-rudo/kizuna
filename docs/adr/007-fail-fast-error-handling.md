@@ -65,7 +65,7 @@ builder.addSingleton(
 );
 
 // vs runtime discovery:
-const service = container.get(InvalidService); // Would fail much later
+const service = container.get('InvalidService'); // Would fail much later
 ```
 
 - Configuration errors discovered during application setup

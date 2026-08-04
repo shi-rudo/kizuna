@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ContainerBuilder } from '../src/api/container-builder';
-import { ServiceProvider } from '../src/api/service-provider';
+import { ServiceProviderToken } from '../src/api/service-provider';
 
 class DisposableService {
     disposed = false;
@@ -138,22 +138,22 @@ describe('Post-dispose behavior', () => {
         expect(scope.get('scoped')).toBe(scopedBefore); // Same scoped instance
     });
 
-    it('should allow self-registration via get(ServiceProvider)', () => {
+    it('should resolve the root provider through its identity token', () => {
         const container = new ContainerBuilder()
             .registerSingleton('service', NonDisposableService)
             .build();
 
-        const self = container.get(ServiceProvider);
+        const self = container.get(ServiceProviderToken);
         expect(self).toBe(container);
     });
 
-    it('should allow self-registration via get(ServiceProvider) in child scope', () => {
+    it('should resolve the scoped provider through its identity token', () => {
         const container = new ContainerBuilder()
             .registerSingleton('service', NonDisposableService)
             .build();
 
         const scope = container.startScope();
-        const self = scope.get(ServiceProvider);
+        const self = scope.get(ServiceProviderToken);
         expect(self).toBe(scope);
     });
 

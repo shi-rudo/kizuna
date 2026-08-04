@@ -269,8 +269,8 @@ builder.addSingleton((r) =>
   r.fromName("Service").useFactory((provider) => {
     const condition = provider.get<Config>("Config").useFeatureX;
     const dep = condition
-      ? provider.get(FeatureXService)
-      : provider.get(DefaultService);
+      ? provider.get('FeatureXService')
+      : provider.get('DefaultService');
     return new Service(dep);
   })
 );

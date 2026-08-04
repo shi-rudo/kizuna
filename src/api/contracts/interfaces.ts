@@ -1,5 +1,5 @@
 import type { ServiceWrapper } from '../../core/services/service-wrapper';
-import type { ServiceProvider } from '../service-provider';
+import type { ServiceProvider, ServiceProviderToken } from '../service-provider';
 
 /**
  * Container interface defines the contract for service lifecycle management.
@@ -116,9 +116,9 @@ export interface ServiceLocator {
     
     /**
      * Returns the current provider through its explicit infrastructure token.
-     * Other constructor tokens are not service keys.
+     * Constructor values are not service keys.
      */
-    get(token: typeof ServiceProvider): ServiceProvider<Record<string, any>>;
+    get(token: typeof ServiceProviderToken): ServiceProvider<Record<string, any>>;
 
     /**
      * Creates a new scope for isolated service resolution.
@@ -182,9 +182,9 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
     
     /**
      * Returns the current provider through its explicit infrastructure token.
-     * Other constructor tokens are not service keys.
+     * Constructor values are not service keys.
      */
-    get(token: typeof ServiceProvider): ServiceProvider<TRegistry>;
+    get(token: typeof ServiceProviderToken): ServiceProvider<TRegistry>;
 
     /**
      * Resolves all implementations registered under a key as an array.

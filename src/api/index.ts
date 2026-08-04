@@ -38,7 +38,11 @@
 export { ContainerBuilder } from "./container-builder";
 
 // Service provider (type-safe by design)
-export { CircularDependencyError, ServiceProvider } from "./service-provider";
+export {
+    CircularDependencyError,
+    ServiceProvider,
+    ServiceProviderToken,
+} from "./service-provider";
 
 // Contracts and interfaces
 export {
