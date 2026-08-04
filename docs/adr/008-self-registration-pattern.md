@@ -1,4 +1,4 @@
-# ADR-008: Decoupled Provider for Factory Functions
+# ADR-008: Decoupled Provider and Explicit Self-Resolution
 
 ## Status
 
@@ -16,25 +16,41 @@ The library initially implemented automatic self-registration.
 
 ## Decision
 
-We have **reversed the original decision**. The service provider is **no longer a self-registered or resolvable service**. 
+We have **reversed the original automatic self-registration decision**. The
+service provider is not stored in the normal string-key registry.
 
-Instead, the `TypeSafeServiceLocator` (the provider) is **explicitly passed as an argument only to factory functions** at the time of resolution. It cannot be injected into a service's constructor.
+The `TypeSafeServiceLocator` is passed directly to factory functions at
+resolution time. Infrastructure code can also call `get(ServiceProvider)` to
+get the current root or scoped provider. This lookup uses constructor identity;
+it is not a hidden service registration.
+
+The constructor token `ServiceProvider` and the string key
+`"ServiceProvider"` are separate. Users can register the string key without
+overwriting provider self-resolution. The provider cannot be injected through a
+string dependency unless the user registers a value under that string.
 
 ## Rationale
 
 This change was made to enforce a cleaner dependency injection architecture and discourage the use of the Service Locator, which is widely considered an anti-pattern.
 
-1.  **Discourages the Service Locator Anti-Pattern**: When the container itself is injectable, services can use it to fetch their own dependencies. This hides the service's true dependencies, making the code harder to understand, test, and maintain. By making the provider non-injectable, we force dependencies to be declared explicitly in the service's constructor.
+1.  **Discourages the Service Locator Anti-Pattern**: The provider is not placed
+    in the string-key registry, so normal constructor injection does not receive
+    it implicitly. Services must declare their actual dependencies.
 
 2.  **Promotes Clear, Explicit Dependencies**: A class's dependencies should be part of its public contract (the constructor signature). The new model enforces this. It is immediately clear what a service needs to function, without having to read its implementation to see what it resolves from a service locator.
 
 3.  **Vastly Improved Testability**: Services that do not depend on the container are much easier to unit test. Dependencies can be mocked and passed directly to the constructor. If a service depends on the provider, tests would need to construct and configure a full container instance, which is complex and couples the test to the DI framework.
 
-4.  **Preserves the Power of Factories**: The primary legitimate use case for accessing the provider is within factory functions for complex, conditional, or dynamic service creation. The new model retains this power precisely where it is needed, without exposing the provider to the rest of the application.
+4.  **Preserves the Power of Factories**: Factory functions receive the current
+    provider directly for complex or conditional service creation.
+
+5.  **Prevents Key Collisions**: Constructor identity cannot overwrite a user
+    registration that happens to use the same text as the class name.
 
 ## Implementation Pattern
 
-The service provider is not a registered service. Attempting to inject it will fail.
+The service provider is not a registered string-key service. Attempting to
+inject it without a user registration will fail.
 
 ### Incorrect Usage (No Longer Possible)
 
@@ -76,6 +92,21 @@ const container = new ContainerBuilder()
 const service = container.get('ComplexService');
 ```
 
+### Explicit Infrastructure Lookup
+
+```typescript
+import { ContainerBuilder, ServiceProvider } from '@shirudo/kizuna';
+
+class DiagnosticService {}
+
+const container = new ContainerBuilder()
+  .registerSingleton('ServiceProvider', DiagnosticService)
+  .build();
+
+container.get(ServiceProvider);   // The current provider
+container.get('ServiceProvider'); // DiagnosticService
+```
+
 ## Consequences
 
 ### Positive
@@ -83,7 +114,8 @@ const service = container.get('ComplexService');
 *   **Architectural Integrity**: Prevents the Service Locator anti-pattern and promotes a clean DI architecture.
 *   **Improved Testability**: Services are easier to unit test in isolation.
 *   **Clear Dependencies**: A service's dependencies are made explicit in its constructor.
-*   **Reduced Complexity**: Eliminates the risk of hidden dependencies and complex resolution paths inside services.
+*   **Reduced Complexity**: Eliminates hidden provider registrations and keeps
+    constructor-token lookup separate from user keys.
 
 ### Negative
 
@@ -93,10 +125,14 @@ const service = container.get('ComplexService');
 
 ### Automatic Self-Registration
 
-*   **Description**: The provider automatically registers itself as an injectable service.
+*   **Description**: The provider automatically registers itself under a string
+    key within the container.
 *   **Reason for Rejection**: This was the previous model. It was rejected because it actively encourages the Service Locator anti-pattern, which leads to poor architectural outcomes regarding testability and maintainability.
 
 ### Manual Registration
 
-*   **Description**: Allow the user to explicitly register the provider if they want to inject it.
-*   **Reason for Rejection**: This is verbose and still enables the anti-pattern. The goal is to guide users toward a better architecture, and allowing manual registration would be a loophole that undermines that goal.
+*   **Description**: Require the user to explicitly register the provider under
+    a string key if they want to inject it.
+*   **Reason for Rejection**: This is verbose and enables hidden service-locator
+    dependencies. Factory arguments and explicit constructor-token lookup cover
+    the intended infrastructure use cases.

@@ -5,6 +5,15 @@ import { ServiceProvider } from "../src/api/service-provider";
 class Dummy {}
 
 describe("ServiceProvider self-resolution", () => {
+	it("keeps the constructor token separate from the same string key", () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("ServiceProvider", Dummy)
+			.build();
+
+		expect(container.get("ServiceProvider")).toBeInstanceOf(Dummy);
+		expect(container.get(ServiceProvider as never)).toBe(container);
+	});
+
 	it("resolves itself under the ServiceProvider key at the root", () => {
 		const container = new ContainerBuilder()
 			.registerSingleton("dummy", Dummy)

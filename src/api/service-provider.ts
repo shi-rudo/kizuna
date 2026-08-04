@@ -1,6 +1,5 @@
 import { CircularDependencyError } from "../core/errors";
-import { SingletonLifecycle } from "../core/scopes/singleton";
-import { ServiceWrapper } from "../core/services/service-wrapper";
+import type { ServiceWrapper } from "../core/services/service-wrapper";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces";
 import type { ServiceKey, ServiceRegistry } from "./contracts/types";
 
@@ -38,7 +37,6 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         this.multiRegistrations = Object.fromEntries(
             Object.entries(multiRegistrations).map(([k, v]) => [k, [...v]])
         );
-        this.addItSelfResolver();
     }
 
     /**
@@ -48,6 +46,11 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     get<T extends new (...args: any) => any>(objToImplement: T): InstanceType<T>;
     get(keyOrType: any): any {
         this.ensureNotDisposed();
+
+        if (keyOrType === ServiceProvider) {
+            return this;
+        }
+
         const typeName = this.getTypeName(keyOrType as ServiceKey);
 
         // Check multi-registrations first
@@ -109,11 +112,6 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
         const newRegistrations: Record<string, ServiceWrapper> = {};
         Object.entries(this.registrations).forEach(([key, resolver]) => {
-            // The new provider registers its own self-resolver in its
-            // constructor — copying this one would be overwritten anyway.
-            if (key === ServiceProvider.name) {
-                return;
-            }
             newRegistrations[key] = resolver.createScope();
         });
 
@@ -265,17 +263,5 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
     private getTypeName<T>(keyOrType: ServiceKey<T>): string {
         return typeof keyOrType === "string" ? keyOrType : keyOrType.name;
-    }
-
-    private addItSelfResolver(): void {
-        const lifecycle = new SingletonLifecycle();
-        lifecycle.setFactory(() => this);
-
-        // ownsLifecycle=false: the instance is the provider itself — disposing
-        // it through the wrapper would re-enter this.dispose().
-        // Use type assertion to bypass readonly modifier for this initialization
-        (this.registrations as Record<string, ServiceWrapper>)[
-            ServiceProvider.name
-        ] = new ServiceWrapper(ServiceProvider.name, lifecycle, [], undefined, false);
     }
 }
