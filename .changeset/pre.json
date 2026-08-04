@@ -6,6 +6,7 @@
   },
   "changesets": [
     "quiet-tools-release",
+    "separate-service-provider-token",
     "single-interface-key",
     "strict-interface-keys"
   ]
