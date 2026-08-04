@@ -47,7 +47,7 @@ class UserService {
 // 🎯 Register services with full type safety
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)                      // Type: Logger ✨
-  .registerSingleton('Database', DatabaseService, 'Logger') // Dependencies as strings
+  .registerSingleton('Database', DatabaseService, 'Logger') // Typed dependency key
   .registerScoped('UserService', UserService, 'Database', 'Logger')
   .build();
 
@@ -64,16 +64,20 @@ Kizuna provides a single, comprehensive API that combines type safety and flexib
 
 For services with constructor dependencies:
 
+TypeScript checks each dependency key against the constructor parameter at the same position. Register each dependency before its consumer.
+
 ```typescript
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)
-  .registerScoped('UserService', UserService, 'Config')      // Dependencies as strings
+  .registerScoped('UserService', UserService, 'Config')      // 'Config' must provide the first parameter type
   .registerTransient('EmailService', EmailService, 'Config')
   .build();
 
 // IDE suggests: 'Config', 'UserService', 'EmailService'
 const userService = container.get('UserService'); // Type: UserService ✨
 ```
+
+If an existing registration fails compilation, read the [typed constructor dependency migration](./docs/migrations/typed-constructor-dependencies.md).
 
 ### 🎯 **Interface Registration** (For Abstractions)
 
@@ -246,63 +250,40 @@ if (issues.length === 0) {
 }
 ```
 
-### 🎯 **Strict Parameter Validation**
+### 🎯 **Constructor Dependency Checks**
 
-Kizuna automatically validates that your dependency names match constructor parameter names, preventing runtime errors from incorrect dependency order:
+TypeScript checks the dependency count, type, and position for concrete constructor registrations:
 
 ```typescript
+class Logger {}
+class MailService {}
+
 class EmailService {
-  // Constructor parameters: logger, mailer
   constructor(private logger: Logger, private mailer: MailService) {}
 }
 
-// ❌ Wrong parameter order - will fail validation
 const builder = new ContainerBuilder()
-  .registerSingleton('Logger', Logger)
-  .registerSingleton('MailService', MailService, 'Logger')
-  .registerScoped('EmailService', EmailService, 'MailService', 'Logger'); // Wrong order!
+  .registerSingleton('logger', Logger)
+  .registerSingleton('mailer', MailService)
+  .registerScoped('emailService', EmailService, 'logger', 'mailer');
 
-const issues = builder.validate();
-// Returns: [
-//   "Service 'EmailService' parameter 0 is named 'logger' but dependency 'MailService' is provided",
-//   "Service 'EmailService' parameter 1 is named 'mailer' but dependency 'Logger' is provided"
-// ]
-
-// ✅ Correct parameter order - validation passes
-const correctBuilder = new ContainerBuilder()
-  .registerSingleton('Logger', Logger)
-  .registerSingleton('MailService', MailService, 'Logger')
-  .registerScoped('EmailService', EmailService, 'logger', 'mailer'); // Matches constructor!
-
-correctBuilder.validate(); // Returns: [] (no issues)
+// TypeScript error: 'mailer' does not provide the Logger parameter.
+builder.registerScoped('brokenEmailService', EmailService, 'mailer', 'logger');
 ```
 
-**Benefits:**
-- **Helps Prevent Runtime Errors**: Catches dependency order mismatches at validation time
-- **Enabled by Default in Development**: Works automatically; auto-disabled in production (`NODE_ENV=production`) because minification mangles parameter names and the check would produce false positives
-- **Helpful Suggestions**: Provides corrected registration examples in error messages
-- **Opt-out Available**: Can be disabled explicitly with `.disableStrictParameterValidation()` (useful if you want to disable it in development too)
+This check applies to `registerSingleton`, `registerScoped`, `registerTransient`, and their constructor-based `add*` methods.
 
-**When Parameter Validation Helps:**
-```typescript
-// Before: Runtime error when EmailService tries to use dependencies
-class EmailService {
-  constructor(private logger: Logger, private config: ConfigService) {}
-  
-  sendEmail() {
-    this.logger.log('Sending email...'); // 💥 Runtime error if dependencies swapped!
-  }
-}
+In development, strict parameter validation also compares each key with the source parameter name. This additional check can find naming mistakes.
 
-// After: Validation catches the error before runtime
-builder.validate(); // Catches parameter name mismatches early
-```
+Production mode disables the name check because minifiers can change parameter names. The TypeScript type check does not depend on parameter names.
 
-**Disable if needed** (not recommended):
+If your key names and parameter names differ, disable only the parameter-name check:
 ```typescript
 const container = new ContainerBuilder()
-  .disableStrictParameterValidation() // Turn off validation
-  .registerScoped('EmailService', EmailService, 'config', 'logger') // Order doesn't matter
+  .disableStrictParameterValidation()
+  .registerSingleton('loggerService', Logger)
+  .registerSingleton('mailService', MailService)
+  .registerScoped('emailService', EmailService, 'loggerService', 'mailService')
   .build();
 ```
 
@@ -513,28 +494,30 @@ The main class for configuring your dependency injection container.
 
 ```typescript
 // Singleton lifecycle
-.registerSingleton<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.registerSingleton<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
 .registerSingletonInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
 .registerSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Scoped lifecycle (one instance per scope)
-.registerScoped<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.registerScoped<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
 .registerScopedInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
 .registerScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Transient lifecycle (new instance every time)
-.registerTransient<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.registerTransient<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
 .registerTransientInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
 .registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
+
+`DependencyKeys` is an internal type. The builder infers it from the current registry and the constructor parameters.
 
 #### Multi-Registration Methods
 
 ```typescript
 // Append services under a shared key (resolved via getAll())
-.addSingleton<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
-.addScoped<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
-.addTransient<K, T>(key: K, serviceType: new (...args: any[]) => T, ...dependencies: string[])
+.addSingleton<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
+.addScoped<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
+.addTransient<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
 .addSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 .addScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 .addTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
