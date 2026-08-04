@@ -8,6 +8,7 @@
     "quiet-tools-release",
     "separate-service-provider-token",
     "single-interface-key",
+    "stable-string-resolution",
     "strict-interface-keys"
   ]
 }
