@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0-rc.6
+
+### Patch Changes
+
+- d749ee3: Reject interface registration key types that can represent more than one runtime value. This includes unions and open template-literal patterns. Use one fixed string literal as the key type.
+
 ## 1.0.0-rc.5
 
 ### Patch Changes
