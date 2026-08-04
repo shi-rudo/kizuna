@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { ContainerBuilder } from "../src/api/container-builder";
-import { ServiceProvider } from "../src/api/service-provider";
+import { ServiceProviderToken } from "../src/api/service-provider";
 
 class Dummy {}
 class OtherDummy {}
 
 describe("ServiceProvider self-resolution", () => {
-	it("keeps the constructor token separate from the same string key", () => {
+	it("keeps the identity token separate from the same string key", () => {
 		const container = new ContainerBuilder()
 			.registerSingleton("ServiceProvider", Dummy)
 			.build();
 
 		expect(container.get("ServiceProvider")).toBeInstanceOf(Dummy);
-		expect(container.get(ServiceProvider)).toBe(container);
+		expect(container.get(ServiceProviderToken)).toBe(container);
 	});
 
 	it("keeps the string key available in child scopes", () => {
@@ -25,10 +25,10 @@ describe("ServiceProvider self-resolution", () => {
 
 		expect(scope.get("ServiceProvider")).toBeInstanceOf(Dummy);
 		expect(scope.get("ServiceProvider")).not.toBe(rootService);
-		expect(scope.get(ServiceProvider)).toBe(scope);
+		expect(scope.get(ServiceProviderToken)).toBe(scope);
 	});
 
-	it("keeps multi-registrations separate from the constructor token", () => {
+	it("keeps multi-registrations separate from the identity token", () => {
 		const container = new ContainerBuilder()
 			.addSingleton("ServiceProvider", Dummy)
 			.addSingleton("ServiceProvider", OtherDummy)
@@ -39,7 +39,7 @@ describe("ServiceProvider self-resolution", () => {
 		expect(services).toHaveLength(2);
 		expect(services[0]).toBeInstanceOf(Dummy);
 		expect(services[1]).toBeInstanceOf(OtherDummy);
-		expect(container.get(ServiceProvider)).toBe(container);
+		expect(container.get(ServiceProviderToken)).toBe(container);
 	});
 
 	it("resolves itself under the ServiceProvider key at the root", () => {
@@ -47,7 +47,20 @@ describe("ServiceProvider self-resolution", () => {
 			.registerSingleton("dummy", Dummy)
 			.build();
 
-		expect(container.get(ServiceProvider)).toBe(container);
+		expect(container.get(ServiceProviderToken)).toBe(container);
+	});
+
+	it("rejects class constructors at runtime", () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("dummy", Dummy)
+			.build();
+		const untypedContainer = container as unknown as {
+			get(token: unknown): unknown;
+		};
+
+		expect(() => untypedContainer.get(Dummy)).toThrow(
+			"Service keys must be strings or ServiceProviderToken",
+		);
 	});
 
 	it("resolves the scope provider (not the parent) inside a scope", () => {
@@ -56,8 +69,8 @@ describe("ServiceProvider self-resolution", () => {
 			.build();
 
 		const scope = container.startScope();
-		expect(scope.get(ServiceProvider)).toBe(scope);
-		expect(scope.get(ServiceProvider)).not.toBe(container);
+		expect(scope.get(ServiceProviderToken)).toBe(scope);
+		expect(scope.get(ServiceProviderToken)).not.toBe(container);
 	});
 
 	it("keeps the parent usable after a scope holding a self-reference is disposed", () => {
@@ -66,11 +79,11 @@ describe("ServiceProvider self-resolution", () => {
 			.build();
 
 		const scope = container.startScope();
-		scope.get(ServiceProvider);
+		scope.get(ServiceProviderToken);
 		scope.dispose();
 
 		expect(container.get("dummy")).toBeInstanceOf(Dummy);
-		expect(container.get(ServiceProvider)).toBe(container);
+		expect(container.get(ServiceProviderToken)).toBe(container);
 	});
 
 	it("dispose remains idempotent with the self-resolver present", () => {
@@ -78,7 +91,7 @@ describe("ServiceProvider self-resolution", () => {
 			.registerSingleton("dummy", Dummy)
 			.build();
 
-		container.get(ServiceProvider);
+		container.get(ServiceProviderToken);
 		expect(() => {
 			container.dispose();
 			container.dispose();

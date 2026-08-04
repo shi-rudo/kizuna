@@ -32,13 +32,13 @@ import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose
  * 
  * // Within the same scope - same instance
  * const scope1 = container.startScope();
- * const ctx1a = scope1.get(UserContext);
- * const ctx1b = scope1.get(UserContext);
+ * const ctx1a = scope1.get('UserContext');
+ * const ctx1b = scope1.get('UserContext');
  * console.log(ctx1a === ctx1b); // true
  * 
  * // Different scope - different instance
  * const scope2 = container.startScope();
- * const ctx2 = scope2.get(UserContext);
+ * const ctx2 = scope2.get('UserContext');
  * console.log(ctx1a === ctx2); // false
  * 
  * // Clean up when done

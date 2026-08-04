@@ -51,9 +51,9 @@ const scope1 = parentProvider.startScope();
 const scope2 = parentProvider.startScope();
 
 // Each scope has completely independent scoped services
-const service1 = scope1.get(ScopedService); // Instance A
-const service2 = scope2.get(ScopedService); // Instance B (different)
-const parentService = parentProvider.get(ScopedService); // Instance C (different)
+const service1 = scope1.get('ScopedService'); // Instance A
+const service2 = scope2.get('ScopedService'); // Instance B (different)
+const parentService = parentProvider.get('ScopedService'); // Instance C (different)
 ```
 
 - No shared state between different scopes
@@ -106,7 +106,7 @@ scopedRegistrations["ScopedService"] = new ScopedLifecycle(factory, deps); // Ne
 scope.dispose(); // Disposes only scoped service instances
 
 // Parent container remains unaffected
-parentProvider.get(SingletonService); // Still works
+parentProvider.get('SingletonService'); // Still works
 ```
 
 - Clear ownership model for scoped instances
@@ -257,12 +257,12 @@ const rootProvider = builder.build();
 const scopedProvider = rootProvider.startScope();
 
 // Services behave according to their lifecycle
-const singleton1 = rootProvider.get(SingletonService);
-const singleton2 = scopedProvider.get(SingletonService);
+const singleton1 = rootProvider.get('SingletonService');
+const singleton2 = scopedProvider.get('SingletonService');
 // singleton1 === singleton2 (same instance)
 
-const scoped1 = rootProvider.get(ScopedService);
-const scoped2 = scopedProvider.get(ScopedService);
+const scoped1 = rootProvider.get('ScopedService');
+const scoped2 = scopedProvider.get('ScopedService');
 // scoped1 !== scoped2 (different instances)
 ```
 
@@ -274,8 +274,8 @@ const scope1 = rootProvider.startScope();
 const scope2 = scope1.startScope(); // Nested scope
 
 // Each scope maintains independence
-const service1 = scope1.get(ScopedService);
-const service2 = scope2.get(ScopedService);
+const service1 = scope1.get('ScopedService');
+const service2 = scope2.get('ScopedService');
 // service1 !== service2
 ```
 
@@ -283,13 +283,13 @@ const service2 = scope2.get(ScopedService);
 
 ```typescript
 const scope = rootProvider.startScope();
-const scopedService = scope.get(ScopedService);
+const scopedService = scope.get('ScopedService');
 
 // Clean up scope
 scope.dispose(); // Disposes scoped service instances
 
 // Root provider remains functional
-const rootService = rootProvider.get(SingletonService); // Still works
+const rootService = rootProvider.get('SingletonService'); // Still works
 ```
 
 ## Consequences
