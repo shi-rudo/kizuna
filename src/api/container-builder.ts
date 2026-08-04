@@ -11,7 +11,41 @@ import type {
 import type { AddToRegistry, Factory, ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
 import { ServiceProvider } from "./service-provider";
 
-type LiteralServiceKey<K extends string> = string extends K ? never : K;
+type IsUnion<T, Whole = T> = T extends Whole
+    ? [Whole] extends [T]
+        ? false
+        : true
+    : never;
+
+type IsOpenNumericString<K extends string> = K extends `${infer N extends number}`
+    ? number extends N
+        ? true
+        : false
+    : false;
+
+type IsOpenBigintString<K extends string> = K extends `${infer N extends bigint}`
+    ? bigint extends N
+        ? true
+        : false
+    : false;
+
+type IsFixedStringLiteral<K extends string> = string extends K
+    ? false
+    : true extends IsUnion<K>
+      ? false
+      : IsOpenNumericString<K> extends true
+        ? false
+        : IsOpenBigintString<K> extends true
+          ? false
+          : K extends ""
+            ? true
+            : K extends `${infer _First}${infer Rest}`
+              ? IsFixedStringLiteral<Rest>
+              : false;
+
+type LiteralServiceKey<K extends string> = IsFixedStringLiteral<K> extends true
+    ? K
+    : never;
 
 /**
  * ContainerBuilder provides a unified, fully type-safe API for dependency injection.
@@ -132,12 +166,12 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * Registers an interface implementation with singleton lifetime.
      * 
      * @template TInterface - The interface type being registered
-     * @template K - The string key for the service
+     * @template K - One fixed string key for the service
      * @param key - The string key used to identify the service
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Optional dependency keys
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks When specifying TInterface explicitly, also specify K so the registry keeps the literal key.
+     * @remarks When specifying TInterface explicitly, also specify K as one fixed string literal. Unions and open template-literal types are rejected.
      */
     registerSingletonInterface<TInterface, K extends string>(
         key: LiteralServiceKey<K>,
@@ -154,12 +188,12 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * Registers an interface implementation with scoped lifetime.
      * 
      * @template TInterface - The interface type being registered
-     * @template K - The string key for the service
+     * @template K - One fixed string key for the service
      * @param key - The string key used to identify the service
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Optional dependency keys
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks When specifying TInterface explicitly, also specify K so the registry keeps the literal key.
+     * @remarks When specifying TInterface explicitly, also specify K as one fixed string literal. Unions and open template-literal types are rejected.
      */
     registerScopedInterface<TInterface, K extends string>(
         key: LiteralServiceKey<K>,
@@ -176,12 +210,12 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * Registers an interface implementation with transient lifetime.
      * 
      * @template TInterface - The interface type being registered
-     * @template K - The string key for the service
+     * @template K - One fixed string key for the service
      * @param key - The string key used to identify the service
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Optional dependency keys
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks When specifying TInterface explicitly, also specify K so the registry keeps the literal key.
+     * @remarks When specifying TInterface explicitly, also specify K as one fixed string literal. Unions and open template-literal types are rejected.
      */
     registerTransientInterface<TInterface, K extends string>(
         key: LiteralServiceKey<K>,

@@ -70,3 +70,76 @@ test("interface registrations preserve literal keys", () => {
 	// @ts-expect-error Inferred registries must also reject unknown keys.
 	inferredProvider.get("missing");
 });
+
+test("interface registrations reject keys with multiple possible values", () => {
+	type UnionKey = "registered" | "not-registered";
+	type PatternKey = `service:${string}`;
+	type NumericPatternKey = `service:${number}`;
+	type BigintPatternKey = `service:${bigint}`;
+
+	new ContainerBuilder().registerSingletonInterface<Service, UnionKey>(
+		// @ts-expect-error A union would add keys that were not registered at runtime.
+		"registered",
+		ServiceImplementation,
+	);
+	new ContainerBuilder().registerScopedInterface<Service, UnionKey>(
+		// @ts-expect-error A union would add keys that were not registered at runtime.
+		"registered",
+		ServiceImplementation,
+	);
+	new ContainerBuilder().registerTransientInterface<Service, UnionKey>(
+		// @ts-expect-error A union would add keys that were not registered at runtime.
+		"registered",
+		ServiceImplementation,
+	);
+	new ContainerBuilder().registerSingletonInterface<Service, PatternKey>(
+		// @ts-expect-error An open pattern would add keys that were not registered at runtime.
+		"service:registered",
+		ServiceImplementation,
+	);
+	new ContainerBuilder().registerScopedInterface<Service, PatternKey>(
+		// @ts-expect-error An open pattern would add keys that were not registered at runtime.
+		"service:registered",
+		ServiceImplementation,
+	);
+	new ContainerBuilder().registerTransientInterface<Service, PatternKey>(
+		// @ts-expect-error An open pattern would add keys that were not registered at runtime.
+		"service:registered",
+		ServiceImplementation,
+	);
+	new ContainerBuilder().registerSingletonInterface<Service, NumericPatternKey>(
+		// @ts-expect-error An open numeric pattern would add keys that were not registered at runtime.
+		"service:123",
+		ServiceImplementation,
+	);
+	new ContainerBuilder().registerSingletonInterface<Service, BigintPatternKey>(
+		// @ts-expect-error An open bigint pattern would add keys that were not registered at runtime.
+		"service:123",
+		ServiceImplementation,
+	);
+
+	const unionKey = null as unknown as UnionKey;
+	new ContainerBuilder().registerSingletonInterface(
+		// @ts-expect-error Inference must not turn one runtime key into a union registry.
+		unionKey,
+		ServiceImplementation,
+	);
+
+	const patternKey = null as unknown as PatternKey;
+	new ContainerBuilder().registerSingletonInterface(
+		// @ts-expect-error Inference must not turn one runtime key into a pattern registry.
+		patternKey,
+		ServiceImplementation,
+	);
+
+	const numericLiteralProvider = new ContainerBuilder()
+		.registerSingletonInterface<Service, "service:123">(
+			"service:123",
+			ServiceImplementation,
+		)
+		.build();
+
+	expectTypeOf(
+		numericLiteralProvider.get("service:123"),
+	).toEqualTypeOf<Service>();
+});

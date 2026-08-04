@@ -4,6 +4,8 @@
 
 Interface registrations now require the literal key as the second type argument.
 This prevents the provider registry from accepting every string key.
+The key type must name one fixed string. Do not use a union type or an open
+template-literal type.
 
 ### Before
 

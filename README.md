@@ -160,7 +160,9 @@ const container = new ContainerBuilder()
 
 When you specify an interface type, also specify its literal key type. TypeScript
 cannot infer a later type argument after an explicit type argument. The second
-type argument keeps `container.get()` limited to registered keys:
+type argument keeps `container.get()` limited to registered keys. It must name
+one fixed string. Union types and open template-literal types are not valid
+service keys:
 
 ```typescript
 .registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
