@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0-rc.8
+
+### Major Changes
+
+- 73c153e: Remove arbitrary constructor tokens from `get()`. Resolve registered services
+  through their string keys. Use `get(ServiceProviderToken)` for the one explicit
+  infrastructure-token lookup. Replace existing `get(ServiceProvider)` calls with
+  the new symbol token.
+
 ## 1.0.0-rc.7
 
 ### Patch Changes
