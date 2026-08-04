@@ -6,6 +6,7 @@
   },
   "changesets": [
     "quiet-tools-release",
+    "single-interface-key",
     "strict-interface-keys"
   ]
 }
