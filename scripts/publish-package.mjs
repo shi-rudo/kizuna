@@ -96,6 +96,7 @@ export const runPublishCommand = async ({
 	});
 
 	if (result.published) {
+		await execute("git", ["tag", `v${packageVersion}`], { cwd: root });
 		log(`New tag: ${selector}`);
 	} else {
 		log(`${selector} is already published.`);
