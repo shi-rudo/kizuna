@@ -39,7 +39,7 @@
 		"coverage": "vitest run --coverage",
 		"sync-version": "node scripts/sync-version.mjs",
 		"version-packages": "changeset version && pnpm sync-version",
-		"release": "pnpm build && changeset publish"
+		"release": "pnpm build && node scripts/publish-package.mjs"
 	},
 	"author": "shirudo",
 	"license": "MIT",
