@@ -124,6 +124,16 @@ describe("Release process", () => {
 		);
 	});
 
+	it("binds the npm identity to a protected GitHub environment", () => {
+		const workflow = readText("../.github/workflows/release.yml");
+		const guide = readText("../docs/releases.md");
+
+		expect(workflow).toContain("    environment:\n      name: npm");
+		expect(workflow).toContain("if: github.ref == 'refs/heads/main'");
+		expect(guide).toContain("- Environment: `npm`");
+		expect(guide).toContain("allows only the `main` branch");
+	});
+
 	it("documents publication targets, npm setup, and emergency recovery", () => {
 		const guide = readText("../docs/releases.md");
 

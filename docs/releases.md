@@ -31,11 +31,16 @@ An npm package owner must configure this once in the package settings for
 - Organization or user: `shi-rudo`
 - Repository: `kizuna`
 - Workflow filename: `release.yml`
+- Environment: `npm`
 - Allowed action: `npm publish`
 
 Do not add an `NPM_TOKEN` write secret. The workflow uses a short-lived GitHub
 OIDC identity. It runs on Node.js 24 and uses npm CLI to publish. npm creates
 provenance for this public package and repository.
+
+The GitHub Environment named `npm` allows only the `main` branch. The npm
+Trusted Publisher requires the same environment name. A workflow from another
+branch therefore cannot obtain the accepted publishing identity.
 
 If the npm settings do not match, publication fails with an authentication or
 registry error. npm checks this configuration only during publication.
