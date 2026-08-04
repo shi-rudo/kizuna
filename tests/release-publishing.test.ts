@@ -119,8 +119,9 @@ describe("Release publishing", () => {
 					"--provenance",
 					"--json",
 				],
+				["tag", "v1.0.0-rc.8"],
 			]);
-			expect(commands).toEqual(["npm", "npm"]);
+			expect(commands).toEqual(["npm", "npm", "git"]);
 			expect(logs).toContain("New tag: @shirudo/kizuna@1.0.0-rc.8");
 		} finally {
 			rmSync(root, { recursive: true, force: true });
