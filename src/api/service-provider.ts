@@ -1,7 +1,7 @@
 import { CircularDependencyError } from "../core/errors";
 import type { ServiceWrapper } from "../core/services/service-wrapper";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces";
-import type { ServiceKey, ServiceRegistry } from "./contracts/types";
+import type { ServiceRegistry } from "./contracts/types";
 
 export { CircularDependencyError } from "../core/errors";
 
@@ -43,15 +43,19 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      * Type-safe service resolution with autocompletion and type inference.
      */
     get<K extends keyof TRegistry>(key: K): TRegistry[K];
-    get<T extends new (...args: any) => any>(objToImplement: T): InstanceType<T>;
-    get(keyOrType: any): any {
+    get(token: typeof ServiceProvider): ServiceProvider<TRegistry>;
+    get(keyOrType: keyof TRegistry | typeof ServiceProvider): unknown {
         this.ensureNotDisposed();
 
         if (keyOrType === ServiceProvider) {
             return this;
         }
 
-        const typeName = this.getTypeName(keyOrType as ServiceKey);
+        if (typeof keyOrType !== "string") {
+            throw new TypeError("Service keys must be strings or ServiceProvider");
+        }
+
+        const typeName = keyOrType;
 
         // Check multi-registrations first
         const multiResolvers = this.multiRegistrations[typeName];
@@ -259,9 +263,5 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         } finally {
             this._resolutionStack.pop();
         }
-    }
-
-    private getTypeName<T>(keyOrType: ServiceKey<T>): string {
-        return typeof keyOrType === "string" ? keyOrType : keyOrType.name;
     }
 }

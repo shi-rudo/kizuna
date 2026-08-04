@@ -1,4 +1,5 @@
 import type { ServiceWrapper } from '../../core/services/service-wrapper';
+import type { ServiceProvider } from '../service-provider';
 
 /**
  * Container interface defines the contract for service lifecycle management.
@@ -86,15 +87,15 @@ export interface ServiceBuilder {
  * ServiceLocator interface defines the contract for service resolution and container management.
  * 
  * This interface is implemented by ServiceProvider and provides the main API for resolving
- * services from the dependency injection container. It supports service resolution by both
- * string keys and constructor types, scope management, and resource cleanup.
+ * services from the dependency injection container. It supports service resolution by
+ * string keys, scope management, and resource cleanup.
  * 
  * @example
  * ```typescript
  * const serviceLocator: ServiceLocator = containerBuilder.build();
  * 
  * // Resolve services
- * const userService = serviceLocator.get(UserService);
+ * const userService = serviceLocator.get<UserService>('UserService');
  * const apiClient = serviceLocator.get<IApiClient>('ApiClient');
  * 
  * // Manage scopes
@@ -114,14 +115,10 @@ export interface ServiceLocator {
     get<T>(objToImplement: string): T;
     
     /**
-     * Resolves a service by constructor type.
-     * 
-     * @template T - The constructor type of the service
-     * @param objToImplement - The constructor function of the service
-     * @returns An instance of the requested service
-     * @throws {Error} If no service is registered for the given type
+     * Returns the current provider through its explicit infrastructure token.
+     * Other constructor tokens are not service keys.
      */
-    get<T extends new (...args: any) => any>(objToImplement: T): InstanceType<T>;
+    get(token: typeof ServiceProvider): ServiceProvider<Record<string, any>>;
 
     /**
      * Creates a new scope for isolated service resolution.
@@ -184,13 +181,10 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
     get<K extends keyof TRegistry>(key: K): TRegistry[K];
     
     /**
-     * Resolves a service by constructor type.
-     *
-     * @template T - The constructor type of the service
-     * @param objToImplement - The constructor function of the service
-     * @returns An instance of the requested service
+     * Returns the current provider through its explicit infrastructure token.
+     * Other constructor tokens are not service keys.
      */
-    get<T extends new (...args: any) => any>(objToImplement: T): InstanceType<T>;
+    get(token: typeof ServiceProvider): ServiceProvider<TRegistry>;
 
     /**
      * Resolves all implementations registered under a key as an array.

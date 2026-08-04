@@ -24,14 +24,14 @@ import type { ServiceLocator } from './interfaces';
  * 
  * // Factory with dependencies
  * const userServiceFactory: Factory<UserService> = (provider) => {
- *   const db = provider.get(DatabaseService);
+ *   const db = provider.get<DatabaseService>('DatabaseService');
  *   const logger = provider.get<ILogger>('Logger');
  *   return new UserService(db, logger);
  * };
  * 
  * // Conditional factory
  * const apiClientFactory: Factory<ApiClient> = (provider) => {
- *   const config = provider.get(AppConfig);
+ *   const config = provider.get<AppConfig>('AppConfig');
  *   return config.isDevelopment 
  *     ? new MockApiClient() 
  *     : new ApiClient(config.apiUrl);
@@ -61,7 +61,7 @@ export type Factory<T> = (serviceProvider: ServiceLocator) => T;
  * 
  * // Usage in service resolution
  * const logger = provider.get<ILogger>('Logger');        // string key
- * const userService = provider.get(UserService);         // constructor key
+ * const userService = provider.get<UserService>('UserService'); // string resolution key
  * ```
  * 
  * @example
@@ -72,7 +72,9 @@ export type Factory<T> = (serviceProvider: ServiceLocator) => T;
  * }
  * 
  * registerService('Logger', () => new ConsoleLogger());
- * registerService(UserService, (provider) => new UserService(provider.get(DatabaseService)));
+ * registerService(UserService, (provider) =>
+ *   new UserService(provider.get<DatabaseService>('DatabaseService'))
+ * );
  * ```
  */
 export type ServiceKey<T = any> = string | (new (...args: any[]) => T);
@@ -125,7 +127,7 @@ export interface TypeSafeRegistrar<T> {
      * @param dependencies - Optional dependency keys
      */
     useType<TCtor extends new (...args: any[]) => T>(
-        constructor: TCtor,
+        constructorType: TCtor,
         ...dependencies: string[]
     ): void;
 

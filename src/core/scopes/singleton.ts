@@ -28,15 +28,15 @@ import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose
  * builder.registerSingleton('DatabaseService', DatabaseService);
  *
  * // All requests return the same instance
- * const db1 = container.get(DatabaseService);
- * const db2 = container.get(DatabaseService);
+ * const db1 = container.get('DatabaseService');
+ * const db2 = container.get('DatabaseService');
  * console.log(db1 === db2); // true
  *
  * // Same instance across different scopes
  * const scope1 = container.startScope();
  * const scope2 = container.startScope();
- * const db3 = scope1.get(DatabaseService);
- * const db4 = scope2.get(DatabaseService);
+ * const db3 = scope1.get('DatabaseService');
+ * const db4 = scope2.get('DatabaseService');
  * console.log(db1 === db3 && db3 === db4); // true
  * ```
  *

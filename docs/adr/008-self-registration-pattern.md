@@ -27,7 +27,9 @@ it is not a hidden service registration.
 The constructor token `ServiceProvider` and the string key
 `"ServiceProvider"` are separate. Users can register the string key without
 overwriting provider self-resolution. The provider cannot be injected through a
-string dependency unless the user registers a value under that string.
+string dependency unless the user registers a value under that string. No other
+constructor is a resolution token. Registered services are resolved through
+their string keys, so runtime resolution does not depend on `constructor.name`.
 
 ## Rationale
 
@@ -115,7 +117,10 @@ container.get('ServiceProvider'); // DiagnosticService
 *   **Improved Testability**: Services are easier to unit test in isolation.
 *   **Clear Dependencies**: A service's dependencies are made explicit in its constructor.
 *   **Reduced Complexity**: Eliminates hidden provider registrations and keeps
-    constructor-token lookup separate from user keys.
+    the one explicit infrastructure token separate from user keys.
+
+*   **Stable Resolution**: Service lookup does not depend on constructor names,
+    which build tools can change.
 
 ### Negative
 

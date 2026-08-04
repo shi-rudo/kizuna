@@ -50,6 +50,19 @@ describe("ServiceProvider self-resolution", () => {
 		expect(container.get(ServiceProvider)).toBe(container);
 	});
 
+	it("rejects constructor tokens other than ServiceProvider at runtime", () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("dummy", Dummy)
+			.build();
+		const untypedContainer = container as unknown as {
+			get(token: unknown): unknown;
+		};
+
+		expect(() => untypedContainer.get(Dummy)).toThrow(
+			"Service keys must be strings or ServiceProvider",
+		);
+	});
+
 	it("resolves the scope provider (not the parent) inside a scope", () => {
 		const container = new ContainerBuilder()
 			.registerSingleton("dummy", Dummy)

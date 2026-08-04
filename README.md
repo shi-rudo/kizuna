@@ -560,7 +560,7 @@ The built container interface for service resolution.
 ```typescript
 interface TypeSafeServiceLocator<TRegistry> {
   get<K extends keyof TRegistry>(key: K): TRegistry[K];      // Resolve service
-  get<T extends new (...args: any[]) => any>(type: T): InstanceType<T>;
+  get(token: typeof ServiceProvider): ServiceProvider<TRegistry>; // Get current provider
   getAll<K extends keyof TRegistry>(key: K): TRegistry[K][]; // Resolve all implementations as array
   startScope(): TypeSafeServiceLocator<TRegistry>;            // Create new scope
   dispose(): void;                                            // Synchronous cleanup
@@ -573,7 +573,8 @@ interface TypeSafeServiceLocator<TRegistry> {
 `ServiceProvider` is also an explicit infrastructure token. Calling
 `container.get(ServiceProvider)` returns the current root or scoped provider.
 This constructor token is separate from the string key `"ServiceProvider"`.
-That string remains available for normal user registrations.
+That string remains available for normal user registrations. Other constructors
+are not resolution keys. Resolve registered services through their string keys.
 
 ### Service Lifecycles
 

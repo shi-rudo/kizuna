@@ -16,4 +16,7 @@ test("self-resolution is available without weakening the public types", () => {
 	const currentProvider = provider.get(ServiceProvider);
 	expectTypeOf(currentProvider).not.toBeAny();
 	expectTypeOf(currentProvider).toMatchTypeOf<{ startScope(): unknown }>();
+
+	// @ts-expect-error Registered services must be resolved through their registry key.
+	provider.get(DiagnosticService);
 });

@@ -29,14 +29,14 @@ import { CircularDependencyError } from '../errors';
  * builder.registerTransient('Logger', Logger);
  * 
  * // Every request creates a new instance
- * const logger1 = container.get(Logger);
- * const logger2 = container.get(Logger);
+ * const logger1 = container.get('Logger');
+ * const logger2 = container.get('Logger');
  * console.log(logger1 === logger2); // false - different instances
  * 
  * // Even within the same scope - still different instances
  * const scope = container.startScope();
- * const logger3 = scope.get(Logger);
- * const logger4 = scope.get(Logger);
+ * const logger3 = scope.get('Logger');
+ * const logger4 = scope.get('Logger');
  * console.log(logger3 === logger4); // false - always new instances
  * 
  * // Each instance is independent
