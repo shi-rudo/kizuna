@@ -47,6 +47,66 @@ type LiteralServiceKey<K extends string> = IsFixedStringLiteral<K> extends true
     ? K
     : never;
 
+type ServiceConstructor = new (...args: any[]) => any;
+
+type IsSameType<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() =>
+    T extends B ? 1 : 2)
+    ? (<T>() => T extends B ? 1 : 2) extends (<T>() => T extends A ? 1 : 2)
+        ? true
+        : false
+    : false;
+
+type MatchingSeenSignature<TSeen, TSignature> = TSeen extends unknown
+    ? IsSameType<TSeen, TSignature>
+    : never;
+
+/** Rotates the final visible overload until the inferred signature repeats. */
+type InternalConstructorSignatures<TCtor, TSeen = never> =
+    TCtor extends new (...args: infer TParameters) => infer TResult
+        ? true extends MatchingSeenSignature<
+              TSeen,
+              new (...args: TParameters) => TResult
+          >
+            ? never
+            : | (new (...args: TParameters) => TResult)
+              | InternalConstructorSignatures<
+                    (new (...args: TParameters) => TResult) & TCtor,
+                    TSeen | (new (...args: TParameters) => TResult)
+                >
+        : never;
+
+/** Converts public constructor overloads to a union without a library-defined limit. */
+type ConstructorOverloads<TCtor> = InternalConstructorSignatures<TCtor>;
+
+type ParametersOf<TCtor> = TCtor extends ServiceConstructor
+    ? ConstructorParameters<TCtor>
+    : never;
+
+type InstanceOf<TCtor> = TCtor extends ServiceConstructor
+    ? InstanceType<TCtor>
+    : never;
+
+type ConstructorParameterTuples<TCtor extends ServiceConstructor> = ParametersOf<
+    ConstructorOverloads<TCtor>
+>;
+
+type ConstructedService<TCtor extends ServiceConstructor> = InstanceOf<
+    ConstructorOverloads<TCtor>
+>;
+
+type MatchingDependencyKey<TRegistry, TParameter> = {
+    [K in Extract<keyof TRegistry, string>]: TRegistry[K] extends TParameter
+        ? K
+        : never;
+}[Extract<keyof TRegistry, string>];
+
+type DependencyKeys<
+    TRegistry,
+    TParameters extends readonly unknown[],
+> = {
+    [I in keyof TParameters]: MatchingDependencyKey<TRegistry, TParameters[I]>;
+};
+
 /**
  * ContainerBuilder provides a unified, fully type-safe API for dependency injection.
  * Combines all registration patterns with complete type safety and IDE autocompletion.
@@ -91,6 +151,11 @@ type LiteralServiceKey<K extends string> = IsFixedStringLiteral<K> extends true
  *
  */
 export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends BaseContainerBuilder {
+    /** Creates a root builder with an empty service registry. */
+    constructor(..._rootRegistryOnly: keyof TRegistry extends never ? [] : [never]) {
+        super();
+    }
+
     // =================
     // CONSTRUCTOR-BASED REGISTRATION
     // =================
@@ -98,19 +163,20 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /**
      * Registers a service with singleton lifetime using constructor and dependencies.
      * 
-     * @template K - The string key for the service
-     * @template T - The service type (inferred from constructor)
-     * @param key - The string key used to identify the service
+     * @template K - One fixed string key for the service
+     * @template TCtor - The service constructor type
+     * @param key - One fixed string key that identifies the service
      * @param serviceType - The service constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the constructor parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks Register each dependency before you use its key in this method.
      */
-    registerSingleton<K extends string, T>(
-        key: K,
-        serviceType: new (...args: any[]) => T,
-        ...dependencies: string[]
-    ): ContainerBuilder<TRegistry & Record<K, T>> {
-        const configurator = (registrar: TypeSafeRegistrar<T>) => {
+    registerSingleton<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        serviceType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>> {
+        const configurator = (registrar: TypeSafeRegistrar<ConstructedService<TCtor>>) => {
             registrar.useType(serviceType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new SingletonLifecycle());
@@ -119,19 +185,20 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /**
      * Registers a service with scoped lifetime using constructor and dependencies.
      * 
-     * @template K - The string key for the service
-     * @template T - The service type (inferred from constructor)
-     * @param key - The string key used to identify the service
+     * @template K - One fixed string key for the service
+     * @template TCtor - The service constructor type
+     * @param key - One fixed string key that identifies the service
      * @param serviceType - The service constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the constructor parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks Register each dependency before you use its key in this method.
      */
-    registerScoped<K extends string, T>(
-        key: K,
-        serviceType: new (...args: any[]) => T,
-        ...dependencies: string[]
-    ): ContainerBuilder<TRegistry & Record<K, T>> {
-        const configurator = (registrar: TypeSafeRegistrar<T>) => {
+    registerScoped<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        serviceType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>> {
+        const configurator = (registrar: TypeSafeRegistrar<ConstructedService<TCtor>>) => {
             registrar.useType(serviceType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new ScopedLifecycle());
@@ -140,19 +207,20 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /**
      * Registers a service with transient lifetime using constructor and dependencies.
      * 
-     * @template K - The string key for the service
-     * @template T - The service type (inferred from constructor)
-     * @param key - The string key used to identify the service
+     * @template K - One fixed string key for the service
+     * @template TCtor - The service constructor type
+     * @param key - One fixed string key that identifies the service
      * @param serviceType - The service constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the constructor parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks Register each dependency before you use its key in this method.
      */
-    registerTransient<K extends string, T>(
-        key: K,
-        serviceType: new (...args: any[]) => T,
-        ...dependencies: string[]
-    ): ContainerBuilder<TRegistry & Record<K, T>> {
-        const configurator = (registrar: TypeSafeRegistrar<T>) => {
+    registerTransient<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        serviceType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>> {
+        const configurator = (registrar: TypeSafeRegistrar<ConstructedService<TCtor>>) => {
             registrar.useType(serviceType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new TransientLifecycle());
@@ -298,19 +366,25 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * Multiple services can be registered under the same key and resolved together via `getAll()`.
      * Cannot be mixed with `register*()` for the same key.
      *
-     * @template K - The string key for the multi-registration
-     * @template T - The service type (inferred from constructor)
-     * @param key - The shared key for this group of services
+     * @template K - One fixed string key for the multi-registration
+     * @template TCtor - The service constructor type
+     * @param key - One fixed string key for this group of services
      * @param serviceType - The service constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the constructor parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks Register each dependency before you use its key in this method.
      */
-    addSingleton<K extends string, T>(
-        key: K,
-        serviceType: new (...args: any[]) => T,
-        ...dependencies: string[]
-    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
-        return this.addTypeSafe(key, serviceType, dependencies, new SingletonLifecycle());
+    addSingleton<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        serviceType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, ConstructedService<TCtor>>> {
+        return this.addTypeSafe<K, ConstructedService<TCtor>>(
+            key,
+            serviceType,
+            dependencies,
+            new SingletonLifecycle(),
+        );
     }
 
     /**
@@ -318,19 +392,25 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * Multiple services can be registered under the same key and resolved together via `getAll()`.
      * Cannot be mixed with `register*()` for the same key.
      *
-     * @template K - The string key for the multi-registration
-     * @template T - The service type (inferred from constructor)
-     * @param key - The shared key for this group of services
+     * @template K - One fixed string key for the multi-registration
+     * @template TCtor - The service constructor type
+     * @param key - One fixed string key for this group of services
      * @param serviceType - The service constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the constructor parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks Register each dependency before you use its key in this method.
      */
-    addScoped<K extends string, T>(
-        key: K,
-        serviceType: new (...args: any[]) => T,
-        ...dependencies: string[]
-    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
-        return this.addTypeSafe(key, serviceType, dependencies, new ScopedLifecycle());
+    addScoped<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        serviceType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, ConstructedService<TCtor>>> {
+        return this.addTypeSafe<K, ConstructedService<TCtor>>(
+            key,
+            serviceType,
+            dependencies,
+            new ScopedLifecycle(),
+        );
     }
 
     /**
@@ -338,19 +418,25 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * Multiple services can be registered under the same key and resolved together via `getAll()`.
      * Cannot be mixed with `register*()` for the same key.
      *
-     * @template K - The string key for the multi-registration
-     * @template T - The service type (inferred from constructor)
-     * @param key - The shared key for this group of services
+     * @template K - One fixed string key for the multi-registration
+     * @template TCtor - The service constructor type
+     * @param key - One fixed string key for this group of services
      * @param serviceType - The service constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the constructor parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
+     * @remarks Register each dependency before you use its key in this method.
      */
-    addTransient<K extends string, T>(
-        key: K,
-        serviceType: new (...args: any[]) => T,
-        ...dependencies: string[]
-    ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
-        return this.addTypeSafe(key, serviceType, dependencies, new TransientLifecycle());
+    addTransient<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        serviceType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<AddToRegistry<TRegistry, K, ConstructedService<TCtor>>> {
+        return this.addTypeSafe<K, ConstructedService<TCtor>>(
+            key,
+            serviceType,
+            dependencies,
+            new TransientLifecycle(),
+        );
     }
 
     /**
