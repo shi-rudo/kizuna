@@ -182,9 +182,9 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}>
   ): ContainerBuilder<TRegistry & Record<K, T>>;
   
   // Interface-based registration
-  registerSingletonInterface<T, K extends string, TCtor extends new (...args: any[]) => T>(
+  registerSingletonInterface<T, K extends string, TCtor extends ServiceConstructor>(
     key: LiteralServiceKey<K>,
-    implementationType: TCtor,
+    implementationType: InterfaceImplementationConstructor<T, TCtor>,
     ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
   ): ContainerBuilder<TRegistry & Record<K, T>>;
   
@@ -197,8 +197,8 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}>
   // All patterns support all lifecycles
   registerScoped<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
   registerTransient<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  registerScopedInterface<T, K extends string, TCtor extends new (...args: any[]) => T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  registerTransientInterface<T, K extends string, TCtor extends new (...args: any[]) => T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
+  registerScopedInterface<T, K extends string, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<K, T>>;
+  registerTransientInterface<T, K extends string, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<K, T>>;
   registerScopedFactory<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
   registerTransientFactory<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
   

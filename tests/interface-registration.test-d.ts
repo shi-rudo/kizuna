@@ -34,6 +34,17 @@ class ConsumerImplementation implements Consumer {
 	run(): void {}
 }
 
+interface WrongConsumer {
+	fail(): void;
+}
+
+interface MixedConsumerConstructor {
+	new (logger: LoggerContract): WrongConsumer;
+	new (logger: LoggerContract, config: Config): Consumer;
+}
+
+declare const MixedConsumerImplementation: MixedConsumerConstructor;
+
 test("interface registrations preserve literal keys", () => {
 	// @ts-expect-error Explicit interface registration also requires its literal key.
 	new ContainerBuilder().registerSingletonInterface<Service>(
@@ -224,6 +235,16 @@ test("interface dependency keys match implementation parameters", () => {
 	// biome-ignore format: Keep the expected TypeScript error on the next line.
 	// @ts-expect-error A required transient dependency cannot use the no-dependency overload.
 	builder.registerTransientInterface<Consumer, "transient-no-dependencies">("transient-no-dependencies", ConsumerImplementation);
+
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Every singleton constructor result must satisfy the interface.
+	builder.registerSingletonInterface<Consumer, "singleton-mixed-result", MixedConsumerConstructor>("singleton-mixed-result", MixedConsumerImplementation, "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Every scoped constructor result must satisfy the interface.
+	builder.registerScopedInterface<Consumer, "scoped-mixed-result", MixedConsumerConstructor>("scoped-mixed-result", MixedConsumerImplementation, "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Every transient constructor result must satisfy the interface.
+	builder.registerTransientInterface<Consumer, "transient-mixed-result", MixedConsumerConstructor>("transient-mixed-result", MixedConsumerImplementation, "logger");
 
 	// biome-ignore format: Keep the expected TypeScript error on the next line.
 	// @ts-expect-error Singleton dependencies reject unknown keys.

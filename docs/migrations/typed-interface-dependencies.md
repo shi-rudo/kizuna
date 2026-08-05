@@ -57,7 +57,8 @@ If TypeScript reports an error, make these changes:
 
 Optional constructor parameters accept zero or one matching key. Rest parameters
 accept zero or more matching keys. A dependency list can match any public
-constructor overload.
+constructor overload. In the three-type-argument form, every public constructor
+overload must return a service that is assignable to the explicit interface type.
 
 TypeScript uses structural types for this check. Services with the same structure
 are compatible even when they use different class names.
@@ -76,4 +77,3 @@ const builder = new ContainerBuilder()
 
 In this form, `container.get('email')` returns `EmailService`. Use all three type
 arguments when the provider must return the interface type.
-

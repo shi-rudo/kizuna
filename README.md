@@ -92,18 +92,26 @@ If an existing registration fails compilation, read the [typed constructor depen
 For implementing abstractions and polymorphism:
 
 ```typescript
+class Logger {
+  log(message: string): void { console.log(message); }
+}
+
 interface IEmailService {
   send(to: string, subject: string, body: string): Promise<void>;
 }
 
 class SMTPEmailService implements IEmailService {
-  async send(to: string, subject: string, body: string) { /* implementation */ }
+  constructor(private logger: Logger) {}
+
+  send(to: string, subject: string, body: string): Promise<void> {
+    this.logger.log(`Sending email to ${to}: ${subject} (${body.length} characters)`);
+    return Promise.resolve();
+  }
 }
 
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   .registerSingletonInterface<IEmailService, 'EmailService', typeof SMTPEmailService>('EmailService', SMTPEmailService, 'Logger')
-  .registerScopedInterface<ICache, 'Cache', typeof RedisCache>('Cache', RedisCache, 'Logger')
   .build();
 
 const emailService = container.get('EmailService'); // Type: IEmailService ✨
@@ -514,23 +522,23 @@ The main class for configuring your dependency injection container.
 // Singleton lifecycle
 .registerSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
-.registerSingletonInterface<T, K, TCtor extends new (...args: any[]) => T>(key: LiteralServiceKey<K>, implementationType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.registerSingletonInterface<T, K, TCtor extends ServiceConstructor>(key: LiteralServiceKey<K>, implementationType: InterfaceImplementationConstructor<T, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Scoped lifecycle (one instance per scope)
 .registerScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
-.registerScopedInterface<T, K, TCtor extends new (...args: any[]) => T>(key: LiteralServiceKey<K>, implementationType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.registerScopedInterface<T, K, TCtor extends ServiceConstructor>(key: LiteralServiceKey<K>, implementationType: InterfaceImplementationConstructor<T, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Transient lifecycle (new instance every time)
 .registerTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
-.registerTransientInterface<T, K, TCtor extends new (...args: any[]) => T>(key: LiteralServiceKey<K>, implementationType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.registerTransientInterface<T, K, TCtor extends ServiceConstructor>(key: LiteralServiceKey<K>, implementationType: InterfaceImplementationConstructor<T, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
 
-`LiteralServiceKey`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
+`LiteralServiceKey`, `ServiceConstructor`, `InterfaceImplementationConstructor`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
 
 #### Multi-Registration Methods
 

@@ -94,6 +94,11 @@ type ConstructedService<TCtor extends ServiceConstructor> = InstanceOf<
     ConstructorOverloads<TCtor>
 >;
 
+type InterfaceImplementationConstructor<
+    TInterface,
+    TCtor extends ServiceConstructor,
+> = [ConstructedService<TCtor>] extends [TInterface] ? TCtor : never;
+
 type MatchingDependencyKey<TRegistry, TParameter> = {
     [K in Extract<keyof TRegistry, string>]: TRegistry[K] extends TParameter
         ? K
@@ -254,10 +259,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     registerSingletonInterface<
         TInterface,
         K extends string,
-        TCtor extends new (...args: any[]) => TInterface,
+        TCtor extends ServiceConstructor,
     >(
         key: LiteralServiceKey<K>,
-        implementationType: TCtor,
+        implementationType: InterfaceImplementationConstructor<TInterface, TCtor>,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
     ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
     registerSingletonInterface(
@@ -295,10 +300,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     registerScopedInterface<
         TInterface,
         K extends string,
-        TCtor extends new (...args: any[]) => TInterface,
+        TCtor extends ServiceConstructor,
     >(
         key: LiteralServiceKey<K>,
-        implementationType: TCtor,
+        implementationType: InterfaceImplementationConstructor<TInterface, TCtor>,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
     ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
     registerScopedInterface(
@@ -336,10 +341,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     registerTransientInterface<
         TInterface,
         K extends string,
-        TCtor extends new (...args: any[]) => TInterface,
+        TCtor extends ServiceConstructor,
     >(
         key: LiteralServiceKey<K>,
-        implementationType: TCtor,
+        implementationType: InterfaceImplementationConstructor<TInterface, TCtor>,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
     ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
     registerTransientInterface(
