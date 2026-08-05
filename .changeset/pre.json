@@ -9,6 +9,7 @@
     "separate-service-provider-token",
     "single-interface-key",
     "stable-string-resolution",
-    "strict-interface-keys"
+    "strict-interface-keys",
+    "typed-constructor-dependencies"
   ]
 }
