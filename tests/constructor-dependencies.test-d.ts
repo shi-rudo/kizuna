@@ -13,6 +13,10 @@ class Config {
 	readonly kind = "config" as const;
 }
 
+class Feature {
+	readonly kind = "feature" as const;
+}
+
 class Consumer {
 	constructor(
 		readonly logger: LoggerContract,
@@ -29,6 +33,53 @@ class RestConsumer {
 		void loggers;
 	}
 }
+
+class OverloadedConsumer {
+	constructor(value: LoggerContract);
+	constructor(value: Config);
+	constructor(readonly value: LoggerContract | Config) {}
+}
+
+interface LoggerVariant {
+	readonly source: "logger";
+}
+
+interface ConfigVariant {
+	readonly source: "config";
+}
+
+interface VariantConstructor {
+	new (value: LoggerContract): LoggerVariant;
+	new (value: Config): ConfigVariant;
+}
+
+declare const VariantService: VariantConstructor;
+
+test("the root builder registry cannot be forged", () => {
+	// @ts-expect-error A root builder always starts with an empty runtime registry.
+	new ContainerBuilder<{ logger: Logger }>();
+});
+
+test("constructor registrations require one fixed service key", () => {
+	const broadKey = null as unknown as string;
+	const unionKey = null as unknown as "first" | "second";
+	const patternKey = null as unknown as `service:${string}`;
+
+	// @ts-expect-error A broad key would make every string appear registered.
+	new ContainerBuilder().registerSingleton(broadKey, Logger);
+	// @ts-expect-error A union would add a key that was not registered at runtime.
+	new ContainerBuilder().registerScoped(unionKey, Logger);
+	// @ts-expect-error An open pattern would add keys that were not registered at runtime.
+	new ContainerBuilder().registerTransient(patternKey, Logger);
+	// @ts-expect-error Constructor-based multi-registrations also reject broad keys.
+	new ContainerBuilder().addSingleton(broadKey, Logger);
+	// @ts-expect-error Constructor-based multi-registrations also reject union keys.
+	new ContainerBuilder().addScoped(unionKey, Logger);
+	// @ts-expect-error Constructor-based multi-registrations also reject open patterns.
+	new ContainerBuilder().addTransient(patternKey, Logger);
+
+	new ContainerBuilder().registerSingleton("service:123", Logger);
+});
 
 test("constructor dependency keys match parameter types and positions", () => {
 	const builder = new ContainerBuilder()
@@ -72,6 +123,32 @@ test("constructor dependency keys match parameter types and positions", () => {
 	builder.registerScoped("wrong-scoped", Consumer, "logger", "logger");
 	// @ts-expect-error Transient registrations reject the wrong dependency type.
 	builder.registerTransient("wrong-transient", Consumer, "config", "config");
+});
+
+test("constructor overloads accept every declared parameter tuple", () => {
+	const builder = new ContainerBuilder()
+		.registerSingleton("logger", Logger)
+		.registerSingleton("config", Config)
+		.registerSingleton("feature", Feature);
+
+	const provider = builder
+		.registerSingleton("logger-overload", OverloadedConsumer, "logger")
+		.registerSingleton("config-overload", OverloadedConsumer, "config")
+		.registerSingleton("variant", VariantService, "logger")
+		.build();
+
+	expectTypeOf(
+		provider.get("logger-overload"),
+	).toEqualTypeOf<OverloadedConsumer>();
+	expectTypeOf(
+		provider.get("config-overload"),
+	).toEqualTypeOf<OverloadedConsumer>();
+	expectTypeOf(provider.get("variant")).toEqualTypeOf<
+		LoggerVariant | ConfigVariant
+	>();
+
+	// @ts-expect-error No constructor overload accepts Feature.
+	builder.registerSingleton("invalid-overload", OverloadedConsumer, "feature");
 });
 
 test("optional and rest constructor parameters keep their tuple semantics", () => {

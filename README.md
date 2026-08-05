@@ -66,6 +66,12 @@ For services with constructor dependencies:
 
 TypeScript checks each dependency key against the constructor parameter at the same position. Register each dependency before its consumer.
 
+Each registration key must be one fixed string literal. Broad strings, unions, and open template patterns fail compilation.
+
+A root builder starts with an empty registry. Do not supply a populated registry type to its constructor.
+
+Kizuna checks up to ten public constructor overloads. Any declared parameter tuple is valid. Different overload result types produce a union.
+
 ```typescript
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)
@@ -494,30 +500,30 @@ The main class for configuring your dependency injection container.
 
 ```typescript
 // Singleton lifecycle
-.registerSingleton<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
+.registerSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
 .registerSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Scoped lifecycle (one instance per scope)
-.registerScoped<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
+.registerScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
 .registerScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Transient lifecycle (new instance every time)
-.registerTransient<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
+.registerTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
 .registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
 
-`DependencyKeys` is an internal type. The builder infers it from the current registry and the constructor parameters.
+`LiteralServiceKey`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
 
 #### Multi-Registration Methods
 
 ```typescript
 // Append services under a shared key (resolved via getAll())
-.addSingleton<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
-.addScoped<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
-.addTransient<K, TCtor>(key: K, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameters<TCtor>>)
+.addSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.addScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.addTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .addSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 .addScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 .addTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)

@@ -63,4 +63,43 @@ builder.registerSingleton('service', Service);
 
 If inference is not possible, use `typeof Service` as the second generic argument.
 
+## Use one fixed registration key
+
+Concrete constructor registration methods now require one fixed string literal. Broad strings, unions, and open template patterns fail compilation.
+
+Keep a computed key narrow with `as const`:
+
+```typescript
+// Before: key has type string
+const key = getServiceKey();
+builder.registerSingleton(key, Service);
+
+// After: key has one fixed literal type
+const key = 'service' as const;
+builder.registerSingleton(key, Service);
+```
+
+This rule prevents the type registry from listing keys that the runtime registry does not contain.
+
+## Start with an empty root registry
+
+A root builder always starts with an empty runtime registry. Do not supply a populated registry type:
+
+```typescript
+// Before
+const builder = new ContainerBuilder<{ logger: Logger }>();
+
+// After
+const builder = new ContainerBuilder()
+  .registerSingleton('logger', Logger);
+```
+
+Let each registration add its service to the inferred registry type.
+
+## Check overloaded constructors
+
+Kizuna checks up to ten public constructor overloads. A dependency list can match any declared overload.
+
+If overloads return different service types, the provider result is a union of those types.
+
 Interface registration methods are not part of this change. Their explicit interface type continues to define the provider result.
