@@ -9,6 +9,31 @@ class ServiceImplementation implements Service {
 	run(): void {}
 }
 
+interface LoggerContract {
+	readonly kind: "logger";
+}
+
+class LoggerImplementation implements LoggerContract {
+	readonly kind = "logger" as const;
+}
+
+class Config {
+	readonly kind = "config" as const;
+}
+
+interface Consumer {
+	run(): void;
+}
+
+class ConsumerImplementation implements Consumer {
+	constructor(
+		readonly logger: LoggerContract,
+		readonly config: Config,
+	) {}
+
+	run(): void {}
+}
+
 test("interface registrations preserve literal keys", () => {
 	// @ts-expect-error Explicit interface registration also requires its literal key.
 	new ContainerBuilder().registerSingletonInterface<Service>(
@@ -142,4 +167,109 @@ test("interface registrations reject keys with multiple possible values", () => 
 	expectTypeOf(
 		numericLiteralProvider.get("service:123"),
 	).toEqualTypeOf<Service>();
+});
+
+test("interface dependency keys match implementation parameters", () => {
+	const builder = new ContainerBuilder()
+		.registerSingleton("logger", LoggerImplementation)
+		.registerSingleton("config", Config);
+
+	const provider = builder
+		.registerSingletonInterface<
+			Consumer,
+			"singleton-consumer",
+			typeof ConsumerImplementation
+		>("singleton-consumer", ConsumerImplementation, "logger", "config")
+		.registerScopedInterface<
+			Consumer,
+			"scoped-consumer",
+			typeof ConsumerImplementation
+		>("scoped-consumer", ConsumerImplementation, "logger", "config")
+		.registerTransientInterface<
+			Consumer,
+			"transient-consumer",
+			typeof ConsumerImplementation
+		>("transient-consumer", ConsumerImplementation, "logger", "config")
+		.build();
+
+	expectTypeOf(provider.get("singleton-consumer")).toEqualTypeOf<Consumer>();
+	expectTypeOf(provider.get("scoped-consumer")).toEqualTypeOf<Consumer>();
+	expectTypeOf(provider.get("transient-consumer")).toEqualTypeOf<Consumer>();
+
+	const inferredProvider = builder
+		.registerSingletonInterface(
+			"inferred-consumer",
+			ConsumerImplementation,
+			"logger",
+			"config",
+		)
+		.build();
+	expectTypeOf(
+		inferredProvider.get("inferred-consumer"),
+	).toEqualTypeOf<ConsumerImplementation>();
+
+	// @ts-expect-error Dependency registrations require the implementation constructor type.
+	builder.registerSingletonInterface<Consumer, "unsafe-two-generics">(
+		"unsafe-two-generics",
+		ConsumerImplementation,
+		"logger",
+		"config",
+	);
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error A required singleton dependency cannot use the no-dependency overload.
+	builder.registerSingletonInterface<Consumer, "singleton-no-dependencies">("singleton-no-dependencies", ConsumerImplementation);
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error A required scoped dependency cannot use the no-dependency overload.
+	builder.registerScopedInterface<Consumer, "scoped-no-dependencies">("scoped-no-dependencies", ConsumerImplementation);
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error A required transient dependency cannot use the no-dependency overload.
+	builder.registerTransientInterface<Consumer, "transient-no-dependencies">("transient-no-dependencies", ConsumerImplementation);
+
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Singleton dependencies reject unknown keys.
+	builder.registerSingletonInterface<Consumer, "singleton-unknown", typeof ConsumerImplementation>("singleton-unknown", ConsumerImplementation, "logger", "missing");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Singleton dependencies reject the wrong service type.
+	builder.registerSingletonInterface<Consumer, "singleton-wrong", typeof ConsumerImplementation>("singleton-wrong", ConsumerImplementation, "logger", "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Singleton dependencies follow the constructor parameter order.
+	builder.registerSingletonInterface<Consumer, "singleton-order", typeof ConsumerImplementation>("singleton-order", ConsumerImplementation, "config", "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Singleton dependencies include every required parameter.
+	builder.registerSingletonInterface<Consumer, "singleton-missing", typeof ConsumerImplementation>("singleton-missing", ConsumerImplementation, "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Singleton dependencies reject additional keys.
+	builder.registerSingletonInterface<Consumer, "singleton-extra", typeof ConsumerImplementation>("singleton-extra", ConsumerImplementation, "logger", "config", "config");
+
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Scoped dependencies reject unknown keys.
+	builder.registerScopedInterface<Consumer, "scoped-unknown", typeof ConsumerImplementation>("scoped-unknown", ConsumerImplementation, "logger", "missing");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Scoped dependencies reject the wrong service type.
+	builder.registerScopedInterface<Consumer, "scoped-wrong", typeof ConsumerImplementation>("scoped-wrong", ConsumerImplementation, "logger", "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Scoped dependencies follow the constructor parameter order.
+	builder.registerScopedInterface<Consumer, "scoped-order", typeof ConsumerImplementation>("scoped-order", ConsumerImplementation, "config", "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Scoped dependencies include every required parameter.
+	builder.registerScopedInterface<Consumer, "scoped-missing", typeof ConsumerImplementation>("scoped-missing", ConsumerImplementation, "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Scoped dependencies reject additional keys.
+	builder.registerScopedInterface<Consumer, "scoped-extra", typeof ConsumerImplementation>("scoped-extra", ConsumerImplementation, "logger", "config", "config");
+
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Transient dependencies reject unknown keys.
+	builder.registerTransientInterface<Consumer, "transient-unknown", typeof ConsumerImplementation>("transient-unknown", ConsumerImplementation, "logger", "missing");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Transient dependencies reject the wrong service type.
+	builder.registerTransientInterface<Consumer, "transient-wrong", typeof ConsumerImplementation>("transient-wrong", ConsumerImplementation, "logger", "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Transient dependencies follow the constructor parameter order.
+	builder.registerTransientInterface<Consumer, "transient-order", typeof ConsumerImplementation>("transient-order", ConsumerImplementation, "config", "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Transient dependencies include every required parameter.
+	builder.registerTransientInterface<Consumer, "transient-missing", typeof ConsumerImplementation>("transient-missing", ConsumerImplementation, "logger");
+	// biome-ignore format: Keep the expected TypeScript error on the next line.
+	// @ts-expect-error Transient dependencies reject additional keys.
+	builder.registerTransientInterface<Consumer, "transient-extra", typeof ConsumerImplementation>("transient-extra", ConsumerImplementation, "logger", "config", "config");
 });

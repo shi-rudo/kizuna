@@ -193,7 +193,7 @@ describe('ContainerBuilder - Unified API', () => {
         it('should register and resolve interface implementations', () => {
             const container = builder
                 .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
-                .registerSingletonInterface<IDatabase, 'IDatabase'>('IDatabase', PostgreSQLDatabase, 'ILogger')
+                .registerSingletonInterface<IDatabase, 'IDatabase', typeof PostgreSQLDatabase>('IDatabase', PostgreSQLDatabase, 'ILogger')
                 .build();
 
             const logger = container.get('ILogger');
@@ -214,7 +214,7 @@ describe('ContainerBuilder - Unified API', () => {
         it('should handle scoped interface registrations', () => {
             const container = builder
                 .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
-                .registerScopedInterface<IDatabase, 'IDatabase'>('IDatabase', PostgreSQLDatabase, 'ILogger')
+                .registerScopedInterface<IDatabase, 'IDatabase', typeof PostgreSQLDatabase>('IDatabase', PostgreSQLDatabase, 'ILogger')
                 .build();
 
             const scope1 = container.startScope();

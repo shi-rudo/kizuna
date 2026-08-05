@@ -102,8 +102,8 @@ class SMTPEmailService implements IEmailService {
 
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
-  .registerSingletonInterface<IEmailService, 'EmailService'>('EmailService', SMTPEmailService, 'Logger')
-  .registerScopedInterface<ICache, 'Cache'>('Cache', RedisCache, 'Logger')
+  .registerSingletonInterface<IEmailService, 'EmailService', typeof SMTPEmailService>('EmailService', SMTPEmailService, 'Logger')
+  .registerScopedInterface<ICache, 'Cache', typeof RedisCache>('Cache', RedisCache, 'Logger')
   .build();
 
 const emailService = container.get('EmailService'); // Type: IEmailService ✨
@@ -159,7 +159,7 @@ const container = new ContainerBuilder()
   
   // Scoped services (shared within scope, new per scope)
   .registerScoped('RequestContext', RequestContext, 'Logger')
-  .registerScopedInterface<ICache, 'Cache'>('Cache', MemoryCache, 'Logger')
+  .registerScopedInterface<ICache, 'Cache', typeof MemoryCache>('Cache', MemoryCache, 'Logger')
   .registerScopedFactory('RequestId', () => crypto.randomUUID())
   
   // Transient services (new instance every time)
@@ -170,15 +170,25 @@ const container = new ContainerBuilder()
   .build();
 ```
 
-When you specify an interface type, also specify its literal key type. TypeScript
-cannot infer a later type argument after an explicit type argument. The second
+When you specify an interface type, also specify its literal key type. The second
 type argument keeps `container.get()` limited to registered keys. It must name
 one fixed string. Union types and open template-literal types are not valid
-service keys:
+service keys.
+
+If the implementation has constructor dependencies, add its constructor type as
+the third type argument. Kizuna then checks each dependency key against the
+constructor parameter at the same position:
 
 ```typescript
 .registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
+.registerSingletonInterface<IEmailService, 'EmailService', typeof SMTPEmailService>(
+  'EmailService',
+  SMTPEmailService,
+  'Logger'
+)
 ```
+
+For more information, read the [typed interface dependency migration](./docs/migrations/typed-interface-dependencies.md).
 
 ### 📦 **Multi-Registration** (Multiple Implementations per Key)
 
@@ -503,17 +513,20 @@ The main class for configuring your dependency injection container.
 ```typescript
 // Singleton lifecycle
 .registerSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerSingletonInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
+.registerSingletonInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
+.registerSingletonInterface<T, K, TCtor extends new (...args: any[]) => T>(key: LiteralServiceKey<K>, implementationType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Scoped lifecycle (one instance per scope)
 .registerScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerScopedInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
+.registerScopedInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
+.registerScopedInterface<T, K, TCtor extends new (...args: any[]) => T>(key: LiteralServiceKey<K>, implementationType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Transient lifecycle (new instance every time)
 .registerTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerTransientInterface<T, K>(key: K, implementationType: new (...args: any[]) => T, ...dependencies: string[])
+.registerTransientInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
+.registerTransientInterface<T, K, TCtor extends new (...args: any[]) => T>(key: LiteralServiceKey<K>, implementationType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
 

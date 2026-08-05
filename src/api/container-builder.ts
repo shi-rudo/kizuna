@@ -130,8 +130,8 @@ type DependencyKeys<
  *   .registerScoped('UserService', UserService, 'Logger')
  *   
  *   // Interface-based registration  
- *   .registerSingletonInterface<IDatabase, 'IDatabase'>('IDatabase', DatabaseService, 'Logger')
- *   .registerScopedInterface<ICache, 'ICache'>('ICache', RedisCache, 'Logger')
+ *   .registerSingletonInterface<IDatabase, 'IDatabase', typeof DatabaseService>('IDatabase', DatabaseService, 'Logger')
+ *   .registerScopedInterface<ICache, 'ICache', typeof RedisCache>('ICache', RedisCache, 'Logger')
  *   
  *   // Factory-based registration
  *   .registerSingletonFactory('Config', (provider) => {
@@ -235,18 +235,37 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * 
      * @template TInterface - The interface type being registered
      * @template K - One fixed string key for the service
+     * @template TCtor - The implementation constructor type for registrations with dependencies
      * @param key - The string key used to identify the service
      * @param implementationType - The concrete implementation constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the implementation parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks When specifying TInterface explicitly, also specify K as one fixed string literal. Unions and open template-literal types are rejected.
+     * @remarks Specify TInterface and K for implementations without dependencies. Also specify TCtor when the implementation has dependencies.
      */
     registerSingletonInterface<TInterface, K extends string>(
         key: LiteralServiceKey<K>,
-        implementationType: new (...args: any[]) => TInterface,
+        implementationType: new () => TInterface,
+    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
+    registerSingletonInterface<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        implementationType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>>;
+    registerSingletonInterface<
+        TInterface,
+        K extends string,
+        TCtor extends new (...args: any[]) => TInterface,
+    >(
+        key: LiteralServiceKey<K>,
+        implementationType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
+    registerSingletonInterface(
+        key: string,
+        implementationType: ServiceConstructor,
         ...dependencies: string[]
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>> {
-        const configurator = (registrar: TypeSafeRegistrar<TInterface>) => {
+    ): ContainerBuilder<any> {
+        const configurator = (registrar: TypeSafeRegistrar<unknown>) => {
             registrar.useType(implementationType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new SingletonLifecycle());
@@ -257,18 +276,37 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * 
      * @template TInterface - The interface type being registered
      * @template K - One fixed string key for the service
+     * @template TCtor - The implementation constructor type for registrations with dependencies
      * @param key - The string key used to identify the service
      * @param implementationType - The concrete implementation constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the implementation parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks When specifying TInterface explicitly, also specify K as one fixed string literal. Unions and open template-literal types are rejected.
+     * @remarks Specify TInterface and K for implementations without dependencies. Also specify TCtor when the implementation has dependencies.
      */
     registerScopedInterface<TInterface, K extends string>(
         key: LiteralServiceKey<K>,
-        implementationType: new (...args: any[]) => TInterface,
+        implementationType: new () => TInterface,
+    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
+    registerScopedInterface<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        implementationType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>>;
+    registerScopedInterface<
+        TInterface,
+        K extends string,
+        TCtor extends new (...args: any[]) => TInterface,
+    >(
+        key: LiteralServiceKey<K>,
+        implementationType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
+    registerScopedInterface(
+        key: string,
+        implementationType: ServiceConstructor,
         ...dependencies: string[]
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>> {
-        const configurator = (registrar: TypeSafeRegistrar<TInterface>) => {
+    ): ContainerBuilder<any> {
+        const configurator = (registrar: TypeSafeRegistrar<unknown>) => {
             registrar.useType(implementationType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new ScopedLifecycle());
@@ -279,18 +317,37 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * 
      * @template TInterface - The interface type being registered
      * @template K - One fixed string key for the service
+     * @template TCtor - The implementation constructor type for registrations with dependencies
      * @param key - The string key used to identify the service
      * @param implementationType - The concrete implementation constructor
-     * @param dependencies - Optional dependency keys
+     * @param dependencies - Keys that match the implementation parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks When specifying TInterface explicitly, also specify K as one fixed string literal. Unions and open template-literal types are rejected.
+     * @remarks Specify TInterface and K for implementations without dependencies. Also specify TCtor when the implementation has dependencies.
      */
     registerTransientInterface<TInterface, K extends string>(
         key: LiteralServiceKey<K>,
-        implementationType: new (...args: any[]) => TInterface,
+        implementationType: new () => TInterface,
+    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
+    registerTransientInterface<K extends string, TCtor extends ServiceConstructor>(
+        key: LiteralServiceKey<K>,
+        implementationType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>>;
+    registerTransientInterface<
+        TInterface,
+        K extends string,
+        TCtor extends new (...args: any[]) => TInterface,
+    >(
+        key: LiteralServiceKey<K>,
+        implementationType: TCtor,
+        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
+    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
+    registerTransientInterface(
+        key: string,
+        implementationType: ServiceConstructor,
         ...dependencies: string[]
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>> {
-        const configurator = (registrar: TypeSafeRegistrar<TInterface>) => {
+    ): ContainerBuilder<any> {
+        const configurator = (registrar: TypeSafeRegistrar<unknown>) => {
             registrar.useType(implementationType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new TransientLifecycle());
