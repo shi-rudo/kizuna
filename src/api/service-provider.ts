@@ -94,7 +94,14 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
     }
 
-    getAll<K extends string & keyof TRegistry>(key: K): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
+    getAll<TToken extends InterfaceToken<unknown, string>>(
+        token: RegisteredInterfaceToken<TRegistry, TToken>,
+    ): InterfaceTokenService<TToken> extends (infer U)[]
+        ? U[]
+        : InterfaceTokenService<TToken>[];
+    getAll<K extends string & keyof TRegistry>(
+        key: K extends InterfaceToken<unknown, string> ? never : K,
+    ): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
     getAll(key: any): any[] {
         this.ensureNotDisposed();
         const typeName = String(key);

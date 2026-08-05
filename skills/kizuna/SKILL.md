@@ -37,6 +37,8 @@ Kizuna is a zero-dependency, type-safe DI container for TypeScript. Services are
 
 ## Setup
 
+Use TypeScript 5.0 or newer.
+
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
 

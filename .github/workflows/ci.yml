@@ -41,3 +41,6 @@ jobs:
 
       - name: Check public types
         run: pnpm test:types
+
+      - name: Check examples
+        run: pnpm test:examples

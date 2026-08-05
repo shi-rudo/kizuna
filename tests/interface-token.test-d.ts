@@ -52,6 +52,10 @@ class EmailConsumer {
 	constructor(readonly email: EmailContract) {}
 }
 
+class Plugin {
+	run(): void {}
+}
+
 class Config {
 	readonly kind = "config" as const;
 }
@@ -101,6 +105,7 @@ test("interface tokens infer interface registration keys and service types", () 
 	expectTypeOf(provider.get("EmailService")).toEqualTypeOf<EmailContract>();
 	expectTypeOf(provider.get("EmailConsumer")).toEqualTypeOf<EmailConsumer>();
 	expectTypeOf(provider.startScope().get(Cache)).toEqualTypeOf<CacheContract>();
+	expectTypeOf(provider.getAll(EmailService)).toEqualTypeOf<EmailContract[]>();
 
 	const Missing = interfaceToken<EmailContract>()("Missing");
 	// @ts-expect-error An unregistered token must not resolve.
@@ -109,6 +114,18 @@ test("interface tokens infer interface registration keys and service types", () 
 	const WrongEmailService = interfaceToken<CacheContract>()("EmailService");
 	// @ts-expect-error A token with the right key but the wrong service type must not resolve.
 	provider.get(WrongEmailService);
+	// @ts-expect-error getAll must also reject a token with the wrong service type.
+	provider.getAll(WrongEmailService);
+});
+
+test("interface tokens preserve getAll array semantics", () => {
+	const Plugins = interfaceToken<Plugin[]>()("Plugins");
+	const provider = new ContainerBuilder()
+		.addSingleton("Plugins", Plugin)
+		.build();
+
+	expectTypeOf(provider.get(Plugins)).toEqualTypeOf<Plugin[]>();
+	expectTypeOf(provider.getAll(Plugins)).toEqualTypeOf<Plugin[]>();
 });
 
 test("interface tokens require fixed keys and replace string registrations", () => {

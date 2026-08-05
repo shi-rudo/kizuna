@@ -59,10 +59,11 @@ Pass the token to `get()` to preserve the interface type:
 ```typescript
 const container = builder.build();
 const emailService = container.get(EmailService); // IEmailService
+const emailServices = container.getAll(EmailService); // IEmailService[]
 ```
 
-An unregistered token fails TypeScript compilation. A token with the correct key
-but a different interface type also fails compilation.
+Both methods reject an unregistered token. They also reject a token that has the
+correct key and a different interface type.
 
 Tokens are strings at runtime. You can use a registered token as a constructor
 dependency key:

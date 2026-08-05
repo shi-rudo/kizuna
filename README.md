@@ -22,6 +22,8 @@ A lightweight, type-safe dependency injection container for TypeScript and JavaS
 npm install @shirudo/kizuna
 ```
 
+TypeScript projects must use TypeScript 5.0 or newer. Kizuna declares this range as a peer dependency.
+
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
 
@@ -546,8 +548,8 @@ Creates a reusable token that carries an interface type and one fixed string key
 const EmailService = interfaceToken<IEmailService>()('EmailService');
 ```
 
-Pass the token to an interface registration method, `container.get()`, or a
-constructor dependency list.
+Pass the token to an interface registration method, `container.get()`,
+`container.getAll()`, or a constructor dependency list.
 
 ### ContainerBuilder
 

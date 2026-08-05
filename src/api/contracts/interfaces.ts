@@ -207,7 +207,14 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
      * @param key - The string key identifying the services
      * @returns An array of service instances
      */
-    getAll<K extends string & keyof TRegistry>(key: K): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
+    getAll<TToken extends InterfaceToken<unknown, string>>(
+        token: RegisteredInterfaceToken<TRegistry, TToken>,
+    ): InterfaceTokenService<TToken> extends (infer U)[]
+        ? U[]
+        : InterfaceTokenService<TToken>[];
+    getAll<K extends string & keyof TRegistry>(
+        key: K extends InterfaceToken<unknown, string> ? never : K,
+    ): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
 
     /**
      * Creates a new scope with the same type safety.
