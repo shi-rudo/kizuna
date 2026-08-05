@@ -7,7 +7,7 @@ Kizuna has two registration modes: **single-registration** (`register*`) and **m
 | Situation | Pattern | Example |
 | --- | --- | --- |
 | Class with constructor dependencies | Constructor | `registerSingleton('svc', Svc, 'dep1', 'dep2')` |
-| Resolved type should be an interface/abstraction | Interface | `registerSingletonInterface<IFoo, 'foo'>('foo', FooImpl, 'dep')` |
+| Resolved type must be an interface or abstraction | Interface | `registerSingletonInterface(Foo, FooImpl, 'dep')` |
 | Needs runtime logic, returns primitive, or needs provider | Factory | `registerSingletonFactory('cfg', (p) => ({ ... }))` |
 | Multiple implementations under one key | Multi-reg | `addSingleton('plugins', PluginA)` then `addSingleton('plugins', PluginB)` |
 | Default choice when unsure | Constructor | Shorter, explicit deps, works with validate() |
@@ -38,10 +38,10 @@ Dependencies are visible to `validate()` and checked for existence and circular 
 
 ## Interface registration
 
-Identical to constructor registration at runtime. The only difference: the generic type parameter sets the resolved type.
+Interface registration uses the same runtime process as constructor registration. The interface token sets the service key and the resolved type.
 
 ```typescript
-import { ContainerBuilder } from '@shirudo/kizuna';
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
 
 interface ICache {
   get(key: string): string | undefined;
@@ -54,12 +54,14 @@ class RedisCache implements ICache {
   set(key: string, value: string) {}
 }
 
+const Cache = interfaceToken<ICache>()('cache');
+
 const container = new ContainerBuilder()
   .registerSingleton('logger', Logger)
-  .registerSingletonInterface<ICache, 'cache'>('cache', RedisCache, 'logger')
+  .registerSingletonInterface(Cache, RedisCache, 'logger')
   .build();
 
-const cache = container.get('cache'); // Type: ICache (not RedisCache)
+const cache = container.get(Cache); // Type: ICache (not RedisCache)
 ```
 
 Use this only when you want the container to return an interface type. If the resolved type equals the concrete class, use plain `registerSingleton`.

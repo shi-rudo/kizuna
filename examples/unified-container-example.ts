@@ -9,6 +9,7 @@
  * - Full type safety with IDE autocompletion
  */
 import { ContainerBuilder } from '../src/api/container-builder';
+import { interfaceToken } from '../src/api/interface-token';
 
 // =================
 // SERVICE DEFINITIONS
@@ -34,6 +35,8 @@ interface IDatabase {
     query<T>(sql: string): Promise<T[]>;
 }
 
+const Database = interfaceToken<IDatabase>()('IDatabase');
+
 class PostgreSQLDatabase implements IDatabase {
     constructor(private logger: Logger) {}
     
@@ -51,6 +54,8 @@ interface ICache {
     get<T>(key: string): Promise<T | null>;
     set<T>(key: string, value: T, ttl?: number): Promise<void>;
 }
+
+const Cache = interfaceToken<ICache>()('ICache');
 
 class RedisCache implements ICache {
     constructor(private logger: Logger) {}
@@ -103,14 +108,14 @@ console.log('=== UNIFIED CONTAINER BUILDER EXAMPLE ===\n');
 const container = new ContainerBuilder()
     // 🏗️ Constructor-based registration
     .registerSingleton('Logger', Logger)
-    .registerScoped('UserService', UserService, 'IDatabase', 'ICache', 'Logger')
-    
+
     // 🎯 Interface-based registration
-    .registerInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'Logger')
-    .registerScopedInterface<ICache, 'ICache'>('ICache', RedisCache, 'Logger')
+    .registerSingletonInterface(Database, PostgreSQLDatabase, 'Logger')
+    .registerScopedInterface(Cache, RedisCache, 'Logger')
+    .registerScoped('UserService', UserService, Database, Cache, 'Logger')
     
     // 🏭 Factory-based registration
-    .registerFactory('AppConfig', (provider) => {
+    .registerSingletonFactory('AppConfig', (provider) => {
         const logger = provider.get('Logger'); // Type: Logger ✅
         logger.log('Initializing application configuration');
         
@@ -149,14 +154,14 @@ const container = new ContainerBuilder()
     })
     
     // 🎨 Advanced function registration patterns
-    .registerFactory('ValidationRules', () => ({
+    .registerSingletonFactory('ValidationRules', () => ({
         email: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
         required: (value: any) => value != null && value !== '',
         minLength: (length: number) => (value: string) => value.length >= length,
         range: (min: number, max: number) => (value: number) => value >= min && value <= max
     }))
     
-    .registerFactory('EventBus', () => {
+    .registerSingletonFactory('EventBus', () => {
         const listeners = new Map<string, Function[]>();
         return {
             on: (event: string, callback: Function) => {
@@ -197,7 +202,7 @@ const container = new ContainerBuilder()
     })
     
     // Function returning different types
-    .registerFactory('EnvironmentConfig', (provider) => {
+    .registerSingletonFactory('EnvironmentConfig', (provider) => {
         const config = provider.get('AppConfig');
         
         // Return different configurations based on environment
@@ -224,10 +229,10 @@ const container = new ContainerBuilder()
     })
     
     // Factory returning a primitive value
-    .registerFactory('MaxRetryAttempts', () => 3)
+    .registerSingletonFactory('MaxRetryAttempts', () => 3)
     
     // Factory returning an array
-    .registerFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de', 'ja'])
+    .registerSingletonFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de', 'ja'])
     
     .build(); // 🚀 Build the ultimate container!
 
@@ -242,8 +247,8 @@ console.log('🎯 Demonstrating type-safe service resolution:\n');
 // All services are fully typed!
 const logger = container.get('Logger');              // Type: Logger
 const userService = container.get('UserService');   // Type: UserService
-const database = container.get('IDatabase');        // Type: IDatabase  
-const cache = container.get('ICache');              // Type: ICache
+const database = container.get(Database);           // Type: IDatabase
+const cache = container.get(Cache);                  // Type: ICache
 const config = container.get('AppConfig');          // Type: inferred from factory!
 
 // Advanced function-based services are also fully typed!

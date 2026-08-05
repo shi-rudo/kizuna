@@ -10,6 +10,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ContainerBuilder } from '../src/api/container-builder';
+import { interfaceToken } from '../src/api/interface-token';
 
 // Test dummies
 class TestService {
@@ -39,6 +40,8 @@ interface ILogger {
     getMessages(): string[];
 }
 
+const ILoggerToken = interfaceToken<ILogger>()('ILogger');
+
 class ConsoleLogger implements ILogger {
     private messages: string[] = [];
     
@@ -54,6 +57,8 @@ class ConsoleLogger implements ILogger {
 interface IDatabase {
     query(sql: string): any[];
 }
+
+const IDatabaseToken = interfaceToken<IDatabase>()('IDatabase');
 
 class PostgreSQLDatabase implements IDatabase {
     constructor(private logger: ILogger) {}
@@ -192,12 +197,12 @@ describe('ContainerBuilder - Unified API', () => {
     describe('Interface-Based Registration', () => {
         it('should register and resolve interface implementations', () => {
             const container = builder
-                .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
-                .registerSingletonInterface<IDatabase, 'IDatabase'>('IDatabase', PostgreSQLDatabase, 'ILogger')
+                .registerSingletonInterface(ILoggerToken, ConsoleLogger)
+                .registerSingletonInterface(IDatabaseToken, PostgreSQLDatabase, ILoggerToken)
                 .build();
 
-            const logger = container.get('ILogger');
-            const database = container.get('IDatabase');
+            const logger = container.get(ILoggerToken);
+            const database = container.get(IDatabaseToken);
 
             expect(logger).toBeInstanceOf(ConsoleLogger);
             expect(database).toBeInstanceOf(PostgreSQLDatabase);
@@ -213,17 +218,17 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should handle scoped interface registrations', () => {
             const container = builder
-                .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
-                .registerScopedInterface<IDatabase, 'IDatabase'>('IDatabase', PostgreSQLDatabase, 'ILogger')
+                .registerSingletonInterface(ILoggerToken, ConsoleLogger)
+                .registerScopedInterface(IDatabaseToken, PostgreSQLDatabase, ILoggerToken)
                 .build();
 
             const scope1 = container.startScope();
             const scope2 = container.startScope();
 
-            const db1 = scope1.get('IDatabase');
-            const db2 = scope2.get('IDatabase');
-            const logger1 = scope1.get('ILogger');
-            const logger2 = scope2.get('ILogger');
+            const db1 = scope1.get(IDatabaseToken);
+            const db2 = scope2.get(IDatabaseToken);
+            const logger1 = scope1.get(ILoggerToken);
+            const logger2 = scope2.get(ILoggerToken);
 
             expect(db1).not.toBe(db2); // Different scoped instances
             expect(logger1).toBe(logger2); // Same singleton instance
@@ -231,11 +236,11 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should handle transient interface registrations', () => {
             const container = builder
-                .registerTransientInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
+                .registerTransientInterface(ILoggerToken, ConsoleLogger)
                 .build();
 
-            const logger1 = container.get('ILogger');
-            const logger2 = container.get('ILogger');
+            const logger1 = container.get(ILoggerToken);
+            const logger2 = container.get(ILoggerToken);
 
             expect(logger1).not.toBe(logger2); // Different instances
             expect(logger1).toBeInstanceOf(ConsoleLogger);
@@ -268,7 +273,7 @@ describe('ContainerBuilder - Unified API', () => {
 
         it('should provide type-safe access to registered services in factory', () => {
             const container = builder
-                .registerSingletonInterface<ILogger, 'ILogger'>('ILogger', ConsoleLogger)
+                .registerSingletonInterface(ILoggerToken, ConsoleLogger)
                 .registerSingletonFactory('LoggedConfig', (provider) => {
                     const logger = provider.get('ILogger'); // Should be typed as ILogger
                     logger.log('Creating config');
@@ -280,7 +285,7 @@ describe('ContainerBuilder - Unified API', () => {
                 .build();
 
             const config = container.get('LoggedConfig');
-            const logger = container.get('ILogger');
+            const logger = container.get(ILoggerToken);
 
             expect(config.environment).toBe('production');
             expect(config.debug).toBe(false);
@@ -335,18 +340,20 @@ describe('ContainerBuilder - Unified API', () => {
                 set(key: string, value: any) { this.data.set(key, value); }
             }
 
+            const ICacheToken = interfaceToken<ICache>()('ICache');
+
             const container = builder
                 // Constructor-based
                 .registerSingleton('Logger', ConsoleLogger)
                 .registerScoped('UserService', ServiceWithDependency, 'Logger')
                 
                 // Interface-based
-                .registerSingletonInterface<ICache, 'ICache'>('ICache', MemoryCache)
+                .registerSingletonInterface(ICacheToken, MemoryCache)
                 
                 // Factory-based
                 .registerSingletonFactory('AppConfig', (provider) => {
                     const logger = provider.get('Logger');
-                    const cache = provider.get('ICache');
+                    const cache = provider.get(ICacheToken);
                     logger.log('Initializing app config');
                     cache.set('initialized', true);
                     return { 
@@ -359,7 +366,7 @@ describe('ContainerBuilder - Unified API', () => {
 
             const logger = container.get('Logger');
             const userService = container.get('UserService');
-            const cache = container.get('ICache');
+            const cache = container.get(ICacheToken);
             const config = container.get('AppConfig');
 
             expect(logger).toBeInstanceOf(ConsoleLogger);

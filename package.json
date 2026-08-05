@@ -35,6 +35,7 @@
 		"build": "tsup && tsc -p tsconfig.json --emitDeclarationOnly",
 		"changeset": "changeset",
 		"test": "vitest",
+		"test:examples": "tsc -p tsconfig.examples.json",
 		"test:types": "tsc -p tsconfig.type-tests.json",
 		"coverage": "vitest run --coverage",
 		"sync-version": "node scripts/sync-version.mjs",
@@ -51,6 +52,9 @@
 		"onlyBuiltDependencies": [
 			"workerd"
 		]
+	},
+	"peerDependencies": {
+		"typescript": ">=5.0.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.2",

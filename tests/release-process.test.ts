@@ -78,6 +78,14 @@ describe("Release process", () => {
 		});
 	});
 
+	it("requires TypeScript 5 or newer for TypeScript consumers", () => {
+		const pkg = readJson("../package.json");
+
+		expect(pkg.peerDependencies).toMatchObject({
+			typescript: ">=5.0.0",
+		});
+	});
+
 	it("synchronizes jsr.json without changing other fields", () => {
 		const root = mkdtempSync(join(tmpdir(), "kizuna-version-"));
 		const script = fileURLToPath(

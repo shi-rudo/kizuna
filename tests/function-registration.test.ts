@@ -10,6 +10,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ContainerBuilder } from '../src/api/container-builder';
+import { interfaceToken } from '../src/api/interface-token';
 
 describe('ContainerBuilder - Function Registration', () => {
     let builder: ContainerBuilder;
@@ -401,15 +402,17 @@ describe('ContainerBuilder - Function Registration', () => {
                 set(key: string, value: any) { this.store.set(key, value); }
             }
 
+            const ICacheToken = interfaceToken<ICache>()('ICache');
+
             class DatabaseService {
                 query(sql: string) { return [{ id: 1, name: 'test' }]; }
             }
 
             const container = builder
-                .registerSingletonInterface<ICache, 'ICache'>('ICache', MemoryCache)
+                .registerSingletonInterface(ICacheToken, MemoryCache)
                 .registerSingleton('DatabaseService', DatabaseService)
                 .registerSingletonFactory('UserRepository', (provider) => {
-                    const cache = provider.get('ICache');
+                    const cache = provider.get(ICacheToken);
                     const db = provider.get('DatabaseService');
                     
                     return {
@@ -434,7 +437,7 @@ describe('ContainerBuilder - Function Registration', () => {
                 .build();
 
             const userRepo = container.get('UserRepository');
-            const cache = container.get('ICache');
+            const cache = container.get(ICacheToken);
 
             const user = userRepo.findUser('123');
             expect(user).toEqual({ id: 1, name: 'test' });
@@ -828,6 +831,8 @@ describe('ContainerBuilder - Function Registration', () => {
                 set(key: string, value: any) { this.store.set(key, value); }
             }
 
+            const ICacheToken = interfaceToken<ICache>()('ICache');
+
             class ApiClient {
                 constructor(private config: any, private cache: ICache) {}
                 
@@ -853,7 +858,7 @@ describe('ContainerBuilder - Function Registration', () => {
                 }))
                 
                 // Interface registration
-                .registerSingletonInterface<ICache, 'ICache'>('ICache', MemoryCache)
+                .registerSingletonInterface(ICacheToken, MemoryCache)
                 
                 // Constructor registration depending on both
                 .registerSingleton('ApiClient', ApiClient, 'ApiConfig', 'ICache')

@@ -2,6 +2,11 @@ import { CircularDependencyError } from "../core/errors";
 import type { ServiceWrapper } from "../core/services/service-wrapper";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces";
 import type { ServiceRegistry } from "./contracts/types";
+import type {
+    InterfaceToken,
+    InterfaceTokenService,
+    RegisteredInterfaceToken,
+} from "./interface-token";
 
 export { CircularDependencyError } from "../core/errors";
 
@@ -45,7 +50,12 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     /**
      * Type-safe service resolution with autocompletion and type inference.
      */
-    get<K extends keyof TRegistry>(key: K): TRegistry[K];
+    get<TToken extends InterfaceToken<unknown, string>>(
+        token: RegisteredInterfaceToken<TRegistry, TToken>,
+    ): InterfaceTokenService<TToken>;
+    get<K extends keyof TRegistry>(
+        key: K extends InterfaceToken<unknown, string> ? never : K,
+    ): TRegistry[K];
     get(token: typeof ServiceProviderToken): ServiceProvider<TRegistry>;
     get(keyOrType: keyof TRegistry | typeof ServiceProviderToken): unknown {
         this.ensureNotDisposed();
@@ -84,7 +94,14 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
     }
 
-    getAll<K extends string & keyof TRegistry>(key: K): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
+    getAll<TToken extends InterfaceToken<unknown, string>>(
+        token: RegisteredInterfaceToken<TRegistry, TToken>,
+    ): InterfaceTokenService<TToken> extends (infer U)[]
+        ? U[]
+        : InterfaceTokenService<TToken>[];
+    getAll<K extends string & keyof TRegistry>(
+        key: K extends InterfaceToken<unknown, string> ? never : K,
+    ): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
     getAll(key: any): any[] {
         this.ensureNotDisposed();
         const typeName = String(key);
