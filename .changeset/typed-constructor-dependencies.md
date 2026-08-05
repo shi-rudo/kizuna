@@ -12,4 +12,4 @@ Require one fixed string literal for each concrete constructor registration key.
 
 Prevent a root builder from declaring services that do not exist in its runtime registry.
 
-Check up to ten public constructor overloads. Accept each declared parameter tuple and preserve different result types as a union.
+Check public constructor overloads without a fixed library limit. Accept each declared parameter tuple and preserve different result types as a union.

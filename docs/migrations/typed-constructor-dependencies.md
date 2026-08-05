@@ -98,7 +98,9 @@ Let each registration add its service to the inferred registry type.
 
 ## Check overloaded constructors
 
-Kizuna checks up to ten public constructor overloads. A dependency list can match any declared overload.
+Kizuna checks each public constructor overload. Kizuna does not set a fixed overload count. TypeScript compiler limits still apply.
+
+A dependency list can match any declared overload.
 
 If overloads return different service types, the provider result is a union of those types.
 

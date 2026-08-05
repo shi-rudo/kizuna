@@ -70,7 +70,9 @@ Each registration key must be one fixed string literal. Broad strings, unions, a
 
 A root builder starts with an empty registry. Do not supply a populated registry type to its constructor.
 
-Kizuna checks up to ten public constructor overloads. Any declared parameter tuple is valid. Different overload result types produce a union.
+Kizuna checks each public constructor overload. Kizuna does not set a fixed overload count. TypeScript compiler limits still apply.
+
+Any declared parameter tuple is valid. Different overload result types produce a union.
 
 ```typescript
 const container = new ContainerBuilder()

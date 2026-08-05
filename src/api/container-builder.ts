@@ -49,30 +49,34 @@ type LiteralServiceKey<K extends string> = IsFixedStringLiteral<K> extends true
 
 type ServiceConstructor = new (...args: any[]) => any;
 
-/** Extracts up to ten public constructor overloads without runtime work. */
-type ConstructorOverloads<TCtor> = TCtor extends {
-    new (...args: infer A1): infer R1;
-    new (...args: infer A2): infer R2;
-    new (...args: infer A3): infer R3;
-    new (...args: infer A4): infer R4;
-    new (...args: infer A5): infer R5;
-    new (...args: infer A6): infer R6;
-    new (...args: infer A7): infer R7;
-    new (...args: infer A8): infer R8;
-    new (...args: infer A9): infer R9;
-    new (...args: infer A10): infer R10;
-}
-    ? | (new (...args: A1) => R1)
-      | (new (...args: A2) => R2)
-      | (new (...args: A3) => R3)
-      | (new (...args: A4) => R4)
-      | (new (...args: A5) => R5)
-      | (new (...args: A6) => R6)
-      | (new (...args: A7) => R7)
-      | (new (...args: A8) => R8)
-      | (new (...args: A9) => R9)
-      | (new (...args: A10) => R10)
-    : TCtor;
+type IsSameType<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() =>
+    T extends B ? 1 : 2)
+    ? (<T>() => T extends B ? 1 : 2) extends (<T>() => T extends A ? 1 : 2)
+        ? true
+        : false
+    : false;
+
+type MatchingSeenSignature<TSeen, TSignature> = TSeen extends unknown
+    ? IsSameType<TSeen, TSignature>
+    : never;
+
+/** Rotates the final visible overload until the inferred signature repeats. */
+type InternalConstructorSignatures<TCtor, TSeen = never> =
+    TCtor extends new (...args: infer TParameters) => infer TResult
+        ? true extends MatchingSeenSignature<
+              TSeen,
+              new (...args: TParameters) => TResult
+          >
+            ? never
+            : | (new (...args: TParameters) => TResult)
+              | InternalConstructorSignatures<
+                    (new (...args: TParameters) => TResult) & TCtor,
+                    TSeen | (new (...args: TParameters) => TResult)
+                >
+        : never;
+
+/** Converts public constructor overloads to a union without a library-defined limit. */
+type ConstructorOverloads<TCtor> = InternalConstructorSignatures<TCtor>;
 
 type ParametersOf<TCtor> = TCtor extends ServiceConstructor
     ? ConstructorParameters<TCtor>

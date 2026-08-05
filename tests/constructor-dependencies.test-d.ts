@@ -40,6 +40,25 @@ class OverloadedConsumer {
 	constructor(readonly value: LoggerContract | Config) {}
 }
 
+type TaggedDependency<Tag extends string> = {
+	readonly tag: Tag;
+};
+
+class ElevenOverloadConsumer {
+	constructor(value: TaggedDependency<"one">);
+	constructor(value: TaggedDependency<"two">);
+	constructor(value: TaggedDependency<"three">);
+	constructor(value: TaggedDependency<"four">);
+	constructor(value: TaggedDependency<"five">);
+	constructor(value: TaggedDependency<"six">);
+	constructor(value: TaggedDependency<"seven">);
+	constructor(value: TaggedDependency<"eight">);
+	constructor(value: TaggedDependency<"nine">);
+	constructor(value: TaggedDependency<"ten">);
+	constructor(value: TaggedDependency<"eleven">);
+	constructor(readonly value: TaggedDependency<string>) {}
+}
+
 interface LoggerVariant {
 	readonly source: "logger";
 }
@@ -149,6 +168,44 @@ test("constructor overloads accept every declared parameter tuple", () => {
 
 	// @ts-expect-error No constructor overload accepts Feature.
 	builder.registerSingleton("invalid-overload", OverloadedConsumer, "feature");
+});
+
+test("constructor dependency checks accept overloads beyond the former limit", () => {
+	const builder = new ContainerBuilder()
+		.registerSingletonFactory("first-dependency", () => ({
+			tag: "one" as const,
+		}))
+		.registerSingletonFactory("last-dependency", () => ({
+			tag: "eleven" as const,
+		}));
+
+	const provider = builder
+		.registerSingleton(
+			"first-overload",
+			ElevenOverloadConsumer,
+			"first-dependency",
+		)
+		.registerSingleton(
+			"last-overload",
+			ElevenOverloadConsumer,
+			"last-dependency",
+		)
+		.build();
+
+	expectTypeOf(
+		provider.get("first-overload"),
+	).toEqualTypeOf<ElevenOverloadConsumer>();
+	expectTypeOf(
+		provider.get("last-overload"),
+	).toEqualTypeOf<ElevenOverloadConsumer>();
+});
+
+test("callable constructors keep their construct signatures", () => {
+	const provider = new ContainerBuilder()
+		.registerTransient("date", Date)
+		.build();
+
+	expectTypeOf(provider.get("date")).toEqualTypeOf<Date>();
 });
 
 test("optional and rest constructor parameters keep their tuple semantics", () => {
