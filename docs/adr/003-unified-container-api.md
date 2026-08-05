@@ -25,6 +25,9 @@ We chose to create a **Unified Container API** that integrates both fluent and t
 ### Unified API Design
 
 ```typescript
+const Database = interfaceToken<IDatabase>()('Database');
+const Cache = interfaceToken<ICache>()('Cache');
+
 // The ultimate container - all patterns unified with full type safety!
 const container = new ContainerBuilder()
   // Constructor-based registration (concise, type-safe)
@@ -32,8 +35,8 @@ const container = new ContainerBuilder()
   .registerScoped('UserService', UserService, 'Database', 'Logger')
   
   // Interface-based registration (abstraction + type safety)
-  .registerSingletonInterface<IDatabase, 'Database', typeof PostgreSQLDatabase>('Database', PostgreSQLDatabase, 'Logger')
-  .registerScopedInterface<ICache, 'Cache', typeof RedisCache>('Cache', RedisCache, 'Logger')
+  .registerSingletonInterface(Database, PostgreSQLDatabase, 'Logger')
+  .registerScopedInterface(Cache, RedisCache, 'Logger')
   
   // Factory-based registration (flexibility + type safety)
   .registerSingletonFactory('Config', (provider) => {
@@ -45,7 +48,7 @@ const container = new ContainerBuilder()
 
 // Perfect IDE autocompletion and compile-time type safety
 const userService = container.get('UserService'); // Type: UserService ✅
-const database = container.get('Database');       // Type: IDatabase ✅
+const database = container.get(Database);         // Type: IDatabase ✅
 const config = container.get('Config');           // Type: inferred from factory ✅
 ```
 
@@ -54,6 +57,9 @@ const config = container.get('Config');           // Type: inferred from factory
 #### 1. **Single Learning Model**
 
 ```typescript
+const Service2 = interfaceToken<IService>()('Service2');
+const Cache = interfaceToken<ICache>()('Cache');
+
 // One API to learn, with consistent patterns
 const container = new ContainerBuilder()
   
@@ -61,11 +67,11 @@ const container = new ContainerBuilder()
   // .register[Lifecycle][Pattern](key, implementation, ...dependencies)
   
   .registerSingleton('Service1', Service1Class)                    // Constructor
-  .registerSingletonInterface<IService, 'Service2'>('Service2', Service2Impl) // Interface
+  .registerSingletonInterface(Service2, Service2Impl) // Interface
   .registerSingletonFactory('Service3', (provider) => new Service3())      // Factory
   
   // Lifecycle variants work identically across all patterns
-  .registerScopedInterface<ICache, 'Cache'>('Cache', CacheImpl)
+  .registerScopedInterface(Cache, CacheImpl)
   .registerTransientFactory('RequestId', () => crypto.randomUUID())
   
   .build();
@@ -74,13 +80,15 @@ const container = new ContainerBuilder()
 #### 2. **Full Type Safety Across All Patterns**
 
 ```typescript
+const DB = interfaceToken<IDatabase>()('DB');
+
 // Every registration pattern provides complete type safety
 const container = new ContainerBuilder()
   .registerSingleton('Logger', ConsoleLogger)
-  .registerSingletonInterface<IDatabase, 'DB', typeof DatabaseService>('DB', DatabaseService, 'Logger')
+  .registerSingletonInterface(DB, DatabaseService, 'Logger')
   .registerSingletonFactory('UserRepo', (provider) => {
     // provider.get() is fully typed based on previous registrations
-    const db = provider.get('DB');         // Type: IDatabase ✅
+    const db = provider.get(DB);           // Type: IDatabase ✅
     const logger = provider.get('Logger'); // Type: ConsoleLogger ✅
     return new UserRepository(db, logger);
   })
@@ -88,29 +96,33 @@ const container = new ContainerBuilder()
 
 // Resolution is type-safe regardless of registration pattern
 const logger = container.get('Logger');   // Type: ConsoleLogger
-const db = container.get('DB');           // Type: IDatabase
+const db = container.get(DB);             // Type: IDatabase
 const repo = container.get('UserRepo');   // Type: UserRepository (inferred!)
 ```
 
 #### 3. **Comprehensive Registration Capabilities**
 
 ```typescript
+const Logger = interfaceToken<ILogger>()('Logger');
+const Cache = interfaceToken<ICache>()('Cache');
+const Validator = interfaceToken<IValidator>()('Validator');
+
 // Every pattern supports all lifecycles
 const container = new ContainerBuilder()
   
   // Singleton services (shared across entire container)
   .registerSingleton('Config', ConfigService)
-  .registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
+  .registerSingletonInterface(Logger, ConsoleLogger)
   .registerSingletonFactory('Database', (provider) => createConnection())
   
   // Scoped services (shared within scope, new per scope)
   .registerScoped('RequestContext', RequestContext)
-  .registerScopedInterface<ICache, 'Cache', typeof MemoryCache>('Cache', MemoryCache, 'Logger')
+  .registerScopedInterface(Cache, MemoryCache, Logger)
   .registerScopedFactory('UserId', () => generateUserId())
   
   // Transient services (new instance every time)
-  .registerTransient('EmailService', EmailService, 'Logger')
-  .registerTransientInterface<IValidator, 'Validator'>('Validator', DefaultValidator)
+  .registerTransient('EmailService', EmailService, Logger)
+  .registerTransientInterface(Validator, DefaultValidator)
   .registerTransientFactory('Timestamp', () => Date.now())
   
   .build();
@@ -151,9 +163,11 @@ const container = new ContainerBuilder()
 #### 5. **Perfect IDE Integration**
 
 ```typescript
+const EmailService = interfaceToken<IEmailService>()('EmailService');
+
 const container = new ContainerBuilder()
   .registerSingleton('UserService', UserService)
-  .registerSingletonInterface<IEmailService, 'EmailService'>('EmailService', SMTPService)
+  .registerSingletonInterface(EmailService, SMTPService)
   .registerSingletonFactory('Config', () => ({ env: 'prod' }))
   .build();
 
@@ -162,7 +176,7 @@ const service = container.get(''); // Suggests: 'UserService', 'EmailService', '
 
 // Type inference works perfectly for all registration patterns
 const userSvc = container.get('UserService');  // Type: UserService
-const emailSvc = container.get('EmailService'); // Type: IEmailService  
+const emailSvc = container.get(EmailService);   // Type: IEmailService
 const config = container.get('Config');         // Type: { env: string }
 ```
 
@@ -182,11 +196,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}>
   ): ContainerBuilder<TRegistry & Record<K, T>>;
   
   // Interface-based registration
-  registerSingletonInterface<T, K extends string, TCtor extends ServiceConstructor>(
-    key: LiteralServiceKey<K>,
-    implementationType: InterfaceImplementationConstructor<T, TCtor>,
+  registerSingletonInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(
+    token: TToken,
+    implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>,
     ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-  ): ContainerBuilder<TRegistry & Record<K, T>>;
+  ): ContainerBuilder<TRegistry & Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>>;
   
   // Factory-based registration
   registerSingletonFactory<K extends string, T>(
@@ -197,8 +211,8 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}>
   // All patterns support all lifecycles
   registerScoped<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
   registerTransient<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  registerScopedInterface<T, K extends string, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  registerTransientInterface<T, K extends string, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<K, T>>;
+  registerScopedInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>>;
+  registerTransientInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>>;
   registerScopedFactory<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
   registerTransientFactory<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
   
@@ -325,7 +339,8 @@ builder.validate(); // Catches missing dependency before build
 - Enabling testing with mocks
 
 ```typescript
-.registerSingletonInterface<IEmailService, 'EmailService', typeof SMTPEmailService>('EmailService', SMTPEmailService, 'Config')
+const EmailService = interfaceToken<IEmailService>()('EmailService');
+builder.registerSingletonInterface(EmailService, SMTPEmailService, 'Config');
 ```
 
 #### Use Factory Registration When

@@ -1,4 +1,9 @@
 import type { ServiceWrapper } from '../../core/services/service-wrapper';
+import type {
+    InterfaceToken,
+    InterfaceTokenService,
+    RegisteredInterfaceToken,
+} from '../interface-token';
 import type { ServiceProvider, ServiceProviderToken } from '../service-provider';
 
 /**
@@ -171,6 +176,11 @@ export interface ServiceLocator {
  * @template TRegistry - The service registry type mapping string keys to service types
  */
 export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
+    /** Resolves a registered interface through its type-safe token. */
+    get<TToken extends InterfaceToken<unknown, string>>(
+        token: RegisteredInterfaceToken<TRegistry, TToken>,
+    ): InterfaceTokenService<TToken>;
+
     /**
      * Type-safe service resolution by string key with autocompletion and type inference.
      * 
@@ -178,7 +188,9 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
      * @param key - The string key identifying the service (must be registered)
      * @returns An instance of the service with inferred type
      */
-    get<K extends keyof TRegistry>(key: K): TRegistry[K];
+    get<K extends keyof TRegistry>(
+        key: K extends InterfaceToken<unknown, string> ? never : K,
+    ): TRegistry[K];
     
     /**
      * Returns the current provider through its explicit infrastructure token.

@@ -92,12 +92,18 @@ If an existing registration fails compilation, read the [typed constructor depen
 For implementing abstractions and polymorphism:
 
 ```typescript
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
+
 class Logger {
   log(message: string): void { console.log(message); }
 }
 
 interface IEmailService {
   send(to: string, subject: string, body: string): Promise<void>;
+}
+
+interface ICache {
+  get(key: string): unknown;
 }
 
 class SMTPEmailService implements IEmailService {
@@ -109,12 +115,26 @@ class SMTPEmailService implements IEmailService {
   }
 }
 
+class RedisCache implements ICache {
+  constructor(private logger: Logger) {}
+
+  get(key: string): unknown {
+    this.logger.log(`Reading cache key: ${key}`);
+    return undefined;
+  }
+}
+
+const EmailService = interfaceToken<IEmailService>()('EmailService');
+const Cache = interfaceToken<ICache>()('Cache');
+
 const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
-  .registerSingletonInterface<IEmailService, 'EmailService', typeof SMTPEmailService>('EmailService', SMTPEmailService, 'Logger')
+  .registerSingletonInterface(EmailService, SMTPEmailService, 'Logger')
+  .registerScopedInterface(Cache, RedisCache, 'Logger')
   .build();
 
-const emailService = container.get('EmailService'); // Type: IEmailService ✨
+const emailService = container.get(EmailService); // Type: IEmailService ✨
+const cache = container.get(Cache);               // Type: ICache ✨
 ```
 
 ### 🏭 **Factory Registration** (For Complex Creation)
@@ -159,42 +179,46 @@ const validator = container.get('Validator');   // Type: validation functions ob
 Every registration pattern supports all three lifecycles:
 
 ```typescript
+const LoggerService = interfaceToken<ILogger>()('Logger');
+const Cache = interfaceToken<ICache>()('Cache');
+const Validator = interfaceToken<IValidator>()('Validator');
+
 const container = new ContainerBuilder()
   // Singleton services (shared across entire application)
   .registerSingleton('Config', ConfigService)
-  .registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
+  .registerSingletonInterface(LoggerService, ConsoleLogger)
   .registerSingletonFactory('Database', (provider) => createConnection())
   
   // Scoped services (shared within scope, new per scope)
-  .registerScoped('RequestContext', RequestContext, 'Logger')
-  .registerScopedInterface<ICache, 'Cache', typeof MemoryCache>('Cache', MemoryCache, 'Logger')
+  .registerScoped('RequestContext', RequestContext, LoggerService)
+  .registerScopedInterface(Cache, MemoryCache, LoggerService)
   .registerScopedFactory('RequestId', () => crypto.randomUUID())
   
   // Transient services (new instance every time)
-  .registerTransient('EmailService', EmailService, 'Logger')
-  .registerTransientInterface<IValidator, 'Validator'>('Validator', DefaultValidator)
+  .registerTransient('EmailService', EmailService, LoggerService)
+  .registerTransientInterface(Validator, DefaultValidator)
   .registerTransientFactory('Timestamp', () => Date.now())
   
   .build();
 ```
 
-When you specify an interface type, also specify its literal key type. The second
-type argument keeps `container.get()` limited to registered keys. It must name
-one fixed string. Union types and open template-literal types are not valid
-service keys.
-
-If the implementation has constructor dependencies, add its constructor type as
-the third type argument. Kizuna then checks each dependency key against the
-constructor parameter at the same position:
+Create each interface token once. The token stores the interface type and one
+fixed string key. Registration and resolution infer both types from the token:
 
 ```typescript
-.registerSingletonInterface<ILogger, 'Logger'>('Logger', ConsoleLogger)
-.registerSingletonInterface<IEmailService, 'EmailService', typeof SMTPEmailService>(
-  'EmailService',
-  SMTPEmailService,
-  'Logger'
-)
+const EmailService = interfaceToken<IEmailService>()('EmailService');
+
+const container = new ContainerBuilder()
+  .registerSingleton('Logger', Logger)
+  .registerSingletonInterface(EmailService, SMTPEmailService, 'Logger')
+  .build();
+
+container.get(EmailService); // IEmailService
 ```
+
+The two calls in `interfaceToken<IEmailService>()('EmailService')` let TypeScript
+keep both the explicit interface type and the inferred literal key. Broad strings,
+unions, and open template-literal patterns are not valid token keys.
 
 For more information, read the [typed interface dependency migration](./docs/migrations/typed-interface-dependencies.md).
 
@@ -421,10 +445,12 @@ For complex applications, separate containers maintain domain boundaries:
 
 ```typescript
 // Shared infrastructure
+const Config = interfaceToken<IConfig>()('Config');
+
 const sharedContainer = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   .registerSingleton('EmailService', EmailService, 'Logger')
-  .registerSingletonInterface<IConfig, 'Config'>('Config', DatabaseConfig)
+  .registerSingletonInterface(Config, DatabaseConfig)
   .build();
 
 // User domain container
@@ -512,6 +538,17 @@ Check out comprehensive examples in the [`examples/`](./examples) directory:
 
 ## 📖 API Reference
 
+### interfaceToken
+
+Creates a reusable token that carries an interface type and one fixed string key:
+
+```typescript
+const EmailService = interfaceToken<IEmailService>()('EmailService');
+```
+
+Pass the token to an interface registration method, `container.get()`, or a
+constructor dependency list.
+
 ### ContainerBuilder
 
 The main class for configuring your dependency injection container.
@@ -521,24 +558,21 @@ The main class for configuring your dependency injection container.
 ```typescript
 // Singleton lifecycle
 .registerSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerSingletonInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
-.registerSingletonInterface<T, K, TCtor extends ServiceConstructor>(key: LiteralServiceKey<K>, implementationType: InterfaceImplementationConstructor<T, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.registerSingletonInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Scoped lifecycle (one instance per scope)
 .registerScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerScopedInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
-.registerScopedInterface<T, K, TCtor extends ServiceConstructor>(key: LiteralServiceKey<K>, implementationType: InterfaceImplementationConstructor<T, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.registerScopedInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 
 // Transient lifecycle (new instance every time)
 .registerTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerTransientInterface<T, K>(key: LiteralServiceKey<K>, implementationType: new () => T)
-.registerTransientInterface<T, K, TCtor extends ServiceConstructor>(key: LiteralServiceKey<K>, implementationType: InterfaceImplementationConstructor<T, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
+.registerTransientInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientFactory<K, T>(key: K, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
 
-`LiteralServiceKey`, `ServiceConstructor`, `InterfaceImplementationConstructor`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
+`LiteralServiceKey`, `InterfaceTokenService`, `InterfaceImplementationConstructor`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
 
 #### Multi-Registration Methods
 

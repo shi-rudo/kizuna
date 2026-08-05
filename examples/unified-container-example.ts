@@ -9,6 +9,7 @@
  * - Full type safety with IDE autocompletion
  */
 import { ContainerBuilder } from '../src/api/container-builder';
+import { interfaceToken } from '../src/api/interface-token';
 
 // =================
 // SERVICE DEFINITIONS
@@ -34,6 +35,8 @@ interface IDatabase {
     query<T>(sql: string): Promise<T[]>;
 }
 
+const Database = interfaceToken<IDatabase>()('IDatabase');
+
 class PostgreSQLDatabase implements IDatabase {
     constructor(private logger: Logger) {}
     
@@ -51,6 +54,8 @@ interface ICache {
     get<T>(key: string): Promise<T | null>;
     set<T>(key: string, value: T, ttl?: number): Promise<void>;
 }
+
+const Cache = interfaceToken<ICache>()('ICache');
 
 class RedisCache implements ICache {
     constructor(private logger: Logger) {}
@@ -106,8 +111,8 @@ const container = new ContainerBuilder()
     .registerScoped('UserService', UserService, 'IDatabase', 'ICache', 'Logger')
     
     // 🎯 Interface-based registration
-    .registerInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'Logger')
-    .registerScopedInterface<ICache, 'ICache', typeof RedisCache>('ICache', RedisCache, 'Logger')
+    .registerSingletonInterface(Database, PostgreSQLDatabase, 'Logger')
+    .registerScopedInterface(Cache, RedisCache, 'Logger')
     
     // 🏭 Factory-based registration
     .registerFactory('AppConfig', (provider) => {

@@ -1,27 +1,28 @@
 # Migration
 
-## From interface registrations with one type argument
+## From string interface registrations
 
-Interface registrations now require the literal key as the second type argument.
-This prevents the provider registry from accepting every string key.
-The key type must name one fixed string. Do not use a union type or an open
-template-literal type.
+Interface registrations now require an interface token. The token stores one fixed service key and the interface type.
 
 ### Before
-
-```typescript
-.registerSingletonInterface<ILogger>('logger', ConsoleLogger)
-```
-
-### After
 
 ```typescript
 .registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
 ```
 
-Apply the same change to `registerScopedInterface` and
-`registerTransientInterface`. This change affects TypeScript types only. Runtime
-registration behavior does not change.
+### After
+
+```typescript
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
+
+const Logger = interfaceToken<ILogger>()('logger');
+new ContainerBuilder()
+  .registerSingletonInterface(Logger, ConsoleLogger)
+```
+
+Apply the same change to `registerScopedInterface` and `registerTransientInterface`. Use the token with `container.get(Logger)`.
+
+The token is the service key at runtime. Registration behavior does not change.
 
 ## From manual `new` chains
 
@@ -66,7 +67,7 @@ const container = builder.build();
 
 ## From tsyringe
 
-tsyringe uses decorators and tokens. Kizuna uses string keys and constructor parameter names.
+tsyringe uses decorators and tokens. Kizuna uses interface tokens or string keys with explicit constructor dependencies.
 
 ### tsyringe
 
@@ -89,17 +90,20 @@ const userService = container.resolve(UserService);
 ### Kizuna
 
 ```typescript
-import { ContainerBuilder } from '@shirudo/kizuna';
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
 
 // No decorators — services are plain classes
 class UserService {
   constructor(private db: IDatabase, private logger: ILogger) {}
 }
 
+const Database = interfaceToken<IDatabase>()('db');
+const Logger = interfaceToken<ILogger>()('logger');
+
 const container = new ContainerBuilder()
-  .registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase)
-  .registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
-  .registerSingleton('userService', UserService, 'db', 'logger')
+  .registerSingletonInterface(Database, PostgresDatabase)
+  .registerSingletonInterface(Logger, ConsoleLogger)
+  .registerSingleton('userService', UserService, Database, Logger)
   .build();
 
 const userService = container.get('userService');
@@ -110,9 +114,9 @@ const userService = container.get('userService');
 | tsyringe | Kizuna |
 | --- | --- |
 | `@injectable()` on class | No decorator needed |
-| `@inject('token')` on params | String key in registration matches param name |
+| `@inject('token')` on params | Explicit dependency token in registration |
 | `container.resolve(Class)` | `container.get('key')` |
-| Token strings are arbitrary | Keys should match constructor param names |
+| Token strings are arbitrary | Tokens contain fixed string keys |
 | Auto-registers with decorators | Explicit registration required |
 
 ## From inversify
@@ -146,18 +150,21 @@ container.bind(UserService).toSelf().inRequestScope();
 ### Kizuna
 
 ```typescript
-import { ContainerBuilder } from '@shirudo/kizuna';
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
 
-// No symbols needed — string keys replace tokens
+// Interface tokens are strings at runtime
 // No decorators — plain classes
 class UserService {
   constructor(private db: IDatabase, private logger: ILogger) {}
 }
 
+const Database = interfaceToken<IDatabase>()('db');
+const Logger = interfaceToken<ILogger>()('logger');
+
 const container = new ContainerBuilder()
-  .registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase)
-  .registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
-  .registerScoped('userService', UserService, 'db', 'logger')
+  .registerSingletonInterface(Database, PostgresDatabase)
+  .registerSingletonInterface(Logger, ConsoleLogger)
+  .registerScoped('userService', UserService, Database, Logger)
   .build();
 ```
 
@@ -165,11 +172,11 @@ const container = new ContainerBuilder()
 
 | inversify | Kizuna |
 | --- | --- |
-| `Symbol.for()` tokens | String keys |
+| `Symbol.for()` tokens | Branded string tokens |
 | `@injectable()` + `@inject()` | No decorators |
 | `.bind().to().inScope()` | `.registerSingleton()` / `.registerScoped()` |
 | `inRequestScope()` | `registerScoped()` |
-| `container.get(TYPES.X)` | `container.get('x')` |
+| `container.get(TYPES.X)` | `container.get(Token)` |
 | Supports property injection | Constructor injection only |
 
 ## From NestJS
@@ -198,15 +205,17 @@ class AppModule {}
 ### Kizuna
 
 ```typescript
-import { ContainerBuilder } from '@shirudo/kizuna';
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
 
 class UserService {
   constructor(private db: IDatabase) {}
 }
 
+const Database = interfaceToken<IDatabase>()('db');
+
 const container = new ContainerBuilder()
-  .registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase)
-  .registerScoped('userService', UserService, 'db')
+  .registerSingletonInterface(Database, PostgresDatabase)
+  .registerScoped('userService', UserService, Database)
   .build();
 ```
 

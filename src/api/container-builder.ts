@@ -9,43 +9,13 @@ import type {
     TypeSafeServiceLocator,
 } from "./contracts/interfaces";
 import type { AddToRegistry, Factory, ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
+import type {
+    InterfaceToken,
+    InterfaceTokenKey,
+    InterfaceTokenService,
+} from "./interface-token";
+import type { LiteralServiceKey } from "./literal-service-key";
 import { ServiceProvider } from "./service-provider";
-
-type IsUnion<T, Whole = T> = T extends Whole
-    ? [Whole] extends [T]
-        ? false
-        : true
-    : never;
-
-type IsOpenNumericString<K extends string> = K extends `${infer N extends number}`
-    ? number extends N
-        ? true
-        : false
-    : false;
-
-type IsOpenBigintString<K extends string> = K extends `${infer N extends bigint}`
-    ? bigint extends N
-        ? true
-        : false
-    : false;
-
-type IsFixedStringLiteral<K extends string> = string extends K
-    ? false
-    : true extends IsUnion<K>
-      ? false
-      : IsOpenNumericString<K> extends true
-        ? false
-        : IsOpenBigintString<K> extends true
-          ? false
-          : K extends ""
-            ? true
-            : K extends `${infer _First}${infer Rest}`
-              ? IsFixedStringLiteral<Rest>
-              : false;
-
-type LiteralServiceKey<K extends string> = IsFixedStringLiteral<K> extends true
-    ? K
-    : never;
 
 type ServiceConstructor = new (...args: any[]) => any;
 
@@ -128,6 +98,9 @@ type DependencyKeys<
  *
  * @example
  * ```typescript
+ * const Database = interfaceToken<IDatabase>()('IDatabase');
+ * const Cache = interfaceToken<ICache>()('ICache');
+ *
  * // The ultimate type-safe container - all patterns in one!
  * const container = new ContainerBuilder()
  *   // Constructor-based registration
@@ -135,8 +108,8 @@ type DependencyKeys<
  *   .registerScoped('UserService', UserService, 'Logger')
  *   
  *   // Interface-based registration  
- *   .registerSingletonInterface<IDatabase, 'IDatabase', typeof DatabaseService>('IDatabase', DatabaseService, 'Logger')
- *   .registerScopedInterface<ICache, 'ICache', typeof RedisCache>('ICache', RedisCache, 'Logger')
+ *   .registerSingletonInterface(Database, DatabaseService, 'Logger')
+ *   .registerScopedInterface(Cache, RedisCache, 'Logger')
  *   
  *   // Factory-based registration
  *   .registerSingletonFactory('Config', (provider) => {
@@ -150,7 +123,7 @@ type DependencyKeys<
  * // Fully type-safe resolution
  * const logger = container.get('Logger');        // Type: ConsoleLogger
  * const userService = container.get('UserService'); // Type: UserService  
- * const database = container.get('IDatabase');   // Type: IDatabase
+ * const database = container.get(Database);      // Type: IDatabase
  * const config = container.get('Config');        // Type: { env: string; debug: boolean }
  * ```
  *
@@ -238,124 +211,118 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /**
      * Registers an interface implementation with singleton lifetime.
      * 
-     * @template TInterface - The interface type being registered
-     * @template K - One fixed string key for the service
-     * @template TCtor - The implementation constructor type for registrations with dependencies
-     * @param key - The string key used to identify the service
+     * @template TToken - The interface token type
+     * @template TCtor - The implementation constructor type
+     * @param token - The token that defines the interface type and service key
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Keys that match the implementation parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks Specify TInterface and K for implementations without dependencies. Also specify TCtor when the implementation has dependencies.
      */
-    registerSingletonInterface<TInterface, K extends string>(
-        key: LiteralServiceKey<K>,
-        implementationType: new () => TInterface,
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
-    registerSingletonInterface<K extends string, TCtor extends ServiceConstructor>(
-        key: LiteralServiceKey<K>,
-        implementationType: TCtor,
-        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>>;
     registerSingletonInterface<
-        TInterface,
-        K extends string,
+        TToken extends InterfaceToken<unknown, string>,
         TCtor extends ServiceConstructor,
     >(
-        key: LiteralServiceKey<K>,
-        implementationType: InterfaceImplementationConstructor<TInterface, TCtor>,
+        token: TToken,
+        implementationType: InterfaceImplementationConstructor<
+            InterfaceTokenService<TToken>,
+            TCtor
+        >,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
-    registerSingletonInterface(
-        key: string,
-        implementationType: ServiceConstructor,
-        ...dependencies: string[]
-    ): ContainerBuilder<any> {
-        const configurator = (registrar: TypeSafeRegistrar<unknown>) => {
+    ): ContainerBuilder<
+        TRegistry &
+            Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>
+    > {
+        const configurator = (
+            registrar: TypeSafeRegistrar<InterfaceTokenService<TToken>>,
+        ) => {
             registrar.useType(implementationType, ...dependencies);
         };
-        return this.registerTypeSafe(key, configurator, new SingletonLifecycle());
+        return this.registerTypeSafe<
+            InterfaceTokenKey<TToken>,
+            InterfaceTokenService<TToken>
+        >(
+            token as unknown as InterfaceTokenKey<TToken>,
+            configurator,
+            new SingletonLifecycle(),
+        );
     }
 
     /**
      * Registers an interface implementation with scoped lifetime.
      * 
-     * @template TInterface - The interface type being registered
-     * @template K - One fixed string key for the service
-     * @template TCtor - The implementation constructor type for registrations with dependencies
-     * @param key - The string key used to identify the service
+     * @template TToken - The interface token type
+     * @template TCtor - The implementation constructor type
+     * @param token - The token that defines the interface type and service key
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Keys that match the implementation parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks Specify TInterface and K for implementations without dependencies. Also specify TCtor when the implementation has dependencies.
      */
-    registerScopedInterface<TInterface, K extends string>(
-        key: LiteralServiceKey<K>,
-        implementationType: new () => TInterface,
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
-    registerScopedInterface<K extends string, TCtor extends ServiceConstructor>(
-        key: LiteralServiceKey<K>,
-        implementationType: TCtor,
-        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>>;
     registerScopedInterface<
-        TInterface,
-        K extends string,
+        TToken extends InterfaceToken<unknown, string>,
         TCtor extends ServiceConstructor,
     >(
-        key: LiteralServiceKey<K>,
-        implementationType: InterfaceImplementationConstructor<TInterface, TCtor>,
+        token: TToken,
+        implementationType: InterfaceImplementationConstructor<
+            InterfaceTokenService<TToken>,
+            TCtor
+        >,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
-    registerScopedInterface(
-        key: string,
-        implementationType: ServiceConstructor,
-        ...dependencies: string[]
-    ): ContainerBuilder<any> {
-        const configurator = (registrar: TypeSafeRegistrar<unknown>) => {
+    ): ContainerBuilder<
+        TRegistry &
+            Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>
+    > {
+        const configurator = (
+            registrar: TypeSafeRegistrar<InterfaceTokenService<TToken>>,
+        ) => {
             registrar.useType(implementationType, ...dependencies);
         };
-        return this.registerTypeSafe(key, configurator, new ScopedLifecycle());
+        return this.registerTypeSafe<
+            InterfaceTokenKey<TToken>,
+            InterfaceTokenService<TToken>
+        >(
+            token as unknown as InterfaceTokenKey<TToken>,
+            configurator,
+            new ScopedLifecycle(),
+        );
     }
 
     /**
      * Registers an interface implementation with transient lifetime.
      * 
-     * @template TInterface - The interface type being registered
-     * @template K - One fixed string key for the service
-     * @template TCtor - The implementation constructor type for registrations with dependencies
-     * @param key - The string key used to identify the service
+     * @template TToken - The interface token type
+     * @template TCtor - The implementation constructor type
+     * @param token - The token that defines the interface type and service key
      * @param implementationType - The concrete implementation constructor
      * @param dependencies - Keys that match the implementation parameters by type and position
      * @returns A new ContainerBuilder with the updated registry type
-     * @remarks Specify TInterface and K for implementations without dependencies. Also specify TCtor when the implementation has dependencies.
      */
-    registerTransientInterface<TInterface, K extends string>(
-        key: LiteralServiceKey<K>,
-        implementationType: new () => TInterface,
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
-    registerTransientInterface<K extends string, TCtor extends ServiceConstructor>(
-        key: LiteralServiceKey<K>,
-        implementationType: TCtor,
-        ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-    ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>>;
     registerTransientInterface<
-        TInterface,
-        K extends string,
+        TToken extends InterfaceToken<unknown, string>,
         TCtor extends ServiceConstructor,
     >(
-        key: LiteralServiceKey<K>,
-        implementationType: InterfaceImplementationConstructor<TInterface, TCtor>,
+        token: TToken,
+        implementationType: InterfaceImplementationConstructor<
+            InterfaceTokenService<TToken>,
+            TCtor
+        >,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-    ): ContainerBuilder<TRegistry & Record<K, TInterface>>;
-    registerTransientInterface(
-        key: string,
-        implementationType: ServiceConstructor,
-        ...dependencies: string[]
-    ): ContainerBuilder<any> {
-        const configurator = (registrar: TypeSafeRegistrar<unknown>) => {
+    ): ContainerBuilder<
+        TRegistry &
+            Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>
+    > {
+        const configurator = (
+            registrar: TypeSafeRegistrar<InterfaceTokenService<TToken>>,
+        ) => {
             registrar.useType(implementationType, ...dependencies);
         };
-        return this.registerTypeSafe(key, configurator, new TransientLifecycle());
+        return this.registerTypeSafe<
+            InterfaceTokenKey<TToken>,
+            InterfaceTokenService<TToken>
+        >(
+            token as unknown as InterfaceTokenKey<TToken>,
+            configurator,
+            new TransientLifecycle(),
+        );
     }
 
     // =================

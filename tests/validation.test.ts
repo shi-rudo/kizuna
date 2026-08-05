@@ -10,6 +10,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ContainerBuilder } from '../src/api/container-builder';
+import { interfaceToken } from '../src/api/interface-token';
 
 // Test services for validation
 class ServiceA {
@@ -44,6 +45,8 @@ class ServiceWithTwoDeps {
 interface ITestService {
     test(): string;
 }
+
+const TestServiceToken = interfaceToken<ITestService>()('ITestService');
 
 class TestServiceImpl implements ITestService {
     constructor(public serviceWithNoDeps?: ServiceWithNoDeps) {}
@@ -85,7 +88,7 @@ describe('ContainerBuilder Validation', () => {
         });
 
         it('should detect missing dependencies in interface registration', () => {
-            builder.registerSingletonInterface<ITestService, 'ITestService', typeof TestServiceImpl>('ITestService', TestServiceImpl, 'serviceWithNoDeps');
+            builder.registerSingletonInterface(TestServiceToken, TestServiceImpl, 'serviceWithNoDeps');
 
             const issues = builder.validate();
             expect(issues.length).toBeGreaterThan(0);
@@ -207,7 +210,7 @@ describe('ContainerBuilder Validation', () => {
                 .registerScoped('UserService', ServiceWithOneDep, 'serviceWithNoDeps')
                 
                 // Interface-based
-                .registerSingletonInterface<ITestService, 'ITestService', typeof TestServiceImpl>('ITestService', TestServiceImpl, 'serviceWithNoDeps')
+                .registerSingletonInterface(TestServiceToken, TestServiceImpl, 'serviceWithNoDeps')
                 
                 // Factory-based
                 .registerSingletonFactory('Config', (provider) => {
@@ -222,7 +225,7 @@ describe('ContainerBuilder Validation', () => {
         it('should detect issues across different registration patterns', () => {
             builder
                 .registerSingleton('Logger', ServiceWithOneDep, 'MissingDep1')  // Missing dep
-                .registerSingletonInterface<ITestService, 'ITestService', typeof TestServiceImpl>('ITestService', TestServiceImpl, 'MissingDep2')  // Missing dep
+                .registerSingletonInterface(TestServiceToken, TestServiceImpl, 'MissingDep2')  // Missing dep
                 .registerSingletonFactory('Config', () => ({ env: 'test' }));  // Factory always valid
 
             const issues = builder.validate();
@@ -234,7 +237,7 @@ describe('ContainerBuilder Validation', () => {
         it('should handle complex interdependencies between different patterns', () => {
             builder
                 .registerSingleton('serviceWithNoDeps', ServiceWithNoDeps)
-                .registerSingletonInterface<ITestService, 'ITestService', typeof TestServiceImpl>('ITestService', TestServiceImpl, 'serviceWithNoDeps')
+                .registerSingletonInterface(TestServiceToken, TestServiceImpl, 'serviceWithNoDeps')
                 .registerScoped('ScopedService', ServiceWithOneDep, 'serviceWithNoDeps')
                 .registerSingletonFactory('FactoryService', (provider) => {
                     const base = provider.get('serviceWithNoDeps');

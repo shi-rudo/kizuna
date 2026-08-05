@@ -2,17 +2,16 @@
 "@shirudo/kizuna": major
 ---
 
-Type-check interface registration dependency keys against registered service
-types and implementation constructor parameter positions.
+Add reusable interface tokens that carry an interface type and one fixed string
+key. Use tokens to register and resolve interface implementations without
+repeating interface, key, and constructor type arguments.
 
-For dependency-aware interface registrations, require every public implementation
-constructor overload to return a service that is assignable to the explicit
-interface type.
+Replace string interface registration arguments with tokens. Create a token with
+`interfaceToken<Service>()("service")`, pass it to an interface registration
+method, and resolve it with `container.get(token)`.
 
-Add the implementation constructor as the third type argument when an interface
-registration has dependencies. For example, use
-`registerScopedInterface<Service, "service", typeof ServiceImplementation>(...)`.
+Type-check interface registration dependencies against registered service types
+and implementation constructor parameter positions.
 
-Keep the two-type-argument form for implementations without constructor
-dependencies. Calls without explicit type arguments infer the implementation
-type and check its dependencies.
+Require every public implementation constructor overload to return a service
+that is assignable to the token interface.
