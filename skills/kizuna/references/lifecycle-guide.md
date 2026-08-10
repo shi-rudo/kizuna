@@ -13,9 +13,12 @@ Every registration in Kizuna has one of three lifecycles. The lifecycle controls
 ## Singleton
 
 ```typescript
-.registerSingleton('logger', Logger)
-.registerSingletonInterface<ICache, 'cache'>('cache', RedisCache, 'logger')
-.registerSingletonFactory('config', () => loadConfig())
+const Cache = interfaceToken<ICache>()('cache');
+
+new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .registerSingletonInterface(Cache, RedisCache, 'logger')
+  .registerSingletonFactory('config', () => loadConfig())
 ```
 
 - Created on first `get()`, cached forever.
@@ -35,9 +38,12 @@ container.dispose(); // pool.dispose() is called automatically if it exists
 ## Scoped
 
 ```typescript
-.registerScoped('userService', UserService, 'logger')
-.registerScopedInterface<ITransaction, 'tx'>('tx', DbTransaction, 'pool')
-.registerScopedFactory('requestId', () => crypto.randomUUID())
+const Transaction = interfaceToken<ITransaction>()('tx');
+
+new ContainerBuilder()
+  .registerScoped('userService', UserService, 'logger')
+  .registerScopedInterface(Transaction, DbTransaction, 'pool')
+  .registerScopedFactory('requestId', () => crypto.randomUUID())
 ```
 
 - Created on first `get()` within each scope, cached for that scope.

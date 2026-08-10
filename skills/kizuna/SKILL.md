@@ -37,6 +37,8 @@ Kizuna is a zero-dependency, type-safe DI container for TypeScript. Services are
 
 ## Setup
 
+Use TypeScript 5.0 or newer.
+
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
 
@@ -69,10 +71,10 @@ const repo = container.get('userRepository'); // Type: UserRepository
 
 ### Register against an interface
 
-Use `registerSingletonInterface` only when you want the resolved type to be an abstraction different from the concrete class. At runtime, both methods do exactly the same thing — the difference is purely in the generic type parameter.
+Use `registerSingletonInterface` when the resolved type must be an abstraction. An interface token stores the service key and its TypeScript type.
 
 ```typescript
-import { ContainerBuilder } from '@shirudo/kizuna';
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
 
 interface IEmailService {
   send(to: string, body: string): Promise<void>;
@@ -83,12 +85,14 @@ class SmtpEmailService implements IEmailService {
   async send(to: string, body: string) { /* ... */ }
 }
 
+const EmailService = interfaceToken<IEmailService>()('emailService');
+
 const container = new ContainerBuilder()
   .registerSingleton('logger', Logger)
-  .registerSingletonInterface<IEmailService, 'emailService'>('emailService', SmtpEmailService, 'logger')
+  .registerSingletonInterface(EmailService, SmtpEmailService, 'logger')
   .build();
 
-const email = container.get('emailService'); // Type: IEmailService
+const email = container.get(EmailService); // Type: IEmailService
 ```
 
 ### Register a factory for config or conditional logic
@@ -395,20 +399,25 @@ Source: base-container-builder.ts
 Wrong:
 
 ```typescript
-// Logger IS the type you want — Interface variant adds nothing
-.registerSingletonInterface<Logger, 'logger'>('logger', ConsoleLogger)
+const LoggerService = interfaceToken<Logger>()('logger');
+new ContainerBuilder()
+  .registerSingletonInterface(LoggerService, ConsoleLogger)
 ```
 
 Correct:
 
 ```typescript
 // Use plain registerSingleton when resolved type = concrete class
-.registerSingleton('logger', ConsoleLogger)
+new ContainerBuilder()
+  .registerSingleton('logger', ConsoleLogger)
+
 // Use Interface ONLY to widen the resolved type to an abstraction
-.registerSingletonInterface<ILogger, 'logger'>('logger', ConsoleLogger)
+const LoggerService = interfaceToken<ILogger>()('logger');
+new ContainerBuilder()
+  .registerSingletonInterface(LoggerService, ConsoleLogger)
 ```
 
-The Interface variants differ only at the type level — they set the generic return type. At runtime, both do exactly the same thing.
+The interface variant stores the interface type in a token. Both variants use the same registration process at runtime.
 
 Source: container-builder.ts:138-147
 
@@ -513,11 +522,14 @@ Correct:
 
 ```typescript
 // All registration methods require a lifecycle prefix
-.registerSingletonInterface<IDatabase, 'db'>('db', PostgresDatabase, 'logger')
-.registerSingletonFactory('config', () => ({ port: 3000 }))
+const Database = interfaceToken<IDatabase>()('db');
+new ContainerBuilder()
+  .registerSingletonInterface(Database, PostgresDatabase, 'logger')
+  .registerSingletonFactory('config', () => ({ port: 3000 }))
 
 // Scopes are read-only — use scoped factories for per-request values
-.registerScopedFactory('requestId', () => crypto.randomUUID())
+new ContainerBuilder()
+  .registerScopedFactory('requestId', () => crypto.randomUUID())
 ```
 
 The examples and docs reference `registerInterface()`, `registerFactory()`, `registerInstance()`, and `scope.reset()` as planned features (ADR-003) that were never implemented.

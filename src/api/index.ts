@@ -8,7 +8,9 @@
  *
  * @example
  * ```typescript
- * import { ContainerBuilder } from '@shirudo/kizuna';
+ * import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
+ *
+ * const Database = interfaceToken<IDatabase>()('IDatabase');
  *
  * // The ultimate type-safe container - all patterns in one!
  * const container = new ContainerBuilder()
@@ -17,7 +19,7 @@
  *   .registerScoped('UserService', UserService, 'Logger')
  *   
  *   // Interface-based
- *   .registerSingletonInterface<IDatabase, 'IDatabase'>('IDatabase', DatabaseService, 'Logger')
+ *   .registerSingletonInterface(Database, DatabaseService, 'Logger')
  *   
  *   // Factory-based
  *   .registerSingletonFactory('Config', (provider) => {
@@ -27,7 +29,7 @@
  *   .build();
  *
  * const userService = container.get('UserService'); // Type: UserService ✅
- * const database = container.get('IDatabase');     // Type: IDatabase ✅  
+ * const database = container.get(Database);        // Type: IDatabase ✅
  * const config = container.get('Config');          // Type: { env: string; debug: boolean } ✅
  * ```
  *
@@ -36,6 +38,10 @@
 
 // The unified, fully type-safe container builder
 export { ContainerBuilder } from "./container-builder";
+
+// Type-safe interface tokens
+export { interfaceToken } from "./interface-token";
+export type { InterfaceToken } from "./interface-token";
 
 // Service provider (type-safe by design)
 export {

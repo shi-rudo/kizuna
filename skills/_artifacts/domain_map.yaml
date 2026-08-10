@@ -177,19 +177,23 @@ skills:
       - mistake: 'Using registerSingletonInterface when registerSingleton works'
         mechanism: >
           The word "Interface" in the method name attracts agents. But
-          registerSingletonInterface only differs at the type level — it sets the
-          resolved type to the generic parameter instead of the concrete class.
-          At runtime, both methods do exactly the same thing. Agents sprinkle
-          Interface variants everywhere "just to be safe."
+          registerSingletonInterface stores the abstraction in an interface
+          token. Both methods use the same registration process at runtime.
+          Agents use Interface variants everywhere "just to be safe."
         wrong_pattern: |
           // Unnecessary — Logger IS the resolved type you want
-          .registerSingletonInterface<Logger>('Logger', ConsoleLogger)
+          const LoggerService = interfaceToken<Logger>()('Logger')
+          new ContainerBuilder()
+            .registerSingletonInterface(LoggerService, ConsoleLogger)
         correct_pattern: |
           // Use Interface variant ONLY when you want the resolved type to be
           // an abstraction (interface) different from the concrete class
-          .registerSingleton('Logger', ConsoleLogger)
+          new ContainerBuilder()
+            .registerSingleton('Logger', ConsoleLogger)
           // OR if you explicitly want ILogger as the resolved type:
-          .registerSingletonInterface<ILogger>('Logger', ConsoleLogger)
+          const LoggerService = interfaceToken<ILogger>()('Logger')
+          new ContainerBuilder()
+            .registerSingletonInterface(LoggerService, ConsoleLogger)
         source: 'maintainer interview'
         priority: 'HIGH'
         status: 'active'
@@ -291,11 +295,14 @@ skills:
           scope.registerInstance('RequestId', requestId)
           scope.reset()
         correct_pattern: |
-          .registerSingletonInterface<IDatabase>('IDatabase', PostgreSQLDatabase, 'Logger')
-          .registerSingletonFactory('Config', (provider) => ({ ... }))
+          const Database = interfaceToken<IDatabase>()('IDatabase')
+          new ContainerBuilder()
+            .registerSingletonInterface(Database, PostgreSQLDatabase, 'Logger')
+            .registerSingletonFactory('Config', (provider) => ({ ... }))
           // registerInstance() and reset() do not exist on scopes
           // For request-specific data, register a scoped factory instead
-          .registerScopedFactory('RequestId', () => crypto.randomUUID())
+          new ContainerBuilder()
+            .registerScopedFactory('RequestId', () => crypto.randomUUID())
         source: 'examples/unified-container-example.ts:109,113; docs/concurrency-patterns.md:229,582'
         priority: 'HIGH'
         status: 'active'
