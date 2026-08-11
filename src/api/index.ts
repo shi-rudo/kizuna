@@ -3,7 +3,7 @@
  *
  * A lightweight, type-safe dependency injection container for TypeScript/JavaScript applications.
  * Supports singleton, scoped, and transient service lifecycles with automatic dependency resolution.
- * 
+ *
  * Features the unified ContainerBuilder with complete type safety and all registration patterns.
  *
  * @example
@@ -17,10 +17,10 @@
  *   // Constructor-based
  *   .registerSingleton('Logger', ConsoleLogger)
  *   .registerScoped('UserService', UserService, 'Logger')
- *   
+ *
  *   // Interface-based
  *   .registerSingletonInterface(Database, DatabaseService, 'Logger')
- *   
+ *
  *   // Factory-based
  *   .registerSingletonFactory('Config', (provider) => {
  *     const logger = provider.get('Logger'); // Type: ConsoleLogger
@@ -36,27 +36,11 @@
  * @packageDocumentation
  */
 
-// The unified, fully type-safe container builder
 export { ContainerBuilder } from "./container-builder";
-
-// Type-safe interface tokens
-export { interfaceToken } from "./interface-token";
+export type { TypeSafeServiceLocator } from "./contracts/interfaces";
 export type { InterfaceToken } from "./interface-token";
-
-// Service provider (type-safe by design)
+export { interfaceToken } from "./interface-token";
 export {
-    CircularDependencyError,
-    ServiceProvider,
-    ServiceProviderToken,
+	CircularDependencyError,
+	ServiceProviderToken,
 } from "./service-provider";
-
-// Contracts and interfaces
-export {
-    Container,
-    ServiceBuilder,
-    ServiceLocator,
-    TypeSafeServiceLocator,
-} from "./contracts/interfaces";
-
-// Type definitions
-export * from "./contracts/types";

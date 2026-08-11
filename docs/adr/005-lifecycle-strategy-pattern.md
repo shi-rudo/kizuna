@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-003 for the public registration API.
+
+This document is a historical design record. Kizuna uses three internal
+lifecycle strategies: singleton, scoped, and transient. The package does not
+export an extension point for custom lifecycle strategies.
 
 ## Context
 

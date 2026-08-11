@@ -6,7 +6,7 @@ description: >
   registerSingletonFactory, registerScoped, registerTransient, addSingleton,
   addScoped, addTransient, addSingletonFactory, addScopedFactory,
   addTransientFactory, build(), validate(), get(), getAll(), startScope(),
-  dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose, remove(),
+  dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose,
   getRegisteredServiceNames(), TypeSafeServiceLocator,
   disableStrictParameterValidation, CircularDependencyError.
   Activate when registering services, choosing lifecycles, managing request
@@ -244,7 +244,7 @@ await container.disposeAsync();
 
 **When sync `dispose()` is wrong:** if any instance's `dispose()` returns a Promise (DB pool teardown, file handle close, network connection drain), `dispose()` invokes it but does not await it. Rejections are logged via a `.catch` attached internally to surface them, but the cleanup may still be in flight when the next operation runs. Always use `disposeAsync()` (or `await using`) when services hold async resources.
 
-## Container Inspection & Modification
+## Container Inspection
 
 ```typescript
 const builder = new ContainerBuilder()
@@ -254,19 +254,13 @@ const builder = new ContainerBuilder()
 
 // Inspect registered services
 builder.getRegisteredServiceNames(); // ['logger', 'database', 'userService']
-
-// Remove a registration (before build)
-builder.remove('database'); // returns true
-builder.remove('nonExistent'); // returns false
-
-// Validate after removal — catches broken dependencies
-builder.validate();
-// ["Service 'userService' depends on unregistered service 'database'"]
+builder.isRegistered('database'); // true
+builder.count; // 3
 ```
 
-`remove()` works on both single-registration and multi-registration keys. It disposes the removed service wrappers and returns `false` if the key wasn't registered.
-
-Re-registering an existing `register*()` key throws (silent overwriting would contradict the inferred type registry). To replace a registration, call `remove(key)` first, then register again.
+Re-registering an existing `register*()` key throws. Create a new builder when
+you need a different registration set. This rule keeps the inferred registry in
+sync with runtime registrations.
 
 ## Common Mistakes
 
@@ -314,7 +308,10 @@ if (issues.length > 0) throw new Error(issues.join('\n'));
 const container = builder.build();
 ```
 
-`build()` creates a ServiceProvider without checking for missing dependencies, circular dependencies, or parameter mismatches. Errors surface at resolution time. Dependency cycles fail fast there: the first resolution touching a cycle throws a `CircularDependencyError` (exported) whose message and `.chain` property show the full path, e.g. `Circular dependency detected: a -> b -> a`.
+`build()` creates the service locator without checking for missing dependencies,
+circular dependencies, or parameter mismatches. Errors occur during resolution.
+The first resolution that touches a cycle throws `CircularDependencyError`. Its
+message and `chain` property show the full path.
 
 Source: container-builder.ts, service-provider.ts
 
@@ -479,7 +476,7 @@ The check is **auto-disabled when `NODE_ENV === "production"`** (or when `proces
 
 Source: `BaseContainerBuilder.validate()` in base-container-builder.ts
 
-### HIGH Importing the stale Factory<T> type
+### HIGH Importing internal factory types
 
 Wrong:
 
@@ -500,7 +497,8 @@ Correct:
 })
 ```
 
-`Factory<T>` in types.ts is leftover from the pre-unified API. It references `ServiceLocator` instead of `TypeSafeServiceLocator`, producing type errors. Let TypeScript infer the type from the registration method.
+The package root does not export `Factory`. Let TypeScript infer the type from
+the registration method. The inferred provider uses the current typed registry.
 
 Source: types.ts vs container-builder.ts factory signatures
 

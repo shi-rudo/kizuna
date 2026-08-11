@@ -29,7 +29,7 @@ A lightweight, zero-dependency, type-safe dependency injection container for Typ
 | 7 | Parameter name vs registration name mismatch | HIGH | maintainer interview; base-container-builder.ts:171-193 | -- |
 | 8 | Believing null factory return breaks caching (myth — code uses _initialized flag) | MEDIUM | singleton.ts:54,132; scoped.ts:68,150 | -- |
 | 9 | Using non-existent APIs from examples and docs | HIGH | examples/unified-container-example.ts; concurrency-patterns.md | -- |
-| 10 | Using the stale Factory<T> type alias | MEDIUM | types.ts:57 vs container-builder.ts | -- |
+| 10 | Importing internal factory helper types | MEDIUM | container-builder.ts | -- |
 | 11 | Assuming singleton dispose is a no-op (it now disposes correctly) | MEDIUM | singleton.ts:187-203 | -- |
 | 12 | Async factory returns Promise instead of resolved value | MEDIUM | maintainer interview; ADR-001 | -- |
 | 13 | startScope() is O(n) on total registrations | MEDIUM | maintainer interview; service-provider.ts:49-57 | -- |
@@ -61,7 +61,6 @@ No cross-references (single skill).
 | --- | --- | --- |
 | kizuna | Recommended scoping patterns for Next.js server components, route handlers, server actions | open |
 | kizuna | Recommended scoping patterns for TanStack Start loaders and actions | open |
-| kizuna | Should ServiceProvider self-registration be documented or is it internal? | open |
 | kizuna | Recommended pattern for container composition / module system | open |
 
 ## Recommended Skill File Structure

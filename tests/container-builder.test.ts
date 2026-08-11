@@ -313,17 +313,20 @@ describe('ContainerBuilder - Unified API', () => {
         });
 
         it('should handle transient factory registrations', () => {
+            let callCount = 0;
             const container = builder
-                .registerTransientFactory('Timestamp', () => Date.now())
+                .registerTransientFactory('Counter', () => ({
+                    call: ++callCount,
+                }))
                 .build();
 
-            const timestamp1 = container.get('Timestamp');
-            const timestamp2 = container.get('Timestamp');
+            const first = container.get('Counter');
+            const second = container.get('Counter');
 
-            expect(typeof timestamp1).toBe('number');
-            expect(typeof timestamp2).toBe('number');
-            // They might be the same if called too quickly, but should be separate instances
-            expect(timestamp1).toBeCloseTo(timestamp2, -1); // Within reasonable time range
+            expect(callCount).toBe(2);
+            expect(first).not.toBe(second);
+            expect(first.call).toBe(1);
+            expect(second.call).toBe(2);
         });
     });
 
@@ -397,19 +400,6 @@ describe('ContainerBuilder - Unified API', () => {
 
             builder.registerSingleton('TestService', TestService);
             expect(builder.isRegistered('TestService')).toBe(true);
-        });
-
-        it('should clear all registrations', () => {
-            builder
-                .registerSingleton('Service1', TestService)
-                .registerScoped('Service2', ServiceWithDependency, 'Service1');
-
-            expect(builder.count).toBe(2);
-
-            builder.clear();
-            expect(builder.count).toBe(0);
-            expect(builder.isRegistered('Service1')).toBe(false);
-            expect(builder.isRegistered('Service2')).toBe(false);
         });
 
         it('should prevent building twice', () => {

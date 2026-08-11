@@ -1,4 +1,4 @@
-import type { Container } from '../../api/contracts/interfaces';
+import type { ServiceLifecycle } from '../contracts';
 import { CircularDependencyError } from '../errors';
 import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose';
 
@@ -46,9 +46,9 @@ import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose
  * scope2.dispose(); // ctx2 is disposed
  * ```
  * 
- * @implements {Container}
+ * @implements {ServiceLifecycle}
  */
-export class ScopedLifecycle implements Container {
+export class ScopedLifecycle implements ServiceLifecycle {
     /**
      * The scoped instance.
      * @private

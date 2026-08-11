@@ -41,13 +41,6 @@ describe('Duplicate single-registration keys', () => {
         );
     });
 
-    it('allows re-registering a key after remove()', () => {
-        const builder = new ContainerBuilder().registerSingleton('svc', ServiceA);
-        builder.remove('svc');
-
-        expect(() => builder.registerSingleton('svc', ServiceB)).not.toThrow();
-    });
-
     it('still allows appending to the same key via add*', () => {
         const builder = new ContainerBuilder()
             .addSingleton('group', ServiceA)

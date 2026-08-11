@@ -40,16 +40,11 @@ export abstract class BaseContainerBuilder {
 
     /**
      * Checks if a service is registered.
-     * @template T - The service type
-     * @param {string | T} serviceName - The name of the service or its constructor
+     * @param {string} serviceName - The registered string key
      * @returns {boolean} True if the service is registered, false otherwise
      */
-    isRegistered<T extends new (...args: any[]) => any>(
-        serviceName: string | T,
-    ): boolean {
-        const name =
-            typeof serviceName === "string" ? serviceName : serviceName.name;
-        return this.registrationNames.has(name);
+    isRegistered(serviceName: string): boolean {
+        return this.registrationNames.has(serviceName);
     }
 
     /**
@@ -82,79 +77,6 @@ export abstract class BaseContainerBuilder {
     disableStrictParameterValidation(): this {
         this.strictParameterValidation = false;
         return this;
-    }
-
-    /**
-     * Removes a service registration.
-     * @template T - The service type
-     * @param {string | T} serviceName - The name of the service or its constructor
-     * @returns {boolean} True if the service was removed, false if it wasn't registered
-     */
-    remove<T extends new (...args: any[]) => any>(
-        serviceName: string | T,
-    ): boolean {
-        this.ensureNotBuilt();
-
-        const name =
-            typeof serviceName === "string" ? serviceName : serviceName.name;
-
-        if (!this.registrationNames.has(name)) {
-            return false;
-        }
-
-        try {
-            // Remove single-registration
-            const resolver = this.registrations.get(name);
-            resolver?.dispose?.();
-            this.registrations.delete(name);
-
-            // Remove multi-registrations
-            const multiResolvers = this.multiRegistrations.get(name);
-            if (multiResolvers) {
-                for (const r of multiResolvers) {
-                    r.dispose?.();
-                }
-                this.multiRegistrations.delete(name);
-            }
-
-            this.registrationNames.delete(name);
-            return true;
-        } catch (error) {
-            this.logError(`Error removing service '${name}':`, error);
-            return false;
-        }
-    }
-
-    /**
-     * Clears all service registrations.
-     * @throws {Error} If the service collection has already been built
-     */
-    clear(): void {
-        this.ensureNotBuilt();
-
-        // Dispose of all single-registration resolvers
-        this.registrations.forEach((resolver) => {
-            try {
-                resolver.dispose?.();
-            } catch (error) {
-                this.logError("Error disposing resolver:", error);
-            }
-        });
-
-        // Dispose of all multi-registration resolvers
-        this.multiRegistrations.forEach((resolvers) => {
-            for (const resolver of resolvers) {
-                try {
-                    resolver.dispose?.();
-                } catch (error) {
-                    this.logError("Error disposing resolver:", error);
-                }
-            }
-        });
-
-        this.registrations.clear();
-        this.multiRegistrations.clear();
-        this.registrationNames.clear();
     }
 
     /**
@@ -367,8 +289,7 @@ export abstract class BaseContainerBuilder {
 
         if (this.registrationNames.has(serviceName)) {
             throw new Error(
-                `Service '${serviceName}' is already registered. ` +
-                `Silently overwriting would contradict the type registry — remove() it first or use a different key.`,
+                `Service '${serviceName}' is already registered. Use a new builder or a different key.`,
             );
         }
     }

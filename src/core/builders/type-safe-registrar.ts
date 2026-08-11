@@ -1,12 +1,17 @@
-import type { Container, ServiceBuilder } from "../../api/contracts/interfaces";
-import type { Factory, TypeSafeRegistrar } from "../../api/contracts/types";
+import type {
+    Factory,
+    ServiceRegistry,
+    TypeSafeRegistrar,
+} from "../../api/contracts/types";
+import type { ServiceBuilder, ServiceLifecycle } from "../contracts";
 import { ServiceWrapper } from "../services/service-wrapper";
 
 /**
  * Implementation of TypeSafeRegistrar that creates ServiceWrapper instances.
  * This replaces the complex ServiceBuilderFactory for the new type-safe API.
  */
-export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBuilder {
+export class TypeSafeRegistrarImpl<TRegistry extends ServiceRegistry, T>
+    implements TypeSafeRegistrar<TRegistry, T>, ServiceBuilder {
     private serviceName: string;
     private factory?: (...args: any[]) => any;
     private dependencies: string[] = [];
@@ -17,15 +22,15 @@ export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBu
     }
 
     useType<TCtor extends new (...args: any[]) => T>(
-        constructor: TCtor,
+        constructorType: TCtor,
         ...dependencies: string[]
     ): void {
-        this.constructorFn = constructor;
+        this.constructorFn = constructorType;
         this.dependencies = dependencies;
-        this.factory = (...args: any[]) => new constructor(...args);
+        this.factory = (...args: any[]) => new constructorType(...args);
     }
 
-    useFactory(factory: Factory<T>): void {
+    useFactory(factory: Factory<TRegistry, T>): void {
         this.factory = factory;
         this.dependencies = [];
     }
@@ -34,7 +39,7 @@ export class TypeSafeRegistrarImpl<T> implements TypeSafeRegistrar<T>, ServiceBu
         return this.constructorFn;
     }
 
-    build(lifecycleManager: Container): ServiceWrapper {
+    build(lifecycleManager: ServiceLifecycle): ServiceWrapper {
         if (!this.factory) {
             throw new Error(`No factory configured for service '${this.serviceName}'`);
         }

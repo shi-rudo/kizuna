@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted for the scope-replication decision.
+
+The code examples in this document are historical. They use internal type names
+and do not define the current package API. `startScope()` returns a
+`TypeSafeServiceLocator<TRegistry>` through the public API.
 
 ## Context
 

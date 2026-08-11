@@ -1,13 +1,11 @@
 import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar";
+import type { ServiceLifecycle } from "../core/contracts";
 import { ScopedLifecycle } from "../core/scopes/scoped";
 import { SingletonLifecycle } from "../core/scopes/singleton";
 import { TransientLifecycle } from "../core/scopes/transient";
 import type { ServiceWrapper } from "../core/services/service-wrapper";
 import { BaseContainerBuilder } from "./base-container-builder";
-import type {
-    Container,
-    TypeSafeServiceLocator,
-} from "./contracts/interfaces";
+import type { TypeSafeServiceLocator } from "./contracts/interfaces";
 import type { AddToRegistry, Factory, ServiceRegistry, TypeSafeRegistrar } from "./contracts/types";
 import type {
     InterfaceToken,
@@ -154,7 +152,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         serviceType: TCtor,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
     ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>> {
-        const configurator = (registrar: TypeSafeRegistrar<ConstructedService<TCtor>>) => {
+        const configurator = (registrar: TypeSafeRegistrar<TRegistry, ConstructedService<TCtor>>) => {
             registrar.useType(serviceType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new SingletonLifecycle());
@@ -176,7 +174,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         serviceType: TCtor,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
     ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>> {
-        const configurator = (registrar: TypeSafeRegistrar<ConstructedService<TCtor>>) => {
+        const configurator = (registrar: TypeSafeRegistrar<TRegistry, ConstructedService<TCtor>>) => {
             registrar.useType(serviceType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new ScopedLifecycle());
@@ -198,7 +196,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         serviceType: TCtor,
         ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
     ): ContainerBuilder<TRegistry & Record<K, ConstructedService<TCtor>>> {
-        const configurator = (registrar: TypeSafeRegistrar<ConstructedService<TCtor>>) => {
+        const configurator = (registrar: TypeSafeRegistrar<TRegistry, ConstructedService<TCtor>>) => {
             registrar.useType(serviceType, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new TransientLifecycle());
@@ -233,7 +231,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
             Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>
     > {
         const configurator = (
-            registrar: TypeSafeRegistrar<InterfaceTokenService<TToken>>,
+            registrar: TypeSafeRegistrar<TRegistry, InterfaceTokenService<TToken>>,
         ) => {
             registrar.useType(implementationType, ...dependencies);
         };
@@ -272,7 +270,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
             Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>
     > {
         const configurator = (
-            registrar: TypeSafeRegistrar<InterfaceTokenService<TToken>>,
+            registrar: TypeSafeRegistrar<TRegistry, InterfaceTokenService<TToken>>,
         ) => {
             registrar.useType(implementationType, ...dependencies);
         };
@@ -311,7 +309,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
             Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>
     > {
         const configurator = (
-            registrar: TypeSafeRegistrar<InterfaceTokenService<TToken>>,
+            registrar: TypeSafeRegistrar<TRegistry, InterfaceTokenService<TToken>>,
         ) => {
             registrar.useType(implementationType, ...dependencies);
         };
@@ -339,11 +337,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @returns A new ContainerBuilder with the updated registry type
      */
     registerSingletonFactory<K extends string, T>(
-        key: K,
-        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+        key: LiteralServiceKey<K>,
+        factory: Factory<TRegistry, T>
     ): ContainerBuilder<TRegistry & Record<K, T>> {
-        const configurator = (registrar: TypeSafeRegistrar<T>) => {
-            registrar.useFactory(factory as Factory<T>);
+        const configurator = (registrar: TypeSafeRegistrar<TRegistry, T>) => {
+            registrar.useFactory(factory);
         };
         return this.registerTypeSafe(key, configurator, new SingletonLifecycle());
     }
@@ -358,11 +356,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @returns A new ContainerBuilder with the updated registry type
      */
     registerScopedFactory<K extends string, T>(
-        key: K,
-        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+        key: LiteralServiceKey<K>,
+        factory: Factory<TRegistry, T>
     ): ContainerBuilder<TRegistry & Record<K, T>> {
-        const configurator = (registrar: TypeSafeRegistrar<T>) => {
-            registrar.useFactory(factory as Factory<T>);
+        const configurator = (registrar: TypeSafeRegistrar<TRegistry, T>) => {
+            registrar.useFactory(factory);
         };
         return this.registerTypeSafe(key, configurator, new ScopedLifecycle());
     }
@@ -377,11 +375,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @returns A new ContainerBuilder with the updated registry type
      */
     registerTransientFactory<K extends string, T>(
-        key: K,
-        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+        key: LiteralServiceKey<K>,
+        factory: Factory<TRegistry, T>
     ): ContainerBuilder<TRegistry & Record<K, T>> {
-        const configurator = (registrar: TypeSafeRegistrar<T>) => {
-            registrar.useFactory(factory as Factory<T>);
+        const configurator = (registrar: TypeSafeRegistrar<TRegistry, T>) => {
+            registrar.useFactory(factory);
         };
         return this.registerTypeSafe(key, configurator, new TransientLifecycle());
     }
@@ -480,10 +478,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @returns A new ContainerBuilder with the updated registry type
      */
     addSingletonFactory<K extends string, T>(
-        key: K,
-        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+        key: LiteralServiceKey<K>,
+        factory: Factory<TRegistry, T>
     ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
-        return this.addFactoryTypeSafe(key, factory, new SingletonLifecycle());
+        return this.addFactoryTypeSafe<K, T>(key, factory, new SingletonLifecycle());
     }
 
     /**
@@ -498,10 +496,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @returns A new ContainerBuilder with the updated registry type
      */
     addScopedFactory<K extends string, T>(
-        key: K,
-        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+        key: LiteralServiceKey<K>,
+        factory: Factory<TRegistry, T>
     ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
-        return this.addFactoryTypeSafe(key, factory, new ScopedLifecycle());
+        return this.addFactoryTypeSafe<K, T>(key, factory, new ScopedLifecycle());
     }
 
     /**
@@ -516,10 +514,10 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @returns A new ContainerBuilder with the updated registry type
      */
     addTransientFactory<K extends string, T>(
-        key: K,
-        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
+        key: LiteralServiceKey<K>,
+        factory: Factory<TRegistry, T>
     ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
-        return this.addFactoryTypeSafe(key, factory, new TransientLifecycle());
+        return this.addFactoryTypeSafe<K, T>(key, factory, new TransientLifecycle());
     }
 
     // =================
@@ -570,12 +568,12 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      */
     private registerTypeSafe<K extends string, T>(
         key: K,
-        configurator: (registrar: TypeSafeRegistrar<T>) => void,
-        lifecycle: Container
+        configurator: (registrar: TypeSafeRegistrar<TRegistry, T>) => void,
+        lifecycle: ServiceLifecycle
     ): ContainerBuilder<TRegistry & Record<K, T>> {
         this.ensureNotBuilt();
 
-        const registrar = new TypeSafeRegistrarImpl<T>(key);
+        const registrar = new TypeSafeRegistrarImpl<TRegistry, T>(key);
         configurator(registrar);
 
         const serviceWrapper = registrar.build(lifecycle);
@@ -594,11 +592,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         key: K,
         serviceType: new (...args: any[]) => T,
         dependencies: string[],
-        lifecycle: Container
+        lifecycle: ServiceLifecycle
     ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
         this.ensureNotBuilt();
 
-        const registrar = new TypeSafeRegistrarImpl<T>(key);
+        const registrar = new TypeSafeRegistrarImpl<TRegistry, T>(key);
         registrar.useType(serviceType, ...dependencies);
         const serviceWrapper = registrar.build(lifecycle);
         this.addMultiService(key, serviceWrapper);
@@ -612,13 +610,13 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      */
     private addFactoryTypeSafe<K extends string, T>(
         key: K,
-        factory: (provider: TypeSafeServiceLocator<TRegistry>) => T,
-        lifecycle: Container
+        factory: Factory<TRegistry, T>,
+        lifecycle: ServiceLifecycle
     ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
         this.ensureNotBuilt();
 
-        const registrar = new TypeSafeRegistrarImpl<T>(key);
-        registrar.useFactory(factory as Factory<T>);
+        const registrar = new TypeSafeRegistrarImpl<TRegistry, T>(key);
+        registrar.useFactory(factory);
         const serviceWrapper = registrar.build(lifecycle);
         this.addMultiService(key, serviceWrapper);
 

@@ -4,7 +4,7 @@
  * Tests for registering multiple implementations under one key
  * and resolving them as arrays via getAll() or get().
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ContainerBuilder } from '../src/api/container-builder';
 
 // Test dummies
@@ -313,15 +313,6 @@ describe('Multi-Registration', () => {
             expect(builder.isRegistered('handlers')).toBe(true);
         });
 
-        it('should clear multi-registrations', () => {
-            const builder = new ContainerBuilder()
-                .addSingleton('handlers', HandlerA)
-                .addSingleton('handlers', HandlerB);
-
-            builder.clear();
-            expect(builder.count).toBe(0);
-            expect(builder.isRegistered('handlers')).toBe(false);
-        });
     });
 
     describe('scope lifecycle', () => {
@@ -601,36 +592,6 @@ describe('Multi-Registration', () => {
             expect(handlers[0]).toBeInstanceOf(HandlerC);
             expect(handlers[1]).toBeInstanceOf(HandlerA);
             expect(handlers[2]).toBeInstanceOf(HandlerB);
-        });
-    });
-
-    describe('remove() on multi-key', () => {
-        it('should remove multi-registration and clean up completely', () => {
-            const builder = new ContainerBuilder()
-                .addSingleton('handlers', HandlerA)
-                .addSingleton('handlers', HandlerB);
-
-            expect(builder.isRegistered('handlers')).toBe(true);
-
-            const removed = builder.remove('handlers');
-            expect(removed).toBe(true);
-            expect(builder.isRegistered('handlers')).toBe(false);
-            expect(builder.count).toBe(0);
-        });
-
-        it('should allow re-registration after remove of multi-key', () => {
-            const builder = new ContainerBuilder()
-                .addSingleton('handlers', HandlerA);
-
-            builder.remove('handlers');
-
-            // Should be able to register as single after removing multi
-            const container = builder
-                .registerSingleton('handlers', HandlerC)
-                .build();
-
-            const handler = container.get('handlers');
-            expect(handler).toBeInstanceOf(HandlerC);
         });
     });
 

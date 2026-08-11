@@ -1,4 +1,4 @@
-import type { Container } from '../../api/contracts/interfaces';
+import type { ServiceLifecycle } from '../contracts';
 import { CircularDependencyError } from '../errors';
 import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose';
 
@@ -40,9 +40,9 @@ import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose
  * console.log(db1 === db3 && db3 === db4); // true
  * ```
  *
- * @implements {Container}
+ * @implements {ServiceLifecycle}
  */
-export class SingletonLifecycle implements Container {
+export class SingletonLifecycle implements ServiceLifecycle {
     /**
      * The singleton instance.
      * @private

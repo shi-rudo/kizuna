@@ -21,9 +21,8 @@ skills:
       registerSingletonFactory, registerScoped, registerTransient, addSingleton,
       addScoped, addTransient, addSingletonFactory, addScopedFactory,
       addTransientFactory, build(), validate(), get(), getAll(), startScope(),
-      dispose(), remove(), getRegisteredServiceNames(), TypeSafeServiceLocator,
-      SingletonLifecycle, ScopedLifecycle,
-      TransientLifecycle, disableStrictParameterValidation. Activate when
+      dispose(), getRegisteredServiceNames(), TypeSafeServiceLocator,
+      disableStrictParameterValidation. Activate when
       registering services, choosing lifecycles, managing request scopes,
       registering multiple implementations under one key, debugging validation
       errors, testing with mock containers, or integrating with web frameworks.

@@ -42,8 +42,12 @@ jobs:
           pnpm add "./$PKG_FILE"
 
       - name: Create test file
+        run: cp -f tests/fixtures/package-consumer.ts test-app/src/test.ts
+
+      - name: Check packed runtime exports
         run: |
-          echo "import { ContainerBuilder } from '@shirudo/kizuna'; console.log(new ContainerBuilder());" > test-app/src/test.ts
+          cd test-app
+          node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['CircularDependencyError','ContainerBuilder','ServiceProviderToken','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
 
       - name: Build test app
         run: cd test-app && pnpm run build

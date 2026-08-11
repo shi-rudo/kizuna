@@ -56,7 +56,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     get<K extends keyof TRegistry>(
         key: K extends InterfaceToken<unknown, string> ? never : K,
     ): TRegistry[K];
-    get(token: typeof ServiceProviderToken): ServiceProvider<TRegistry>;
+    get(token: typeof ServiceProviderToken): TypeSafeServiceLocator<TRegistry>;
     get(keyOrType: keyof TRegistry | typeof ServiceProviderToken): unknown {
         this.ensureNotDisposed();
 

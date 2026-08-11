@@ -2,21 +2,10 @@
 
 ## build() does NOT validate
 
-This is the single most important fact about Kizuna. The `build()` method creates a `ServiceProvider` without any checks:
+The `build()` method creates the service locator without checks:
 
-```typescript
-// container-builder.ts:392-407
-build(): TypeSafeServiceLocator<TRegistry> {
-    this.ensureNotBuilt();
-    this.markAsBuilt();
-    if (this.registrations.size === 0 && this.multiRegistrations.size === 0) {
-        this.logWarning("Building ServiceProvider with no registered services");
-    }
-    const registrationsObject = Object.fromEntries(this.registrations);
-    const multiRegistrationsObject = ...;
-    return new ServiceProvider<TRegistry>(registrationsObject, multiRegistrationsObject);
-}
-```
+The concrete provider is internal. The public `build()` return type is
+`TypeSafeServiceLocator<TRegistry>`.
 
 No call to `validate()`. No missing dependency check. No circular dependency check. No parameter name check. Errors surface at resolution time when a request hits the wrong code path.
 
@@ -46,7 +35,7 @@ const container = builder.build();
 ## What validate() does NOT check
 
 - **Factory dependencies** — dependencies resolved inside factories are invisible.
-- **Runtime resolution errors** — factory throws, async factory returns Promise.
+- **Runtime resolution errors** — a factory throws or a Promise value rejects.
 - **add*/register* key conflicts** — these are caught at registration time, not by validate().
 
 ## Error types and debugging
