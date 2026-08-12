@@ -114,7 +114,15 @@ Both `SingletonLifecycle` and `ScopedLifecycle` use a boolean `_initialized` fla
 Two disposal APIs on every lifecycle and on the container:
 
 - `dispose()` — synchronous. Calls each instance's `dispose()` without awaiting Promises. Rejections from Promise-returning `dispose` are logged via a `.catch` attached internally, but not awaited.
-- `disposeAsync()` — awaits service-owned async cleanup. Runs handlers in parallel via `Promise.allSettled`.
+- `disposeAsync()` — awaits service-owned async cleanup. It waits for all consumers before it starts dependency cleanup.
+
+Both APIs process consumers before their declared dependencies. `disposeAsync()` starts a dependency after all its consumers complete cleanup.
+
+Independent cleanup can run in parallel. A slow, unrelated service does not delay dependency cleanup in another graph branch.
+
+This order includes all services under a multi-registration key. Services in the same disposal layer keep their registration order.
+
+Factory lookups do not affect disposal order because factories do not declare dependency keys.
 
 Both are idempotent (second call is a no-op). All check `_isDisposed` before `_factory` in `getInstance()`, so after disposal you always get a clear "disposed" error, not a misleading "no factory" error.
 

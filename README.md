@@ -411,7 +411,7 @@ await withTransaction(async (txScope) => {
 
 ### 🧹 **Async Disposal**
 
-When services hold async resources (DB pools, file handles, network sockets), use `disposeAsync()` — the sync `dispose()` cannot await Promise-returning dispose handlers and any rejection is logged but lost.
+Use `disposeAsync()` for services that hold asynchronous resources. The sync `dispose()` method cannot wait for Promise-based cleanup.
 
 ```typescript
 class DatabasePool {
@@ -427,7 +427,7 @@ const container = new ContainerBuilder()
 // Sync — fine for purely synchronous services
 container.dispose();
 
-// Async — awaits each service's dispose, runs them in parallel
+// Async — waits for consumer cleanup before dependency cleanup
 await container.disposeAsync();
 
 // TC39 explicit resource management
@@ -437,7 +437,15 @@ await container.disposeAsync();
 } // scope.disposeAsync() called automatically at block exit
 ```
 
-Services may implement either `dispose()` (sync or returning a Promise) or `[Symbol.asyncDispose]()`. Kizuna prefers `Symbol.asyncDispose` → `Symbol.dispose` → `dispose()` when calling cleanup.
+Services can implement `dispose()` or `[Symbol.asyncDispose]()`. Kizuna uses `Symbol.asyncDispose` before `Symbol.dispose` and `dispose()` for asynchronous cleanup.
+
+`dispose()` invokes consumer cleanup before dependency cleanup. It cannot wait for asynchronous consumer cleanup.
+
+`disposeAsync()` waits for all consumer cleanup before it starts dependency cleanup. It runs services without dependency links in parallel.
+
+This order includes all services under a multi-registration key. Services in the same disposal layer keep their registration order.
+
+Factory registrations do not declare dependency keys. Thus, service lookups inside a factory do not affect the disposal order.
 
 ## 🏗️ Advanced Patterns
 

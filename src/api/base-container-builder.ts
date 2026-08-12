@@ -34,6 +34,7 @@ const isDevelopment = (): boolean => {
 export abstract class BaseContainerBuilder {
     protected readonly registrations: Map<string, ServiceWrapper> = new Map();
     protected readonly multiRegistrations: Map<string, ServiceWrapper[]> = new Map();
+    protected readonly registrationOrder: ServiceWrapper[] = [];
     protected readonly registrationNames: Set<string> = new Set();
     protected isBuilt: boolean = false;
     protected strictParameterValidation: boolean = true;
@@ -317,6 +318,7 @@ export abstract class BaseContainerBuilder {
      */
     protected registerService(serviceName: string, resolver: ServiceWrapper): void {
         this.registrations.set(serviceName, resolver);
+        this.registrationOrder.push(resolver);
         this.registrationNames.add(serviceName);
     }
 
@@ -343,6 +345,7 @@ export abstract class BaseContainerBuilder {
         } else {
             this.multiRegistrations.set(serviceName, [resolver]);
         }
+        this.registrationOrder.push(resolver);
         this.registrationNames.add(serviceName);
     }
 

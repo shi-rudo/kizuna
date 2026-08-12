@@ -198,7 +198,13 @@ const issues = builder.validate();
 
 Two disposal APIs:
 - `container.dispose()` — synchronous. Invokes each instance's sync dispose hook (see priority below) without awaiting Promises.
-- `container.disposeAsync()` — awaits service-owned async cleanup. Runs handlers in parallel via `Promise.allSettled`.
+- `container.disposeAsync()` — awaits service-owned async cleanup. Waits for all consumers before it starts dependency cleanup.
+
+Both APIs process consumers before their declared dependencies. Services in the same disposal layer keep registration order.
+
+Independent cleanup can run in parallel during `disposeAsync()`.
+
+Multi-registration keys include all services under that key. Factory lookups do not affect disposal order because factories do not declare dependency keys.
 
 Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
 
@@ -223,7 +229,7 @@ const pool = container.get('dbPool');
 // Option A — Sync. Fine only for purely-synchronous services.
 container.dispose();
 
-// Option B — Async. Awaits each service's dispose in parallel.
+// Option B — Async. Waits for consumers before their dependencies.
 //            Use this whenever any service has async cleanup.
 await container.disposeAsync();
 

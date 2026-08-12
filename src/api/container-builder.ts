@@ -555,7 +555,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
             multiRegistrationsObject[key] = [...wrappers];
         });
 
-        return new ServiceProvider<TRegistry>(registrationsObject, multiRegistrationsObject);
+        return new ServiceProvider<TRegistry>(
+            registrationsObject,
+            multiRegistrationsObject,
+            this.registrationOrder,
+        );
     }
 
     // =================

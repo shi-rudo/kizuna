@@ -342,6 +342,7 @@ async function bootstrap() {
 - **Singleton instances:** Disposed only when the **root container** is disposed (not when child scopes are disposed). If the singleton instance has a `[Symbol.dispose]` or `dispose()` method, it is called automatically.
 - **Transient instances:** Not tracked. The lifecycle holds no references.
 - **Multi-registrations:** Each implementation follows its own lifecycle's disposal rules.
+- **Dependency order:** The container cleans consumers before their declared dependencies. Async cleanup starts a dependency after all its consumers complete cleanup.
 
 Always dispose scopes. Undisposed scopes leak whatever resources scoped services hold (connections, file handles, transactions).
 
