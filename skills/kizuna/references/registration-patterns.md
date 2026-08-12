@@ -143,6 +143,8 @@ loggers.forEach(l => l.log('Hello'));
 
 All methods return a new `ContainerBuilder` with an updated type registry, enabling chained registration with cumulative type inference.
 
-## The Factory<T> type is stale
+## Factory types are inferred
 
-`types.ts` exports `Factory<T>` as `(serviceProvider: ServiceLocator) => T`. The actual factory parameter type on `ContainerBuilder` is `(provider: TypeSafeServiceLocator<TRegistry>) => T`. Do not import or use `Factory<T>` — let TypeScript infer the type from the registration method.
+The package root does not export a factory helper type. Let TypeScript infer the
+type from the registration method. The provider parameter uses the registry that
+exists at that point in the builder chain.

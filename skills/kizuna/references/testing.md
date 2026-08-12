@@ -71,30 +71,28 @@ describe('publisher', () => {
 });
 ```
 
-## Override a single registration
+## Select a test registration
 
-Build a helper that creates the production container but swaps one service.
+Use a composition helper that selects the service before it creates the builder.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
 
-function createContainerWithOverride<T>(
-  key: string,
-  mockFactory: () => T,
-) {
-  const builder = new ContainerBuilder()
-    .registerSingleton('logger', Logger)
-    .registerSingleton('database', DatabaseService, 'logger')
-    .registerScoped('userService', UserService, 'database', 'logger');
+interface Database {
+  findUser(id: string): { id: string; name: string } | undefined;
+}
 
-  // Override: re-registering an existing key throws, so remove it first
-  builder.remove(key);
-  return builder.registerSingletonFactory(key, mockFactory as any).build();
+function createContainer(databaseFactory: () => Database) {
+  return new ContainerBuilder()
+    .registerSingleton('logger', Logger)
+    .registerSingletonFactory('database', databaseFactory)
+    .registerScoped('userService', UserService, 'database', 'logger')
+    .build();
 }
 
 describe('UserService with mock database', () => {
   it('uses the mock', () => {
-    const container = createContainerWithOverride('database', () => ({
+    const container = createContainer(() => ({
       findUser: (id: string) => ({ id, name: 'Test User' }),
     }));
 
@@ -106,7 +104,8 @@ describe('UserService with mock database', () => {
 });
 ```
 
-Re-registering an existing key throws — `remove(key)` followed by a fresh registration is the supported way to swap a single dependency for testing.
+Re-registering an existing key throws. A separate builder keeps the runtime
+registrations equal to the inferred registry.
 
 ## Test scoped lifecycle isolation
 
@@ -277,7 +276,7 @@ describe('Multi-registration', () => {
 });
 ```
 
-## Test container inspection with getRegisteredServiceNames and remove
+## Test container inspection
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -292,16 +291,14 @@ describe('Container inspection', () => {
     expect(builder.getRegisteredServiceNames()).toEqual(['logger', 'userService']);
   });
 
-  it('removes a registration and validates', () => {
+  it('reports its registration state', () => {
     const builder = new ContainerBuilder()
       .registerSingleton('logger', Logger)
       .registerScoped('userService', UserService, 'logger');
 
-    expect(builder.remove('logger')).toBe(true);
-    expect(builder.remove('nonExistent')).toBe(false);
-
-    const issues = builder.validate();
-    expect(issues.some(i => i.includes("'logger'"))).toBe(true);
+    expect(builder.isRegistered('logger')).toBe(true);
+    expect(builder.isRegistered('missing')).toBe(false);
+    expect(builder.count).toBe(2);
   });
 });
 ```

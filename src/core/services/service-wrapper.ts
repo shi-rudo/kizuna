@@ -1,4 +1,4 @@
-import type { Container } from '../../api/contracts/interfaces';
+import type { ServiceLifecycle } from '../contracts';
 import { ScopedLifecycle } from '../scopes/scoped';
 import { SingletonLifecycle } from '../scopes/singleton';
 import { TransientLifecycle } from '../scopes/transient';
@@ -16,12 +16,12 @@ export type ServiceLifetime = 'singleton' | 'scoped' | 'transient' | 'unknown';
  */
 export class ServiceWrapper {
     private readonly _name: string;
-    private _lifecycle: Container | null;
+    private _lifecycle: ServiceLifecycle | null;
     private _dependencies: readonly string[];
     private _constructorFn?: new (...args: any[]) => any;
     private _ownsLifecycle: boolean;
 
-    constructor(name: string, lifecycle: Container, dependencies: string[], constructorFn?: new (...args: any[]) => any, ownsLifecycle = true) {
+    constructor(name: string, lifecycle: ServiceLifecycle, dependencies: string[], constructorFn?: new (...args: any[]) => any, ownsLifecycle = true) {
         this._name = name;
         this._lifecycle = lifecycle;
         this._dependencies = Object.freeze([...dependencies]); // Immutable copy
@@ -135,7 +135,7 @@ export class ServiceWrapper {
 
     /**
      * Classifies the lifetime of the underlying lifecycle manager.
-     * Custom Container implementations report 'unknown'.
+     * Custom lifecycle implementations report 'unknown'.
      * @returns The lifetime classification
      */
     getLifetime(): ServiceLifetime {

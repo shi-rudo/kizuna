@@ -335,19 +335,11 @@ describe('ContainerBuilder Validation', () => {
             // With strict validation enabled by default, still won't pass because parameter name is 'serviceWithNoDeps' but dependency name is 'MissingService'
             expect(builder.validate().length).toBeGreaterThan(0);
             
-            // Fix by using correct parameter name
-            builder.clear();
-            builder.registerSingleton('serviceWithOneDep', ServiceWithOneDep, 'serviceWithNoDeps');
-            builder.registerSingleton('serviceWithNoDeps', ServiceWithNoDeps);
-            expect(builder.validate()).toEqual([]);
-        });
-
-        it('should handle validation after clearing services', () => {
-            builder.registerSingleton('Service', ServiceWithOneDep, 'MissingDep');
-            expect(builder.validate().length).toBeGreaterThan(0);
-
-            builder.clear();
-            expect(builder.validate()).toEqual([]); // No services, no issues
+            // A new builder provides a clean, type-safe configuration.
+            const validBuilder = new ContainerBuilder()
+                .registerSingleton('serviceWithNoDeps', ServiceWithNoDeps)
+                .registerSingleton('serviceWithOneDep', ServiceWithOneDep, 'serviceWithNoDeps');
+            expect(validBuilder.validate()).toEqual([]);
         });
 
         it('should handle validation of empty container', () => {
@@ -356,33 +348,25 @@ describe('ContainerBuilder Validation', () => {
 
         it('should prevent validation of built containers from being modified', () => {
             builder.registerSingleton('Service', ServiceWithNoDeps);
-            const container = builder.build();
+            builder.build();
 
             expect(() => builder.registerSingleton('Another', ServiceWithNoDeps)).toThrow();
             // Validation after build might work or might throw - let's just check modification fails
         });
 
-        it('should flag missing dependency after remove()', () => {
-            builder
-                .registerSingleton('serviceWithNoDeps', ServiceWithNoDeps)
-                .registerSingleton('serviceWithOneDep', ServiceWithOneDep, 'serviceWithNoDeps');
-
-            expect(builder.validate()).toEqual([]);
-
-            builder.remove('serviceWithNoDeps');
+        it('should flag a missing constructor dependency at runtime', () => {
+            builder.registerSingleton(
+                'serviceWithOneDep',
+                ServiceWithOneDep,
+                'serviceWithNoDeps' as never,
+            );
 
             const issues = builder.validate();
             expect(issues.some(i => i.includes('serviceWithNoDeps'))).toBe(true);
         });
 
-        it('should flag missing multi-registration dependency after remove()', () => {
-            builder
-                .registerSingleton('dep', ServiceWithNoDeps)
-                .addSingleton('multi', ServiceWithOneDep, 'dep');
-
-            expect(builder.validate()).toEqual([]);
-
-            builder.remove('dep');
+        it('should flag a missing multi-registration dependency at runtime', () => {
+            builder.addSingleton('multi', ServiceWithOneDep, 'dep' as never);
 
             const issues = builder.validate();
             expect(issues.some(i => i.includes('dep'))).toBe(true);
@@ -390,20 +374,19 @@ describe('ContainerBuilder Validation', () => {
     });
 
     describe('Integration with Service Management', () => {
-        it('should maintain accurate validation when a service is replaced via remove()', () => {
-            // Register service with missing dependency
-            builder.registerSingleton('Service', ServiceWithOneDep, 'MissingDep');
-            expect(builder.validate().length).toBeGreaterThan(0);
+        it('should keep validation state isolated between builders', () => {
+            const invalid = new ContainerBuilder().registerSingleton(
+                'Service',
+                ServiceWithOneDep,
+                'MissingDep' as never,
+            );
+            const valid = new ContainerBuilder().registerSingleton(
+                'Service',
+                ServiceWithNoDeps,
+            );
 
-            // Replace with valid service (remove first — overwriting throws)
-            builder.remove('Service');
-            builder.registerSingleton('Service', ServiceWithNoDeps);
-            expect(builder.validate()).toEqual([]);
-
-            // Replace again with invalid service
-            builder.remove('Service');
-            builder.registerSingleton('Service', ServiceWithOneDep, 'StillMissing');
-            expect(builder.validate().length).toBeGreaterThan(0);
+            expect(invalid.validate().length).toBeGreaterThan(0);
+            expect(valid.validate()).toEqual([]);
         });
 
         it('should handle partial registration scenarios', () => {
@@ -460,7 +443,10 @@ describe('ContainerBuilder Validation', () => {
     describe('Parameter Name Validation', () => {
         it('should detect when dependency order does not match constructor parameter order', () => {
             class TestService {
-                constructor(private logger: ServiceWithNoDeps, private bar: ServiceWithOneDep) {}
+                constructor(logger: ServiceWithNoDeps, bar: ServiceWithOneDep) {
+                    void logger;
+                    void bar;
+                }
             }
 
             builder
@@ -485,7 +471,10 @@ describe('ContainerBuilder Validation', () => {
 
         it('should not report parameter issues when dependency order matches constructor parameters', () => {
             class TestServiceGood {
-                constructor(private logger: ServiceWithNoDeps, private bar: ServiceWithNoDeps) {}
+                constructor(logger: ServiceWithNoDeps, bar: ServiceWithNoDeps) {
+                    void logger;
+                    void bar;
+                }
             }
 
             builder
@@ -503,6 +492,7 @@ describe('ContainerBuilder Validation', () => {
                 .registerSingleton('Logger', ServiceWithNoDeps)
                 .registerSingletonFactory('FactoryService', (provider) => {
                     const logger = provider.get('Logger');
+                    void logger;
                     return { message: 'factory service' };
                 });
 
@@ -512,9 +502,7 @@ describe('ContainerBuilder Validation', () => {
         });
 
         it('should handle services with no dependencies gracefully', () => {
-            class TestService {
-                constructor() {}
-            }
+            class TestService {}
 
             builder.registerSingleton('TestService', TestService);
 
@@ -527,8 +515,10 @@ describe('ContainerBuilder Validation', () => {
             class ComplexService {
                 constructor(
                     public readonly logger: ServiceWithNoDeps,
-                    private config: ServiceWithNoDeps
-                ) {}
+                    config: ServiceWithNoDeps
+                ) {
+                    void config;
+                }
             }
 
             builder
@@ -543,7 +533,10 @@ describe('ContainerBuilder Validation', () => {
 
         it('should allow disabling strict parameter validation', () => {
             class TestService {
-                constructor(private logger: ServiceWithNoDeps, private bar: ServiceWithOneDep) {}
+                constructor(logger: ServiceWithNoDeps, bar: ServiceWithOneDep) {
+                    void logger;
+                    void bar;
+                }
             }
 
             builder

@@ -1,4 +1,4 @@
-import type { Container } from '../../api/contracts/interfaces';
+import type { ServiceLifecycle } from '../contracts';
 import { CircularDependencyError } from '../errors';
 
 /**
@@ -44,9 +44,9 @@ import { CircularDependencyError } from '../errors';
  * logger2.log("Message 2"); // Different logger instance
  * ```
  * 
- * @implements {Container}
+ * @implements {ServiceLifecycle}
  */
-export class TransientLifecycle implements Container {
+export class TransientLifecycle implements ServiceLifecycle {
     /**
      * The factory function used to create new instances.
      * @private
@@ -137,7 +137,7 @@ export class TransientLifecycle implements Container {
      * 
      * For transient lifecycles, creating a scope doesn't change the behavior
      * since each getInstance() call already creates a new instance. However,
-     * this method maintains consistency with the Container interface and
+     * this method maintains consistency with the ServiceLifecycle interface and
      * provides a fresh TransientLifecycle instance with the same factory.
      * 
      * @returns {TransientLifecycle} A new TransientLifecycle instance with the same factory
@@ -219,7 +219,7 @@ export class TransientLifecycle implements Container {
      * Asynchronously disposes the transient lifecycle.
      *
      * Transient lifecycles do not track created instances, so this only clears
-     * the factory reference. Provided for `Container` interface conformance.
+     * the factory reference. Provided for `ServiceLifecycle` interface conformance.
      */
     public async disposeAsync(): Promise<void> {
         this.dispose();

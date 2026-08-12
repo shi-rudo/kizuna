@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted
+Historical. The current validation contract is in the README and the public
+`ContainerBuilder` API.
+
+This document describes an earlier builder API. Its code examples do not define
+the current package API. `build()` does not call `validate()`. Configuration
+errors can therefore occur during registration, explicit validation, or first
+resolution.
 
 ## Context
 

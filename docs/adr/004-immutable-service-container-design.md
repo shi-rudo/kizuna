@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted
+Superseded by ADR-010 for concurrency claims and ADR-003 for the public API.
+
+This document is a historical design record. Its code examples do not describe
+the current package API. Only dependency metadata is copied and frozen. The
+builder, provider, and lifecycle instances contain mutable state. Kizuna does
+not supply thread safety.
 
 ## Context
 

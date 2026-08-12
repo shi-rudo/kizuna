@@ -90,19 +90,16 @@ export default {
             // Touches every public API surface that the other routes don't exercise.
             // The assertion is just "no throw" — semantics live in the unit tests.
             // This catches Node-API leakage in code paths the documented patterns
-            // never hit (sync dispose, getAll, builder mutations, Symbol.dispose).
+            // never hit (sync dispose, getAll, builder inspection, Symbol.dispose).
             const b = new ContainerBuilder()
                 .registerSingleton("Logger", Logger)
                 .registerTransient("RequestContext", RequestContext)
                 .addSingleton("plugins", Logger)
                 .addSingleton("plugins", Logger);
 
-            const beforeRemoveCount = b.count;
+            const registrationCount = b.count;
             const wasRegistered = b.isRegistered("Logger");
             const names = b.getRegisteredServiceNames();
-            b.remove("Logger");
-            const afterRemoveCount = b.count;
-            b.registerSingleton("Logger", Logger);
 
             const c = b.build();
             const all = c.getAll("plugins");
@@ -120,8 +117,7 @@ export default {
 
             return Response.json({
                 ok: true,
-                beforeRemoveCount,
-                afterRemoveCount,
+                registrationCount,
                 wasRegistered,
                 namesLength: names.length,
                 allPluginsLength: all.length,

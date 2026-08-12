@@ -1,368 +1,67 @@
-# ADR-009: Factory Function Signature
+# ADR-009: Typed Locator Factory Signature
 
 ## Status
 
-Accepted
+Accepted. This text replaces the legacy `Factory<T>` and `ServiceLocator`
+contract.
 
 ## Context
 
-Kizuna needed to design the signature for factory functions used in service registration. Three primary approaches were considered:
+A factory needs access to services that exist before its registration. The
+factory parameter must keep the inferred registry type.
 
-1. **ServiceProvider Parameter**: Factory receives the ServiceProvider for dependency resolution
-2. **Pre-resolved Dependencies**: Factory receives already resolved dependencies as parameters
-3. **Dependency Object**: Factory receives a dependency object with named properties
+The old contract used an unrestricted locator. It also declared `T | Promise<T>`.
+That declaration did not match the builder or the runtime lifecycle behavior.
 
 ## Decision
 
-We chose the **ServiceProvider Parameter** approach where factory functions receive the ServiceProvider as their parameter.
-
-## Rationale
-
-### Factory Function Signature
+The internal factory contract is:
 
 ```typescript
-type Factory<T> = (serviceProvider: TypeSafeServiceLocator<TRegistry>) => T | Promise<T>;
+type Factory<TRegistry, T> = (
+  serviceProvider: TypeSafeServiceLocator<TRegistry>,
+) => T;
+```
 
-// Usage example with current unified API
+The package root does not export this helper type. Registration methods infer
+the factory type. This design keeps one registry-aware contract through the
+builder and lifecycle implementation.
+
+Factory keys must be fixed string literals. Broad strings, unions, and open
+template-literal types do not create safe registry entries.
+
+## Example
+
+```typescript
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)
   .registerSingleton('Logger', LoggerService)
-  .registerSingletonFactory('DatabaseService', (provider) => {
-    const config = provider.get('Config');  // Type: ConfigService (inferred!)
-    const logger = provider.get('Logger');  // Type: LoggerService (inferred!)
+  .registerSingletonFactory('Database', (provider) => {
+    const config = provider.get('Config');
+    const logger = provider.get('Logger');
     return new DatabaseService(config.connectionString, logger);
   })
   .build();
 ```
 
-### Benefits of ServiceProvider Parameter
+The factory can only resolve entries that exist before `Database` in the
+builder chain. The returned service becomes the registry value for `Database`.
 
-#### 1. **Maximum Flexibility**
+## Promise Values
 
-```typescript
-// Conditional dependency resolution with current unified API
-const container = new ContainerBuilder()
-  .registerSingleton('AppConfig', AppConfigService)
-  .registerSingleton('EmailService', EmailService)
-  .registerSingleton('SMSService', SMSService)
-  .registerSingletonFactory('NotificationService', (provider) => {
-    const config = provider.get('AppConfig');  // Type: AppConfigService
+An `async` function infers `T` as `Promise<Service>`. The container stores and
+returns that `Promise` as the service value. It does not await the `Promise`.
 
-    if (config.useEmailNotifications) {
-      const emailService = provider.get('EmailService');  // Type: EmailService
-      return new EmailNotificationService(emailService);
-    } else {
-      const smsService = provider.get('SMSService');  // Type: SMSService
-      return new SMSNotificationService(smsService);
-    }
-  })
-  .build();
-```
-
-- Enables runtime dependency selection based on configuration
-- Supports complex initialization logic with multiple dependency paths
-- Allows factories to resolve different services based on conditions
-
-#### 2. **Dynamic Service Discovery**
-
-```typescript
-// Plugin-based architecture with current unified API
-const container = new ContainerBuilder()
-  .registerSingleton('PluginConfig', PluginConfigService)
-  .registerSingleton('Plugin_Analytics', AnalyticsPlugin)
-  .registerSingleton('Plugin_Logging', LoggingPlugin)
-  .registerSingletonFactory('PluginManager', (provider) => {
-    const config = provider.get('PluginConfig');  // Type: PluginConfigService
-    const enabledPlugins = config.enabledPlugins;
-
-    const plugins = enabledPlugins.map((pluginName) => {
-      const pluginKey = `Plugin_${pluginName}` as keyof typeof container;
-      return (provider as any).get(pluginKey);  // Dynamic plugin resolution
-    });
-
-    return new PluginManager(plugins);
-  })
-  .build();
-```
-
-- Supports discovery and resolution of services based on runtime configuration
-- Enables plugin architectures with dynamic plugin loading
-- Allows factories to resolve collections of services
-
-#### 3. **Async Initialization Support**
-
-```typescript
-// Async factory with dependent async services
-const container = new ContainerBuilder()
-  .registerSingleton('ConfigService', ConfigService)
-  .registerSingleton('DatabaseService', DatabaseService)
-  .registerSingletonFactory('AsyncService', async (provider) => {
-    const configService = provider.get('ConfigService');  // Type: ConfigService
-    const dbService = provider.get('DatabaseService');    // Type: DatabaseService
-    
-    const config = await configService.loadConfig();
-    const connection = await dbService.connect();
-
-    const service = new AsyncService(config, connection);
-    await service.initialize();
-    return service;
-  })
-  .build();
-```
-
-- Factory can await resolution of async services
-- Supports complex async initialization sequences
-- Enables async factories without changing container API
-
-#### 4. **Scope-Aware Factory Creation**
-
-```typescript
-// Factory that creates scoped services
-builder.addScoped((r) =>
-  r.fromName("RequestProcessor").useFactory((provider: ServiceProvider) => {
-    const requestScope = provider.startScope();
-    const processor = new RequestProcessor(requestScope);
-
-    // Processor manages its own scope lifecycle
-    return processor;
-  })
-);
-```
-
-- Factories can create and manage scopes
-- Enables sophisticated lifetime management patterns
-- Supports request-scoped service creation
-
-### Implementation Details
-
-#### Factory Type Definition
-
-```typescript
-type Factory<T> = (serviceProvider: ServiceLocator) => T | Promise<T>;
-```
-
-#### Factory Execution in Lifecycle
-
-```typescript
-class SingletonLifecycle implements Container {
-  private _instance: any = null;
-
-  constructor(
-    private readonly _factory: Factory<any>,
-    private readonly _dependencies: readonly ServiceKey<any>[]
-  ) {}
-
-  resolve(serviceProvider: ServiceLocator): any {
-    if (this._instance === null) {
-      // Factory receives the ServiceProvider directly
-      this._instance = this._factory(serviceProvider);
-    }
-    return this._instance;
-  }
-}
-```
-
-#### Dependency Resolution Within Factory
-
-```typescript
-// Factory has full control over dependency resolution
-const factory: Factory<ComplexService> = (provider: ServiceProvider) => {
-  // Resolve dependencies explicitly
-  const dependency1 = provider.get<Dependency1>("Dependency1");
-  const dependency2 = provider.get<Dependency2>("Dependency2");
-
-  // Complex construction logic
-  const service = new ComplexService(dependency1);
-  service.configure(dependency2);
-
-  return service;
-};
-```
-
-### Trade-offs Accepted
-
-#### Advantages
-
-- **Maximum Flexibility**: Factory controls all aspects of service creation
-- **Dynamic Resolution**: Can resolve different services based on runtime conditions
-- **Async Support**: Natural support for async initialization patterns
-- **Scope Management**: Factories can create and manage scopes
-- **Complex Logic**: Supports sophisticated service construction scenarios
-
-#### Disadvantages
-
-- **Service Locator Pattern**: Encourages service locator usage within factories
-- **Hidden Dependencies**: Factory dependencies not declared in registration
-- **Testing Complexity**: Harder to mock dependencies for factory testing
-- **Potential Misuse**: Easy to abuse for non-factory scenarios
-
-### Alternatives Considered
-
-#### Pre-resolved Dependencies Parameter
-
-```typescript
-// Rejected approach
-type Factory<T, TDeps extends any[]> = (...dependencies: TDeps) => T;
-
-// Registration would specify dependencies
-builder.addSingleton((r) =>
-  r
-    .fromName("Service")
-    .useFactory(
-      (dep1: Dependency1, dep2: Dependency2) => new Service(dep1, dep2)
-    )
-    .withDependencies("Dependency1", "Dependency2")
-);
-```
-
-- **Rejected**: Limited to pre-declared dependencies
-- **Rejected**: Cannot handle conditional or dynamic dependency resolution
-- **Rejected**: Complex type system to maintain dependency parameter alignment
-
-#### Dependency Object Parameter
-
-```typescript
-// Rejected approach
-type Factory<T> = (dependencies: Record<string, any>) => T;
-
-// Usage
-builder.addSingleton((r) =>
-  r
-    .fromName("Service")
-    .useFactory((deps) => {
-      const dep1 = deps["Dependency1"] as Dependency1;
-      const dep2 = deps["Dependency2"] as Dependency2;
-      return new Service(dep1, dep2);
-    })
-    .withDependencies("Dependency1", "Dependency2")
-);
-```
-
-- **Rejected**: Loss of type safety for dependency access
-- **Rejected**: Verbose casting required for each dependency
-- **Rejected**: Still limited to pre-declared dependencies
-
-#### Dependency Injection Container Parameter
-
-```typescript
-// Rejected approach
-interface IDependencyContainer {
-  resolve<T>(key: string): T;
-}
-
-type Factory<T> = (container: IDependencyContainer) => T;
-```
-
-- **Rejected**: Additional abstraction layer without clear benefit
-- **Rejected**: Would require maintaining separate interface
-- **Rejected**: ServiceProvider already provides the needed functionality
-
-## Implementation Pattern
-
-### Basic Factory Usage
-
-```typescript
-// Simple factory with dependency resolution
-const container = new ContainerBuilder()
-  .registerSingleton('EmailConfig', EmailConfigService)
-  .registerSingletonFactory('EmailService', (provider) => {
-    const config = provider.get('EmailConfig');  // Type: EmailConfigService
-    return new EmailService(config.smtpHost, config.smtpPort);
-  })
-  .build();
-```
-
-### Conditional Service Creation
-
-```typescript
-// Factory with runtime decision making
-const container = new ContainerBuilder()
-  .registerSingleton('AppConfig', AppConfigService)
-  .registerSingletonFactory('Logger', (provider) => {
-    const config = provider.get('AppConfig');  // Type: AppConfigService
-
-    return config.isDevelopment
-      ? new ConsoleLogger(config.logLevel)
-      : new FileLogger(config.logPath, config.logLevel);
-  })
-  .build();
-```
-
-### Async Factory Pattern
-
-```typescript
-// Async initialization in factory
-builder.addSingleton((r) =>
-  r
-    .fromName("DatabaseConnection")
-    .useFactory(async (provider: ServiceProvider) => {
-      const config = provider.get<DatabaseConfig>("DatabaseConfig");
-      const connection = new DatabaseConnection(config.connectionString);
-
-      await connection.initialize();
-      await connection.runMigrations();
-
-      return connection;
-    })
-);
-```
-
-### Complex Dependency Management
-
-```typescript
-// Factory managing multiple dependencies and scopes
-builder.addScoped((r) =>
-  r.fromName("RequestHandler").useFactory((provider: ServiceProvider) => {
-    const scope = provider.startScope();
-
-    const logger = scope.get<Logger>("Logger");
-    const metrics = scope.get<MetricsCollector>("MetricsCollector");
-    const processor = scope.get<RequestProcessor>("RequestProcessor");
-
-    return new RequestHandler(logger, metrics, processor, scope);
-  })
-);
-```
+The container also does not manage disposal for the resolved value. ADR-001
+defines the full Promise-value contract.
 
 ## Consequences
 
-### Positive
+Factories keep full registry inference without casts to an unrestricted
+locator. Consumers do not need to import a factory helper type.
 
-- **Flexibility**: Supports any service creation scenario
-- **Dynamic Resolution**: Runtime dependency selection based on conditions
-- **Async Support**: Natural support for async initialization
-- **Scope Control**: Factories can create and manage scopes
-- **Complex Logic**: Handles sophisticated service construction requirements
+Factories can hide dependencies because they resolve services in their body.
+Constructor registration is better when the dependency list is fixed.
 
-### Negative
-
-- **Service Locator**: Encourages service locator pattern usage
-- **Hidden Dependencies**: Factory dependencies not explicitly declared
-- **Testing**: More complex to unit test factory functions
-- **Abstraction**: Breaks dependency inversion in some scenarios
-
-## Guidelines
-
-### When to Use Factories
-
-#### Appropriate Use Cases
-
-- **Conditional Creation**: Service type depends on runtime configuration
-- **Complex Initialization**: Multi-step initialization requiring multiple services
-- **Async Services**: Services requiring async initialization
-- **Dynamic Dependencies**: Dependencies determined at runtime
-- **Resource Management**: Services requiring special resource handling
-
-#### Avoid Factories For
-
-- **Simple Construction**: Services with straightforward constructor injection
-- **Static Dependencies**: Dependencies that never change
-- **Pure Functions**: Services that don't require initialization state
-
-### Factory Best Practices
-
-1. **Minimize Complexity**: Keep factory logic as simple as possible
-2. **Document Dependencies**: Clearly document what services the factory uses
-3. **Error Handling**: Handle resolution errors gracefully
-4. **Testing**: Create factory unit tests with mocked ServiceProvider
-5. **Type Safety**: Use proper TypeScript types for resolved services
+The package does not promise custom lifecycle strategies or async-aware
+lifecycle management.

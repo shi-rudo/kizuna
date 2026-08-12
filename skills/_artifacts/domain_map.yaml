@@ -37,13 +37,8 @@ skills:
       - 'getAll()'
       - 'startScope()'
       - 'dispose()'
-      - 'remove()'
       - 'getRegisteredServiceNames()'
       - 'disableStrictParameterValidation()'
-      - 'SingletonLifecycle / ScopedLifecycle / TransientLifecycle'
-      - 'ServiceWrapper'
-      - 'ServiceProvider'
-      - 'AddToRegistry<TRegistry, K, T>'
     tasks:
       - 'Install and scaffold the container'
       - 'Register a service with constructor dependencies'
@@ -109,7 +104,7 @@ skills:
 
       - mistake: 'Assuming build() validates the container'
         mechanism: >
-          build() does NOT call validate(). It creates a ServiceProvider without
+          build() does NOT call validate(). It creates a service locator without
           checking for missing dependencies, circular dependencies, or parameter
           mismatches. Errors surface at resolution time, not build time. The
           validate() method exists but must be called explicitly.
@@ -308,13 +303,10 @@ skills:
         status: 'active'
         version_context: 'v1.0.0-rc.0 — APIs listed as planned in ADR-003 but never implemented'
 
-      - mistake: 'Using the stale Factory<T> type alias'
+      - mistake: 'Importing internal factory helper types'
         mechanism: >
-          types.ts:57 defines Factory<T> as (serviceProvider: ServiceLocator) => T.
-          But actual factory parameters on ContainerBuilder accept
-          (provider: TypeSafeServiceLocator<TRegistry>) => T. The Factory<T> type
-          is a leftover from the pre-unified API. Using it produces type errors
-          because ServiceLocator and TypeSafeServiceLocator are different interfaces.
+          The package root does not export a Factory helper. Registration methods
+          infer a provider that uses the current typed registry.
         wrong_pattern: |
           import { Factory } from '@shirudo/kizuna';
           const myFactory: Factory<UserService> = (provider) => {
@@ -328,10 +320,10 @@ skills:
             const db = provider.get('Database'); // Type-safe!
             return new UserService(db);
           })
-        source: 'maintainer interview; types.ts:57 vs container-builder.ts:204-207'
+        source: 'container-builder.ts factory signatures'
         priority: 'MEDIUM'
         status: 'active'
-        version_context: 'v1.0.0-rc.0 — Factory<T> is dead code from pre-unified API'
+        version_context: 'Factory helpers are internal'
 
       - mistake: 'Assuming singleton dispose is a no-op (outdated belief)'
         mechanism: >
@@ -511,11 +503,6 @@ gaps:
     question: 'What are the recommended scoping patterns for TanStack Start loaders and actions?'
 
     context: 'TanStack Start loaders can run in parallel for the same route. No documentation exists.'
-    status: 'open'
-
-  - skill: 'kizuna'
-    question: 'Should the ServiceProvider self-registration (service-provider.ts:73-81) be documented or is it considered internal?'
-    context: 'ADR-008 says self-registration was removed, but addItSelfResolver() still exists and registers ServiceProvider as a resolvable service.'
     status: 'open'
 
   - skill: 'kizuna'
