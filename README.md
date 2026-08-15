@@ -445,13 +445,16 @@ Services can implement `dispose()` or `[Symbol.asyncDispose]()`. Kizuna uses `Sy
 `disposeAsync()` waits for all consumer cleanup before it starts dependency cleanup. It runs services without dependency links in parallel.
 
 Both methods attempt all cleanup operations. If one or more operations fail,
-`dispose()` throws an `AggregateError`, and `disposeAsync()` rejects with an
-`AggregateError`. The `errors` property contains the original errors. Kizuna
+`dispose()` throws a `DisposalError`. The `disposeAsync()` method rejects with
+the same error type. The `errors` property contains the original errors. Kizuna
 does not write these errors to the console.
 
-If a cleanup method returns a Promise during `dispose()`, the aggregate contains
-a `TypeError` that tells you to use `disposeAsync()`. The cleanup has started,
-but `dispose()` cannot wait for it.
+`DisposalError` extends the JavaScript `AggregateError` class. It reports
+multiple cleanup errors and does not represent a domain aggregate.
+
+If a cleanup method returns a Promise during `dispose()`, the `DisposalError`
+contains a `TypeError`. This error tells you to use `disposeAsync()`. The cleanup
+has started, but `dispose()` cannot wait for it.
 
 This order includes all services under a multi-registration key. Sync cleanup keeps registration order within each disposal layer.
 
@@ -652,9 +655,9 @@ interface TypeSafeServiceLocator<TRegistry> {
 ```
 
 Disposal attempts all cleanup operations before it reports failures. The sync
-API throws one `AggregateError`. The async API rejects with one
-`AggregateError` after all cleanup operations settle. The resource-management
-symbols use the same behavior.
+API throws one `DisposalError`. The async API rejects with one `DisposalError`
+after all cleanup operations settle. The resource-management symbols use the
+same behavior.
 
 `ServiceProviderToken` is an explicit infrastructure token. Calling
 `container.get(ServiceProviderToken)` returns the current root or scoped

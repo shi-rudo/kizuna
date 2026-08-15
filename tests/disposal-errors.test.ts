@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ContainerBuilder } from "../src/api/container-builder";
+import { ContainerBuilder, DisposalError } from "../src";
 
 function captureThrown(action: () => void): unknown {
 	try {
@@ -22,7 +22,7 @@ async function captureRejection(action: Promise<void>): Promise<unknown> {
 }
 
 describe("disposal errors", () => {
-	it("attempts every sync cleanup and throws one AggregateError", () => {
+	it("attempts every sync cleanup and throws one DisposalError", () => {
 		const firstFailure = new Error("first cleanup failed");
 		const secondFailure = new Error("second cleanup failed");
 		const events: string[] = [];
@@ -55,8 +55,10 @@ describe("disposal errors", () => {
 
 		const error = captureThrown(() => container.dispose());
 
+		expect(error).toBeInstanceOf(DisposalError);
 		expect(error).toBeInstanceOf(AggregateError);
-		expect((error as AggregateError).errors).toEqual([
+		expect(error).toHaveProperty("name", "DisposalError");
+		expect((error as DisposalError).errors).toEqual([
 			firstFailure,
 			secondFailure,
 		]);
@@ -70,7 +72,7 @@ describe("disposal errors", () => {
 		warnSpy.mockRestore();
 	});
 
-	it("attempts every async cleanup and rejects with one AggregateError", async () => {
+	it("attempts every async cleanup and rejects with one DisposalError", async () => {
 		const firstFailure = new Error("first async cleanup failed");
 		const secondFailure = new Error("second async cleanup failed");
 		const events: string[] = [];
@@ -106,8 +108,9 @@ describe("disposal errors", () => {
 
 		const error = await captureRejection(container.disposeAsync());
 
+		expect(error).toBeInstanceOf(DisposalError);
 		expect(error).toBeInstanceOf(AggregateError);
-		expect((error as AggregateError).errors).toEqual([
+		expect((error as DisposalError).errors).toEqual([
 			firstFailure,
 			secondFailure,
 		]);
@@ -148,8 +151,8 @@ describe("disposal errors", () => {
 		container.get("consumer");
 		const error = await captureRejection(container.disposeAsync());
 
-		expect(error).toBeInstanceOf(AggregateError);
-		expect((error as AggregateError).errors).toEqual([failure]);
+		expect(error).toBeInstanceOf(DisposalError);
+		expect((error as DisposalError).errors).toEqual([failure]);
 		expect(events).toEqual(["consumer", "dependency"]);
 	});
 
@@ -170,10 +173,10 @@ describe("disposal errors", () => {
 		container.get("service");
 		const error = captureThrown(() => container.dispose());
 
-		expect(error).toBeInstanceOf(AggregateError);
-		expect((error as AggregateError).errors).toHaveLength(1);
-		expect((error as AggregateError).errors[0]).toBeInstanceOf(TypeError);
-		expect((error as AggregateError).errors[0]).toHaveProperty(
+		expect(error).toBeInstanceOf(DisposalError);
+		expect((error as DisposalError).errors).toHaveLength(1);
+		expect((error as DisposalError).errors[0]).toBeInstanceOf(TypeError);
+		expect((error as DisposalError).errors[0]).toHaveProperty(
 			"message",
 			expect.stringMatching(/disposeAsync\(\)/),
 		);
@@ -192,7 +195,7 @@ describe("disposal errors", () => {
 			.build();
 		syncContainer.get("service");
 
-		expect(() => syncContainer[Symbol.dispose]()).toThrow(AggregateError);
+		expect(() => syncContainer[Symbol.dispose]()).toThrow(DisposalError);
 
 		const asyncContainer = new ContainerBuilder()
 			.registerSingletonFactory("service", () => ({
@@ -204,7 +207,7 @@ describe("disposal errors", () => {
 		asyncContainer.get("service");
 
 		await expect(asyncContainer[Symbol.asyncDispose]()).rejects.toBeInstanceOf(
-			AggregateError,
+			DisposalError,
 		);
 	});
 });

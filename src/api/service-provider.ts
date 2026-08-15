@@ -1,4 +1,4 @@
-import { CircularDependencyError } from "../core/errors";
+import { CircularDependencyError, DisposalError } from "../core/errors";
 import {
     createDisposalLayers,
     createDisposalPlan,
@@ -12,7 +12,7 @@ import type {
     RegisteredInterfaceToken,
 } from "./interface-token";
 
-export { CircularDependencyError } from "../core/errors";
+export { CircularDependencyError, DisposalError } from "../core/errors";
 
 /** Stable identity token for resolving the current service provider. */
 export const ServiceProviderToken: unique symbol = Symbol("ServiceProvider");
@@ -176,7 +176,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
     /**
      * Disposes all owned services. Cleanup failures do not stop later cleanup.
-     * After all cleanup completes, this method throws one `AggregateError` that
+     * After all cleanup completes, this method throws one `DisposalError` that
      * contains the original failures.
      */
     dispose(): void {
@@ -210,7 +210,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      * Independent dispose handlers run in parallel. A dependency starts only
      * after all of its consumer groups settle. Rejections do not stop other
      * cleanup. After all cleanup settles, this method throws one
-     * `AggregateError` with the original failures. Idempotent — safe to call
+     * `DisposalError` with the original failures. Idempotent — safe to call
      * multiple times.
      */
     async disposeAsync(): Promise<void> {
@@ -300,10 +300,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
     private throwDisposalErrors(errors: readonly unknown[]): void {
         if (errors.length > 0) {
-            throw new AggregateError(
-                errors,
-                "One or more services failed to dispose",
-            );
+            throw new DisposalError(errors);
         }
     }
 

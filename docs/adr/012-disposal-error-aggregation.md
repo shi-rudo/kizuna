@@ -19,20 +19,22 @@ The sync API cannot wait for a cleanup method that returns a Promise.
 
 Both disposal APIs attempt all owned cleanup operations.
 
-After sync cleanup completes, `dispose()` throws one `AggregateError` if an
-operation failed. After async cleanup settles, `disposeAsync()` rejects with one
-`AggregateError` if an operation failed. The `errors` property contains the
-original error values.
+After sync cleanup completes, `dispose()` throws one `DisposalError` if an
+operation failed. After async cleanup settles, `disposeAsync()` rejects with the
+same error type. The `errors` property contains the original error values.
+
+`DisposalError` extends the JavaScript `AggregateError` class. It reports
+multiple cleanup errors. It does not represent a domain aggregate.
 
 Kizuna does not write cleanup errors to the console. The caller decides how to
 report them.
 
-If a sync cleanup call returns a Promise, Kizuna attaches a rejection handler
-to prevent an unhandled rejection. It adds a `TypeError` to the aggregate. The
-error tells the caller to use `disposeAsync()` for future containers. The
-Promise has started, but the sync API does not wait for it.
+If a sync cleanup call returns a Promise, Kizuna attaches a rejection handler.
+This handler prevents an unhandled rejection. Kizuna adds a `TypeError` to the
+`DisposalError`. The error tells the caller to use `disposeAsync()` for future
+containers. The Promise has started, but the sync API does not wait for it.
 
-The provider clears its state before it reports the aggregate. A second
+The provider clears its state before it reports the `DisposalError`. A second
 disposal call is a no-op, even if the first call reported errors.
 
 The TC39 resource-management symbols use the same behavior as the matching

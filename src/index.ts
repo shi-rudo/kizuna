@@ -4,5 +4,6 @@ export type { InterfaceToken } from "./api/interface-token";
 export { interfaceToken } from "./api/interface-token";
 export {
 	CircularDependencyError,
+	DisposalError,
 	ServiceProviderToken,
 } from "./api/service-provider";

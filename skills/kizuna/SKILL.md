@@ -209,9 +209,12 @@ Multi-registration keys include all services under that key. Factory lookups do 
 Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
 
 Both APIs attempt all cleanup operations. `dispose()` throws one
-`AggregateError` after sync cleanup completes. `disposeAsync()` rejects with one
-`AggregateError` after all cleanup settles. The `errors` property contains the
+`DisposalError` after sync cleanup completes. `disposeAsync()` rejects with one
+`DisposalError` after all cleanup settles. The `errors` property contains the
 original errors. Kizuna does not write cleanup errors to the console.
+
+`DisposalError` extends the JavaScript `AggregateError` class. It reports
+multiple cleanup errors and does not represent a domain aggregate.
 
 For each lifecycle, disposal does:
 - **Singleton**: Invokes the instance's dispose hook (sync or async path, see priority below) if present, then marks lifecycle as permanently disposed
@@ -251,9 +254,9 @@ await container.disposeAsync();
 
 **Per-API resolution rules (exactly one hook is invoked per instance):**
 - `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
-- `dispose()` (sync) picks by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort. If the selected hook returns a Promise, cleanup starts, but the aggregate contains a `TypeError` because `dispose()` cannot wait for the Promise.
+- `dispose()` picks the sync cleanup method by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort. If the selected hook returns a Promise, cleanup starts. The `DisposalError` contains a `TypeError` because `dispose()` cannot wait.
 
-**When sync `dispose()` is wrong:** if any instance's `dispose()` returns a Promise (DB pool teardown, file handle close, network connection drain), `dispose()` invokes it but does not await it. It reports this condition in the `AggregateError`. The cleanup can still be in progress when the next operation runs. Always use `disposeAsync()` (or `await using`) when services hold async resources.
+**When sync `dispose()` is wrong:** Use `disposeAsync()` when a service has asynchronous cleanup. Examples include database pools, file handles, and network connections. The sync method starts a Promise-based cleanup but does not await it. The `DisposalError` reports this condition.
 
 ## Container Inspection
 

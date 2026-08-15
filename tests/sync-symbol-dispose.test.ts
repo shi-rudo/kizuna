@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ContainerBuilder } from '../src/api/container-builder';
+import { ContainerBuilder, DisposalError } from '../src';
 
 describe('Sync dispose() honors TC39 dispose symbols', () => {
     it('disposes a singleton implementing only [Symbol.dispose]', () => {
@@ -71,7 +71,7 @@ describe('Sync dispose() honors TC39 dispose symbols', () => {
             .build();
 
         container.get('res');
-        expect(() => container.dispose()).toThrow(AggregateError);
+        expect(() => container.dispose()).toThrow(DisposalError);
 
         expect(started).toBe(true);
     });
