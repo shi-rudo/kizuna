@@ -197,7 +197,7 @@ const issues = builder.validate();
 ### Disposal
 
 Two disposal APIs:
-- `container.dispose()` — synchronous. Invokes each instance's sync dispose hook (see priority below) without awaiting Promises.
+- `container.dispose()` — synchronous. Invokes each instance's sync dispose hook (see priority below). It cannot await Promises.
 - `container.disposeAsync()` — awaits service-owned async cleanup. Waits for all consumers before it starts dependency cleanup.
 
 Both APIs process consumers before their declared dependencies. Sync disposal keeps registration order within each disposal layer.
@@ -207,6 +207,11 @@ Independent cleanup can run in parallel during `disposeAsync()`. Its order depen
 Multi-registration keys include all services under that key. Factory lookups do not affect disposal order because factories do not declare dependency keys.
 
 Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
+
+Both APIs attempt all cleanup operations. `dispose()` throws one
+`AggregateError` after sync cleanup completes. `disposeAsync()` rejects with one
+`AggregateError` after all cleanup settles. The `errors` property contains the
+original errors. Kizuna does not write cleanup errors to the console.
 
 For each lifecycle, disposal does:
 - **Singleton**: Invokes the instance's dispose hook (sync or async path, see priority below) if present, then marks lifecycle as permanently disposed
@@ -246,9 +251,9 @@ await container.disposeAsync();
 
 **Per-API resolution rules (exactly one hook is invoked per instance):**
 - `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
-- `dispose()` (sync) picks by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort and is invoked fire-and-forget (rejections are logged, not awaited) — services with genuinely async cleanup should be disposed via `disposeAsync()`.
+- `dispose()` (sync) picks by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort. If the selected hook returns a Promise, cleanup starts, but the aggregate contains a `TypeError` because `dispose()` cannot wait for the Promise.
 
-**When sync `dispose()` is wrong:** if any instance's `dispose()` returns a Promise (DB pool teardown, file handle close, network connection drain), `dispose()` invokes it but does not await it. Rejections are logged via a `.catch` attached internally to surface them, but the cleanup may still be in flight when the next operation runs. Always use `disposeAsync()` (or `await using`) when services hold async resources.
+**When sync `dispose()` is wrong:** if any instance's `dispose()` returns a Promise (DB pool teardown, file handle close, network connection drain), `dispose()` invokes it but does not await it. It reports this condition in the `AggregateError`. The cleanup can still be in progress when the next operation runs. Always use `disposeAsync()` (or `await using`) when services hold async resources.
 
 ## Container Inspection
 

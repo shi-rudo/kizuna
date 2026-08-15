@@ -1,6 +1,10 @@
 import type { ServiceLifecycle } from '../contracts';
 import { CircularDependencyError } from '../errors';
-import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose';
+import {
+    invokeAsyncDispose,
+    invokeSyncDispose,
+    requireSynchronousDispose,
+} from '../services/async-dispose';
 
 /**
  * Scoped lifecycle implementation that maintains one instance per scope.
@@ -228,26 +232,21 @@ export class ScopedLifecycle implements ServiceLifecycle {
      * ```
      */
     public dispose(): void {
-        if (!this._isDisposed) {
+        if (this._isDisposed) {
+            return;
+        }
+        this._isDisposed = true;
+
+        try {
             // Dispose the instance if it implements a sync or TC39 dispose hook
             if (this._instance && typeof this._instance === 'object') {
-                try {
-                    const result = invokeSyncDispose(this._instance);
-                    if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
-                        (result as Promise<unknown>).catch((error) => {
-                            console.warn('Error disposing scoped instance asynchronously (call disposeAsync() for proper awaiting):', error);
-                        });
-                    }
-                } catch (error) {
-                    // Log error but don't throw to avoid disposal chain breaking
-                    console.warn('Error disposing scoped instance:', error);
-                }
+                const result = invokeSyncDispose(this._instance);
+                requireSynchronousDispose(result);
             }
-
+        } finally {
             this._instance = undefined;
             this._initialized = false;
             this._factory = null;
-            this._isDisposed = true;
         }
     }
 
@@ -261,17 +260,15 @@ export class ScopedLifecycle implements ServiceLifecycle {
         }
         this._isDisposed = true;
 
-        if (this._instance && typeof this._instance === 'object') {
-            try {
+        try {
+            if (this._instance && typeof this._instance === 'object') {
                 await invokeAsyncDispose(this._instance);
-            } catch (error) {
-                console.warn('Error disposing scoped instance:', error);
             }
+        } finally {
+            this._instance = undefined;
+            this._initialized = false;
+            this._factory = null;
         }
-
-        this._instance = undefined;
-        this._initialized = false;
-        this._factory = null;
     }
 
     /**

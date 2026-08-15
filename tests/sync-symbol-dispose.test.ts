@@ -59,7 +59,7 @@ describe('Sync dispose() honors TC39 dispose symbols', () => {
         expect(plainCalls).toBe(0);
     });
 
-    it('falls back to [Symbol.asyncDispose] as a last resort on the sync path', () => {
+    it('reports [Symbol.asyncDispose] as asynchronous on the sync path', () => {
         let started = false;
         class Resource {
             async [Symbol.asyncDispose]() {
@@ -71,7 +71,7 @@ describe('Sync dispose() honors TC39 dispose symbols', () => {
             .build();
 
         container.get('res');
-        container.dispose();
+        expect(() => container.dispose()).toThrow(AggregateError);
 
         expect(started).toBe(true);
     });

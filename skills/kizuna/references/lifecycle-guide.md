@@ -113,10 +113,15 @@ Both `SingletonLifecycle` and `ScopedLifecycle` use a boolean `_initialized` fla
 
 Two disposal APIs on every lifecycle and on the container:
 
-- `dispose()` — synchronous. Calls each instance's `dispose()` without awaiting Promises. Rejections from Promise-returning `dispose` are logged via a `.catch` attached internally, but not awaited.
+- `dispose()` — synchronous. Calls each instance's cleanup method. It cannot await Promises.
 - `disposeAsync()` — awaits service-owned async cleanup. It waits for all consumers before it starts dependency cleanup.
 
 Both APIs process consumers before their declared dependencies. `disposeAsync()` starts a dependency after all its consumers complete cleanup.
+
+Both APIs attempt all cleanup operations. `dispose()` throws one
+`AggregateError` after sync cleanup completes. `disposeAsync()` rejects with one
+`AggregateError` after all cleanup settles. The `errors` property contains the
+original errors. Kizuna does not write cleanup errors to the console.
 
 Independent cleanup can run in parallel. A slow, unrelated service does not delay dependency cleanup in another graph branch.
 
@@ -134,7 +139,7 @@ The `ServiceProvider` (container) also exposes TC39 hooks:
 
 **Per-API resolution rules:**
 - `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
-- `dispose()` (sync) picks by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort invoked fire-and-forget (rejections logged, not awaited) — use `disposeAsync()` for genuinely async cleanup.
+- `dispose()` (sync) picks by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort. If the selected hook returns a Promise, cleanup starts, but the aggregate contains a `TypeError` because `dispose()` cannot wait for the Promise.
 
 After `container.dispose()` or `container.disposeAsync()`:
 - `get()`, `getAll()`, `startScope()` throw `"Cannot access services from a disposed container"`.

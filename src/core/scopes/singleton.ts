@@ -1,6 +1,10 @@
 import type { ServiceLifecycle } from '../contracts';
 import { CircularDependencyError } from '../errors';
-import { invokeAsyncDispose, invokeSyncDispose } from '../services/async-dispose';
+import {
+    invokeAsyncDispose,
+    invokeSyncDispose,
+    requireSynchronousDispose,
+} from '../services/async-dispose';
 
 /**
  * Singleton lifecycle implementation that maintains one instance for the entire application lifetime.
@@ -195,23 +199,16 @@ export class SingletonLifecycle implements ServiceLifecycle {
         }
         this._isDisposed = true;
 
-        if (this._initialized && this._instance && typeof this._instance === 'object') {
-            try {
+        try {
+            if (this._initialized && this._instance && typeof this._instance === 'object') {
                 const result = invokeSyncDispose(this._instance);
-                // Attach rejection logger so an async dispose called from the sync path
-                // does not surface as an UnhandledPromiseRejection.
-                if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
-                    (result as Promise<unknown>).catch((error) => {
-                        console.warn('Error disposing singleton instance asynchronously (call disposeAsync() for proper awaiting):', error);
-                    });
-                }
-            } catch (error) {
-                console.warn('Error disposing singleton instance:', error);
+                requireSynchronousDispose(result);
             }
+        } finally {
+            this._instance = undefined;
+            this._initialized = false;
+            this._factory = null;
         }
-        this._instance = undefined;
-        this._initialized = false;
-        this._factory = null;
     }
 
     /**
@@ -224,16 +221,15 @@ export class SingletonLifecycle implements ServiceLifecycle {
         }
         this._isDisposed = true;
 
-        if (this._initialized && this._instance && typeof this._instance === 'object') {
-            try {
+        try {
+            if (this._initialized && this._instance && typeof this._instance === 'object') {
                 await invokeAsyncDispose(this._instance);
-            } catch (error) {
-                console.warn('Error disposing singleton instance:', error);
             }
+        } finally {
+            this._instance = undefined;
+            this._initialized = false;
+            this._factory = null;
         }
-        this._instance = undefined;
-        this._initialized = false;
-        this._factory = null;
     }
 
     /**

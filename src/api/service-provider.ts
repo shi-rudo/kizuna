@@ -174,23 +174,33 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         );
     }
 
+    /**
+     * Disposes all owned services. Cleanup failures do not stop later cleanup.
+     * After all cleanup completes, this method throws one `AggregateError` that
+     * contains the original failures.
+     */
     dispose(): void {
         if (this._disposed) {
             return;
         }
         this._disposed = true;
 
-        for (const layer of createDisposalLayers(this.registrationOrder)) {
-            for (const resolver of layer) {
-                try {
-                    resolver.dispose?.();
-                } catch (error) {
-                    console.error("Error disposing resolver:", error);
+        const errors: unknown[] = [];
+        try {
+            for (const layer of createDisposalLayers(this.registrationOrder)) {
+                for (const resolver of layer) {
+                    try {
+                        resolver.dispose();
+                    } catch (error) {
+                        errors.push(error);
+                    }
                 }
             }
+        } finally {
+            this.clearRegistrations();
         }
 
-        this.clearRegistrations();
+        this.throwDisposalErrors(errors);
     }
 
     /**
@@ -198,9 +208,10 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      * dispose handlers (Promise-returning `dispose()` or `[Symbol.asyncDispose]`).
      *
      * Independent dispose handlers run in parallel. A dependency starts only
-     * after all of its consumer groups settle. Individual rejections are
-     * logged to `console.error` but do not abort disposal. Idempotent — safe to
-     * call multiple times.
+     * after all of its consumer groups settle. Rejections do not stop other
+     * cleanup. After all cleanup settles, this method throws one
+     * `AggregateError` with the original failures. Idempotent — safe to call
+     * multiple times.
      */
     async disposeAsync(): Promise<void> {
         if (this._disposed) {
@@ -208,9 +219,14 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
         this._disposed = true;
 
-        await this.runDependencyAwareDisposeAsync();
+        let errors: readonly unknown[] = [];
+        try {
+            errors = await this.runDependencyAwareDisposeAsync();
+        } finally {
+            this.clearRegistrations();
+        }
 
-        this.clearRegistrations();
+        this.throwDisposalErrors(errors);
     }
 
     /**
@@ -227,24 +243,13 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         await this.disposeAsync();
     }
 
-    private runResolverDisposeAsync(resolver: ServiceWrapper, label: string): Promise<unknown> | undefined {
-        try {
-            const result = resolver.disposeAsync?.();
-            if (!result) return undefined;
-            return result.catch((error) => {
-                console.error(`Error disposing ${label}:`, error);
-            });
-        } catch (error) {
-            console.error(`Error disposing ${label}:`, error);
-            return undefined;
-        }
-    }
-
-    private async runDependencyAwareDisposeAsync(): Promise<void> {
+    private async runDependencyAwareDisposeAsync(): Promise<readonly unknown[]> {
         const plan = createDisposalPlan(this.registrationOrder);
         if (plan.groups.length === 0) {
-            return;
+            return [];
         }
+
+        const errorsByResolver = new Map<ServiceWrapper, unknown>();
 
         const remainingConsumerGroups = plan.groups.map(
             (group) => group.consumerGroupCount,
@@ -254,15 +259,17 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             let completedGroups = 0;
 
             const startGroup = (groupIndex: number): void => {
-                const tasks: Promise<unknown>[] = [];
-                for (const resolver of plan.groups[groupIndex].resolvers) {
-                    const task = this.runResolverDisposeAsync(resolver, "resolver");
-                    if (task) {
-                        tasks.push(task);
-                    }
-                }
+                const tasks = plan.groups[groupIndex].resolvers.map(
+                    async (resolver) => {
+                        try {
+                            await resolver.disposeAsync();
+                        } catch (error) {
+                            errorsByResolver.set(resolver, error);
+                        }
+                    },
+                );
 
-                void Promise.allSettled(tasks).then(() => {
+                void Promise.all(tasks).then(() => {
                     completedGroups++;
 
                     for (const dependencyGroup of plan.groups[groupIndex].dependencyGroups) {
@@ -282,6 +289,22 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
                 startGroup(groupIndex);
             }
         });
+
+        return this.registrationOrder.flatMap((resolver) => {
+            if (!errorsByResolver.has(resolver)) {
+                return [];
+            }
+            return [errorsByResolver.get(resolver)];
+        });
+    }
+
+    private throwDisposalErrors(errors: readonly unknown[]): void {
+        if (errors.length > 0) {
+            throw new AggregateError(
+                errors,
+                "One or more services failed to dispose",
+            );
+        }
     }
 
     private clearRegistrations(): void {

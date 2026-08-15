@@ -73,7 +73,7 @@ describe('disposeAsync()', () => {
         expect(elapsed).toBeLessThan(50);
     });
 
-    it('continues disposing other services when one rejects', async () => {
+    it('continues disposing other services before it reports a rejection', async () => {
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
@@ -85,10 +85,12 @@ describe('disposeAsync()', () => {
         container.get('bad');
         const good = container.get('good');
 
-        await expect(container.disposeAsync()).resolves.toBeUndefined();
+        await expect(container.disposeAsync()).rejects.toMatchObject({
+            errors: [expect.objectContaining({ message: 'async dispose boom' })],
+        });
         expect(good.disposed).toBe(true);
-        // Failure is logged at either the lifecycle (warn) or provider (error) layer.
-        expect(errorSpy.mock.calls.length + warnSpy.mock.calls.length).toBeGreaterThan(0);
+        expect(errorSpy).not.toHaveBeenCalled();
+        expect(warnSpy).not.toHaveBeenCalled();
 
         errorSpy.mockRestore();
         warnSpy.mockRestore();

@@ -424,24 +424,34 @@ const container = new ContainerBuilder()
   .registerSingleton('Pool', DatabasePool)
   .build();
 
-// Sync — fine for purely synchronous services
-container.dispose();
-
-// Async — waits for consumer cleanup before dependency cleanup
-await container.disposeAsync();
-
 // TC39 explicit resource management
 {
   await using scope = container.startScope();
   // ...work...
 } // scope.disposeAsync() called automatically at block exit
+
+// Waits for consumer cleanup before dependency cleanup
+await container.disposeAsync();
 ```
+
+Use `dispose()` instead when every service has synchronous cleanup. Do not call
+both methods on one container. The first call disposes the container, and later
+calls are no-ops.
 
 Services can implement `dispose()` or `[Symbol.asyncDispose]()`. Kizuna uses `Symbol.asyncDispose` before `Symbol.dispose` and `dispose()` for asynchronous cleanup.
 
 `dispose()` invokes consumer cleanup before dependency cleanup. It cannot wait for asynchronous consumer cleanup.
 
 `disposeAsync()` waits for all consumer cleanup before it starts dependency cleanup. It runs services without dependency links in parallel.
+
+Both methods attempt all cleanup operations. If one or more operations fail,
+`dispose()` throws an `AggregateError`, and `disposeAsync()` rejects with an
+`AggregateError`. The `errors` property contains the original errors. Kizuna
+does not write these errors to the console.
+
+If a cleanup method returns a Promise during `dispose()`, the aggregate contains
+a `TypeError` that tells you to use `disposeAsync()`. The cleanup has started,
+but `dispose()` cannot wait for it.
 
 This order includes all services under a multi-registration key. Sync cleanup keeps registration order within each disposal layer.
 
@@ -640,6 +650,11 @@ interface TypeSafeServiceLocator<TRegistry> {
   [Symbol.asyncDispose](): Promise<void>;                     // TC39 `await using` syntax
 }
 ```
+
+Disposal attempts all cleanup operations before it reports failures. The sync
+API throws one `AggregateError`. The async API rejects with one
+`AggregateError` after all cleanup operations settle. The resource-management
+symbols use the same behavior.
 
 `ServiceProviderToken` is an explicit infrastructure token. Calling
 `container.get(ServiceProviderToken)` returns the current root or scoped
