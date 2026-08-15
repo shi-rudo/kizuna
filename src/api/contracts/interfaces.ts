@@ -61,6 +61,8 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	/**
 	 * Disposes of all services and cleans up resources.
 	 *
+	 * The provider invokes consumer cleanup before dependency cleanup.
+	 *
 	 * Note: services whose `dispose()` returns a Promise will have their
 	 * rejections logged but not awaited. For async cleanup use `disposeAsync()`.
 	 */
@@ -70,8 +72,9 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	 * Asynchronously disposes of all services and awaits any returned Promises.
 	 *
 	 * Services may implement `[Symbol.asyncDispose]` or return a Promise from
-	 * `dispose()`. Dispose handlers run in parallel; individual rejections are
-	 * logged to `console.error` but do not abort disposal of other services.
+	 * `dispose()`. The provider waits for consumer cleanup before it starts
+	 * dependency cleanup. Independent handlers run in parallel. Individual
+	 * rejections do not abort disposal of other services.
 	 */
 	disposeAsync(): Promise<void>;
 

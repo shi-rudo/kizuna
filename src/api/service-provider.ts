@@ -1,4 +1,8 @@
 import { CircularDependencyError } from "../core/errors";
+import {
+    createDisposalLayers,
+    createDisposalPlan,
+} from "../core/services/disposal-order";
 import type { ServiceWrapper } from "../core/services/service-wrapper";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces";
 import type { ServiceRegistry } from "./contracts/types";
@@ -26,6 +30,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
     private readonly registrations: Readonly<Record<string, ServiceWrapper>>;
     private readonly multiRegistrations: Readonly<Record<string, ServiceWrapper[]>>;
+    private readonly registrationOrder: ServiceWrapper[];
     private _disposed = false;
 
     /**
@@ -36,7 +41,8 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
     constructor(
         registrations: Record<string, ServiceWrapper>,
-        multiRegistrations: Record<string, ServiceWrapper[]> = {}
+        multiRegistrations: Record<string, ServiceWrapper[]> = {},
+        registrationOrder?: readonly ServiceWrapper[],
     ) {
         if (!registrations) {
             throw new Error("Registrations cannot be null or undefined");
@@ -45,6 +51,12 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         this.multiRegistrations = Object.fromEntries(
             Object.entries(multiRegistrations).map(([k, v]) => [k, [...v]])
         );
+        this.registrationOrder = registrationOrder
+            ? [...registrationOrder]
+            : [
+                ...Object.values(this.registrations),
+                ...Object.values(this.multiRegistrations).flat(),
+            ];
     }
 
     /**
@@ -135,16 +147,31 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         this.ensureNotDisposed();
 
         const newRegistrations: Record<string, ServiceWrapper> = {};
+        const scopedResolvers = new Map<ServiceWrapper, ServiceWrapper>();
         Object.entries(this.registrations).forEach(([key, resolver]) => {
-            newRegistrations[key] = resolver.createScope();
+            const scopedResolver = resolver.createScope();
+            newRegistrations[key] = scopedResolver;
+            scopedResolvers.set(resolver, scopedResolver);
         });
 
         const newMultiRegistrations: Record<string, ServiceWrapper[]> = {};
         Object.entries(this.multiRegistrations).forEach(([key, resolvers]) => {
-            newMultiRegistrations[key] = resolvers.map(r => r.createScope());
+            newMultiRegistrations[key] = resolvers.map((resolver) => {
+                const scopedResolver = resolver.createScope();
+                scopedResolvers.set(resolver, scopedResolver);
+                return scopedResolver;
+            });
         });
 
-        return new ServiceProvider<TRegistry>(newRegistrations, newMultiRegistrations);
+        const scopedRegistrationOrder = this.registrationOrder
+            .map((resolver) => scopedResolvers.get(resolver))
+            .filter((resolver): resolver is ServiceWrapper => resolver !== undefined);
+
+        return new ServiceProvider<TRegistry>(
+            newRegistrations,
+            newMultiRegistrations,
+            scopedRegistrationOrder,
+        );
     }
 
     dispose(): void {
@@ -153,23 +180,15 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
         this._disposed = true;
 
-        Object.values(this.registrations).forEach((resolver) => {
-            try {
-                resolver.dispose?.();
-            } catch (error) {
-                console.error("Error disposing resolver:", error);
-            }
-        });
-
-        Object.values(this.multiRegistrations).forEach((resolvers) => {
-            for (const resolver of resolvers) {
+        for (const layer of createDisposalLayers(this.registrationOrder)) {
+            for (const resolver of layer) {
                 try {
                     resolver.dispose?.();
                 } catch (error) {
-                    console.error("Error disposing multi-registration resolver:", error);
+                    console.error("Error disposing resolver:", error);
                 }
             }
-        });
+        }
 
         this.clearRegistrations();
     }
@@ -178,9 +197,10 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      * Asynchronously disposes the provider and awaits all service-owned async
      * dispose handlers (Promise-returning `dispose()` or `[Symbol.asyncDispose]`).
      *
-     * Dispose handlers run in parallel via `Promise.allSettled`. Individual
-     * rejections are logged to `console.error` but do not abort disposal.
-     * Idempotent — safe to call multiple times.
+     * Independent dispose handlers run in parallel. A dependency starts only
+     * after all of its consumer groups settle. Individual rejections are
+     * logged to `console.error` but do not abort disposal. Idempotent — safe to
+     * call multiple times.
      */
     async disposeAsync(): Promise<void> {
         if (this._disposed) {
@@ -188,21 +208,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
         this._disposed = true;
 
-        const tasks: Promise<unknown>[] = [];
-
-        for (const resolver of Object.values(this.registrations)) {
-            const task = this.runResolverDisposeAsync(resolver, "resolver");
-            if (task) tasks.push(task);
-        }
-
-        for (const resolvers of Object.values(this.multiRegistrations)) {
-            for (const resolver of resolvers) {
-                const task = this.runResolverDisposeAsync(resolver, "multi-registration resolver");
-                if (task) tasks.push(task);
-            }
-        }
-
-        await Promise.allSettled(tasks);
+        await this.runDependencyAwareDisposeAsync();
 
         this.clearRegistrations();
     }
@@ -234,6 +240,50 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
     }
 
+    private async runDependencyAwareDisposeAsync(): Promise<void> {
+        const plan = createDisposalPlan(this.registrationOrder);
+        if (plan.groups.length === 0) {
+            return;
+        }
+
+        const remainingConsumerGroups = plan.groups.map(
+            (group) => group.consumerGroupCount,
+        );
+
+        await new Promise<void>((resolve) => {
+            let completedGroups = 0;
+
+            const startGroup = (groupIndex: number): void => {
+                const tasks: Promise<unknown>[] = [];
+                for (const resolver of plan.groups[groupIndex].resolvers) {
+                    const task = this.runResolverDisposeAsync(resolver, "resolver");
+                    if (task) {
+                        tasks.push(task);
+                    }
+                }
+
+                void Promise.allSettled(tasks).then(() => {
+                    completedGroups++;
+
+                    for (const dependencyGroup of plan.groups[groupIndex].dependencyGroups) {
+                        remainingConsumerGroups[dependencyGroup]--;
+                        if (remainingConsumerGroups[dependencyGroup] === 0) {
+                            startGroup(dependencyGroup);
+                        }
+                    }
+
+                    if (completedGroups === plan.groups.length) {
+                        resolve();
+                    }
+                });
+            };
+
+            for (const groupIndex of plan.rootGroups) {
+                startGroup(groupIndex);
+            }
+        });
+    }
+
     private clearRegistrations(): void {
         const regs = this.registrations as Record<string, ServiceWrapper>;
         for (const key of Object.keys(regs)) {
@@ -243,6 +293,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         for (const key of Object.keys(multiRegs)) {
             delete multiRegs[key];
         }
+        this.registrationOrder.length = 0;
     }
 
     private ensureNotDisposed(): void {
