@@ -24,7 +24,9 @@ Sync disposal invokes each layer in registration order. Async disposal starts th
 
 Async disposal starts each dependency group after all its consumer groups settle. Unrelated graph branches do not block one another.
 
-Services in the same disposal layer keep their registration order. The provider keeps one order across single registrations and multi-registrations.
+Sync disposal keeps registration order within each layer. The provider keeps one order across single registrations and multi-registrations.
+
+Async order between independent branches depends on completion timing. If cleanup order is required, applications must declare a dependency.
 
 Factory registrations do not declare dependency keys. Service lookups inside a factory do not add edges to the disposal graph.
 
@@ -34,5 +36,5 @@ Factory registrations do not declare dependency keys. Service lookups inside a f
 - Independent cleanup stays parallel in the async path.
 - Multi-registration dependencies use the same order as single registrations.
 - A cycle cannot have a valid internal disposal order. Services in the cycle start in registration order.
-- The graph plan takes `O(V log V + E)` time and `O(V + E)` memory.
+- The graph plan takes `O((V + E) log V)` time and `O(V + E)` memory.
 - If factory dependency order is important, the application must coordinate cleanup.

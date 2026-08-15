@@ -120,7 +120,9 @@ Both APIs process consumers before their declared dependencies. `disposeAsync()`
 
 Independent cleanup can run in parallel. A slow, unrelated service does not delay dependency cleanup in another graph branch.
 
-This order includes all services under a multi-registration key. Services in the same disposal layer keep their registration order.
+This order includes all services under a multi-registration key. Sync disposal keeps registration order within each disposal layer.
+
+Async order between independent branches depends on completion timing. If cleanup order is required, declare a dependency.
 
 Factory lookups do not affect disposal order because factories do not declare dependency keys.
 

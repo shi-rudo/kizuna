@@ -200,9 +200,9 @@ Two disposal APIs:
 - `container.dispose()` — synchronous. Invokes each instance's sync dispose hook (see priority below) without awaiting Promises.
 - `container.disposeAsync()` — awaits service-owned async cleanup. Waits for all consumers before it starts dependency cleanup.
 
-Both APIs process consumers before their declared dependencies. Services in the same disposal layer keep registration order.
+Both APIs process consumers before their declared dependencies. Sync disposal keeps registration order within each disposal layer.
 
-Independent cleanup can run in parallel during `disposeAsync()`.
+Independent cleanup can run in parallel during `disposeAsync()`. Its order depends on completion timing.
 
 Multi-registration keys include all services under that key. Factory lookups do not affect disposal order because factories do not declare dependency keys.
 

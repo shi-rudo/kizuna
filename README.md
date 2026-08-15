@@ -443,7 +443,9 @@ Services can implement `dispose()` or `[Symbol.asyncDispose]()`. Kizuna uses `Sy
 
 `disposeAsync()` waits for all consumer cleanup before it starts dependency cleanup. It runs services without dependency links in parallel.
 
-This order includes all services under a multi-registration key. Services in the same disposal layer keep their registration order.
+This order includes all services under a multi-registration key. Sync cleanup keeps registration order within each disposal layer.
+
+Async order between independent branches depends on completion timing. If cleanup order is required, declare a dependency.
 
 Factory registrations do not declare dependency keys. Thus, service lookups inside a factory do not affect the disposal order.
 
