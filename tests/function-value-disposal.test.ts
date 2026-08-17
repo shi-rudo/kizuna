@@ -59,9 +59,13 @@ describe("function-valued service disposal", () => {
 
 	it("awaits singleton function cleanup through Symbol.asyncDispose exactly once", async () => {
 		let disposeCalls = 0;
+		let cleanupFinished = false;
+		const cleanupBlocker = createDeferred();
 		const service = Object.assign(() => "ready", {
 			async [Symbol.asyncDispose](): Promise<void> {
 				disposeCalls++;
+				await cleanupBlocker.promise;
+				cleanupFinished = true;
 			},
 		});
 		const container = new ContainerBuilder()
@@ -69,17 +73,33 @@ describe("function-valued service disposal", () => {
 			.build();
 
 		container.get("service");
-		await container.disposeAsync();
+		let disposalFinished = false;
+		const disposal = container.disposeAsync().then(() => {
+			disposalFinished = true;
+		});
+		await nextTurn();
+
+		expect(disposeCalls).toBe(1);
+		expect(cleanupFinished).toBe(false);
+		expect(disposalFinished).toBe(false);
+
+		cleanupBlocker.resolve();
+		await disposal;
 		await container.disposeAsync();
 
+		expect(cleanupFinished).toBe(true);
 		expect(disposeCalls).toBe(1);
 	});
 
 	it("awaits scoped function cleanup through Symbol.asyncDispose exactly once", async () => {
 		let disposeCalls = 0;
+		let cleanupFinished = false;
+		const cleanupBlocker = createDeferred();
 		const service = Object.assign(() => "ready", {
 			async [Symbol.asyncDispose](): Promise<void> {
 				disposeCalls++;
+				await cleanupBlocker.promise;
+				cleanupFinished = true;
 			},
 		});
 		const container = new ContainerBuilder()
@@ -88,9 +108,21 @@ describe("function-valued service disposal", () => {
 		const scope = container.startScope();
 
 		scope.get("service");
-		await scope.disposeAsync();
+		let disposalFinished = false;
+		const disposal = scope.disposeAsync().then(() => {
+			disposalFinished = true;
+		});
+		await nextTurn();
+
+		expect(disposeCalls).toBe(1);
+		expect(cleanupFinished).toBe(false);
+		expect(disposalFinished).toBe(false);
+
+		cleanupBlocker.resolve();
+		await disposal;
 		await scope.disposeAsync();
 
+		expect(cleanupFinished).toBe(true);
 		expect(disposeCalls).toBe(1);
 	});
 
@@ -134,3 +166,15 @@ describe("function-valued service disposal", () => {
 		await expect(container.disposeAsync()).resolves.toBeUndefined();
 	});
 });
+
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+	let resolve!: () => void;
+	const promise = new Promise<void>((complete) => {
+		resolve = complete;
+	});
+	return { promise, resolve };
+}
+
+function nextTurn(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
