@@ -63,7 +63,7 @@ export function requireSynchronousDispose(result: unknown): void {
 	) {
 		void Promise.resolve(result).catch(() => undefined);
 		throw new TypeError(
-			"A service returned a Promise during dispose(). Call disposeAsync() to wait for asynchronous cleanup.",
+			"dispose() started asynchronous cleanup but cannot wait for it. Use disposeAsync() instead of dispose() for containers with asynchronous cleanup.",
 		);
 	}
 }

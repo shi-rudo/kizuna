@@ -22,6 +22,8 @@ export class CircularDependencyError extends Error {
  * This error does not represent a domain aggregate.
  */
 export class DisposalError extends AggregateError {
+	declare readonly errors: unknown[];
+
 	constructor(
 		errors: Iterable<unknown>,
 		message = "One or more services failed to dispose",

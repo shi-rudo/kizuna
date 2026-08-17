@@ -178,7 +178,7 @@ describe("disposal errors", () => {
 		expect((error as DisposalError).errors[0]).toBeInstanceOf(TypeError);
 		expect((error as DisposalError).errors[0]).toHaveProperty(
 			"message",
-			expect.stringMatching(/disposeAsync\(\)/),
+			"dispose() started asynchronous cleanup but cannot wait for it. Use disposeAsync() instead of dispose() for containers with asynchronous cleanup.",
 		);
 
 		finishCleanup();
