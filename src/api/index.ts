@@ -42,5 +42,6 @@ export type { InterfaceToken } from "./interface-token";
 export { interfaceToken } from "./interface-token";
 export {
 	CircularDependencyError,
+	DisposalError,
 	ServiceProviderToken,
 } from "./service-provider";

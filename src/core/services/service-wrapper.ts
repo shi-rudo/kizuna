@@ -93,8 +93,9 @@ export class ServiceWrapper {
      */
     dispose(): void {
         if (this._lifecycle && this._ownsLifecycle) {
-            this._lifecycle.dispose();
+            const lifecycle = this._lifecycle;
             this._lifecycle = null;
+            lifecycle.dispose();
         }
     }
 

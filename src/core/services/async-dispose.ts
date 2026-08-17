@@ -48,6 +48,26 @@ export function invokeSyncDispose(instance: unknown): unknown {
     return undefined;
 }
 
+/**
+ * Reports cleanup that a synchronous disposal call cannot wait for.
+ *
+ * A rejection handler prevents an unhandled rejection. The caller receives a
+ * synchronous error and can use `disposeAsync()` for future containers.
+ *
+ * @internal
+ */
+export function requireSynchronousDispose(result: unknown): void {
+	if (
+		result &&
+		typeof (result as PromiseLike<unknown>).then === "function"
+	) {
+		void Promise.resolve(result).catch(() => undefined);
+		throw new TypeError(
+			"dispose() started asynchronous cleanup but cannot wait for it. Use disposeAsync() instead of dispose() for containers with asynchronous cleanup.",
+		);
+	}
+}
+
 export async function invokeAsyncDispose(instance: unknown): Promise<void> {
     if (!instance || typeof instance !== 'object') {
         return;

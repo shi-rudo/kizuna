@@ -15,3 +15,20 @@ export class CircularDependencyError extends Error {
 		this.chain = chain;
 	}
 }
+
+/**
+ * Reports one or more failures that occurred while services were disposed.
+ * The original failures are available through the inherited `errors` property.
+ * This error does not represent a domain aggregate.
+ */
+export class DisposalError extends AggregateError {
+	declare readonly errors: unknown[];
+
+	constructor(
+		errors: Iterable<unknown>,
+		message = "One or more services failed to dispose",
+	) {
+		super(errors, message);
+		this.name = "DisposalError";
+	}
+}

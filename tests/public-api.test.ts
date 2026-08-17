@@ -6,6 +6,7 @@ describe("public package API", () => {
 		expect(Object.keys(PublicApi).sort()).toEqual([
 			"CircularDependencyError",
 			"ContainerBuilder",
+			"DisposalError",
 			"ServiceProviderToken",
 			"interfaceToken",
 		]);

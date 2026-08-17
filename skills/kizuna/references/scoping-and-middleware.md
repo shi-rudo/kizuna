@@ -78,7 +78,7 @@ const app = express();
 
 // Scope middleware — creates and disposes scope per request.
 // res.on('finish') is a sync callback that cannot await; if services have
-// async cleanup, fire-and-forget disposeAsync() (rejections go to console).
+// async cleanup, fire-and-forget disposeAsync(). Handle the rejection here.
 app.use((req, res, next) => {
   req.scope = container.startScope();
   res.on('finish', () => {

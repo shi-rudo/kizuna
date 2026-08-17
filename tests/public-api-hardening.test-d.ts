@@ -12,6 +12,15 @@ test("the package root does not expose provider construction or internals", () =
 	Kizuna.ServiceWrapper;
 });
 
+test("disposal errors require callers to narrow each original error", () => {
+	const disposalError = new Kizuna.DisposalError([new Error("cleanup failed")]);
+	expectTypeOf(disposalError.errors).toEqualTypeOf<unknown[]>();
+
+	const originalError = disposalError.errors[0];
+	// @ts-expect-error Original errors must be narrowed before property access.
+	originalError.message;
+});
+
 test("legacy service contracts are not public API", () => {
 	// @ts-expect-error The unsafe ServiceLocator contract is internal.
 	type UnsafeLocator = Kizuna.ServiceLocator;

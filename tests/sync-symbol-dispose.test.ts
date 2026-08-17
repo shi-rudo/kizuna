@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ContainerBuilder } from '../src/api/container-builder';
+import { ContainerBuilder, DisposalError } from '../src';
 
 describe('Sync dispose() honors TC39 dispose symbols', () => {
     it('disposes a singleton implementing only [Symbol.dispose]', () => {
@@ -59,7 +59,7 @@ describe('Sync dispose() honors TC39 dispose symbols', () => {
         expect(plainCalls).toBe(0);
     });
 
-    it('falls back to [Symbol.asyncDispose] as a last resort on the sync path', () => {
+    it('reports [Symbol.asyncDispose] as asynchronous on the sync path', () => {
         let started = false;
         class Resource {
             async [Symbol.asyncDispose]() {
@@ -71,7 +71,7 @@ describe('Sync dispose() honors TC39 dispose symbols', () => {
             .build();
 
         container.get('res');
-        container.dispose();
+        expect(() => container.dispose()).toThrow(DisposalError);
 
         expect(started).toBe(true);
     });
