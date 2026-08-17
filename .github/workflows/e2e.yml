@@ -47,7 +47,7 @@ jobs:
       - name: Check packed runtime exports
         run: |
           cd test-app
-          node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['CircularDependencyError','ContainerBuilder','ServiceProviderToken','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
+          node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['CircularDependencyError','ContainerBuilder','DisposalError','ServiceProviderToken','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
 
       - name: Build test app
         run: cd test-app && pnpm run build
