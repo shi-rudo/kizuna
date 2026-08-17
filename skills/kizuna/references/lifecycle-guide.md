@@ -123,6 +123,9 @@ Both APIs attempt all cleanup operations. `dispose()` throws one
 `DisposalError` after all cleanup settles. The `errors` property contains the
 original errors. Kizuna does not write cleanup errors to the console.
 
+Kizuna checks object and function values from singleton and scoped factories
+for cleanup hooks.
+
 `DisposalError` extends the JavaScript `AggregateError` class. It reports
 multiple cleanup errors and does not represent a domain aggregate.
 

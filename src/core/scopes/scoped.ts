@@ -239,7 +239,7 @@ export class ScopedLifecycle implements ServiceLifecycle {
 
         try {
             // Dispose the instance if it implements a sync or TC39 dispose hook
-            if (this._instance && typeof this._instance === 'object') {
+            if (this._initialized) {
                 const result = invokeSyncDispose(this._instance);
                 requireSynchronousDispose(result);
             }
@@ -261,7 +261,7 @@ export class ScopedLifecycle implements ServiceLifecycle {
         this._isDisposed = true;
 
         try {
-            if (this._instance && typeof this._instance === 'object') {
+            if (this._initialized) {
                 await invokeAsyncDispose(this._instance);
             }
         } finally {
