@@ -16,12 +16,16 @@ async lifecycle management that the container does not supply.
 
 The container treats a `Promise` as a normal service value.
 
-- A singleton factory caches its `Promise` in the root container.
-- A scoped factory caches its `Promise` in each scope.
+- A singleton factory caches a pending or fulfilled `Promise` in the root container.
+- A scoped factory caches a pending or fulfilled `Promise` in each scope.
 - A transient factory creates a new `Promise` for each resolution.
 - `get()` returns the `Promise` without awaiting it.
+- An active lifecycle removes its `Promise` from the cache after rejection.
+- The next `get()` call invokes the failed factory again.
+- The lifecycle does not retry without a new resolution request.
 - `disposeAsync()` waits for stored singleton and scoped Promises.
 - `disposeAsync()` cleans each resolved value with the standard hook priority.
+- Disposal keeps ownership of a pending `Promise` and reports a later rejection.
 - `dispose()` starts this cleanup but reports that it cannot wait.
 - The container does not track or clean transient values.
 
@@ -45,11 +49,14 @@ requires the consumer to await the result.
 Synchronous services have no `Promise` cost. Promise caching also prevents a
 singleton or scoped factory from starting the same operation more than once.
 
-The container does not supply async-aware resolution or creation rollback. A
-rejected `Promise` stays cached for its lifecycle.
+The container does not supply async-aware resolution or creation rollback. All
+callers share one pending `Promise` and its result.
 
-`disposeAsync()` reports a rejected stored Promise as a cleanup failure. The
-original rejection is in the `DisposalError`.
+After rejection, a new resolution request can start the factory again. Kizuna
+does not supply a retry limit, a delay, or backoff.
+
+The original consumer receives the rejection. If disposal already owns the
+pending `Promise`, its `DisposalError` also contains the rejection.
 
 Disposal waits while a stored Promise is pending. A Promise that never settles
 also prevents asynchronous disposal from settling.

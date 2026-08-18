@@ -53,7 +53,8 @@ An `async` function infers `T` as `Promise<Service>`. The container stores and
 returns that `Promise` as the service value. It does not await the `Promise`.
 
 `disposeAsync()` waits for stored singleton and scoped Promises. It cleans each
-resolved value. ADR-001 defines the full Promise-value contract.
+resolved value. An active lifecycle removes a rejected `Promise` from its cache.
+ADR-001 defines the full Promise-value contract.
 
 ## Consequences
 

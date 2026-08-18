@@ -212,6 +212,13 @@ Singleton and scoped factories can return Promise values. `disposeAsync()`
 waits for each stored Promise and cleans its resolved value. Transient values
 are not tracked or cleaned.
 
+An active singleton or scoped lifecycle removes a rejected Promise from its
+cache. The next `get()` or `getAll()` call invokes only the failed factory again.
+The lifecycle does not retry automatically.
+
+If disposal starts before the Promise settles, the lifecycle keeps ownership.
+`disposeAsync()` reports a later rejection in its `DisposalError`.
+
 Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
 
 Both APIs attempt all cleanup operations. `dispose()` throws one

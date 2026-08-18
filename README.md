@@ -671,14 +671,18 @@ are not resolution keys. Resolve registered services through their string keys.
 
 Factory methods are synchronous container operations. An `async` factory stores
 and returns its `Promise` as the service value. Singleton and scoped lifecycles
-cache that `Promise`.
+cache a pending or fulfilled `Promise`.
 
 `get()` does not await the `Promise`. Each consumer must await the returned
 value. `disposeAsync()` waits for a stored singleton or scoped `Promise`. It then
 cleans the resolved value with the standard cleanup-hook priority.
 
-If the stored `Promise` rejects, `disposeAsync()` reports the rejection in its
-`DisposalError`. A rejected `Promise` stays cached for its lifecycle.
+If a stored `Promise` rejects, its active lifecycle removes it from the cache.
+The next `get()` call invokes the factory again. The lifecycle does not retry
+automatically. The consumer still receives the original rejection.
+
+If disposal starts while a `Promise` is pending, the lifecycle keeps ownership.
+`disposeAsync()` reports a later rejection in its `DisposalError`.
 
 `dispose()` starts the cleanup chain but cannot wait for it. Its `DisposalError`
 contains a `TypeError` that tells the caller to use `disposeAsync()`.

@@ -14,6 +14,10 @@ import type { TypeSafeServiceLocator } from "./interfaces";
  * method waits for the Promise and cleans the resolved value. Transient values
  * are not tracked or cleaned.
  *
+ * An active singleton or scoped lifecycle removes a rejected Promise from its
+ * cache. The next resolution request invokes the factory again. The lifecycle
+ * does not retry automatically.
+ *
  * @template TRegistry - The registry available when the factory is registered
  * @template T - The type of service the factory creates
  * @param serviceProvider - The typed service locator for resolving dependencies

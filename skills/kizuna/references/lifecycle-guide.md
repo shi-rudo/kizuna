@@ -127,8 +127,14 @@ Kizuna checks object and function values from singleton and scoped factories
 for cleanup hooks.
 
 Singleton and scoped factories can also return Promise values. `disposeAsync()`
-waits for each stored Promise and cleans its resolved value. A rejection becomes
-a cleanup failure in the `DisposalError`.
+waits for each stored Promise and cleans its resolved value.
+
+An active lifecycle removes a rejected Promise from its cache. The next
+resolution request invokes only the failed factory again. The lifecycle does
+not retry automatically.
+
+If disposal starts before a Promise settles, the lifecycle keeps ownership. A
+later rejection becomes a cleanup failure in the `DisposalError`.
 
 The container does not track transient values. It cannot clean a value from a
 transient Promise factory.

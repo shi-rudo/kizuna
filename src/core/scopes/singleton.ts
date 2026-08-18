@@ -5,6 +5,7 @@ import {
     invokeSyncDispose,
     requireSynchronousDispose,
 } from '../services/async-dispose';
+import { observePromiseRejection } from '../services/promise-value';
 
 /**
  * Singleton lifecycle implementation that maintains one instance for the entire application lifetime.
@@ -137,8 +138,15 @@ export class SingletonLifecycle implements ServiceLifecycle {
 
         if (!this._initialized) {
             try {
-                this._instance = this._factory(...args);
+                const instance = this._factory(...args);
+                this._instance = instance;
                 this._initialized = true;
+                observePromiseRejection(instance, () => {
+                    if (!this._isDisposed && this._instance === instance) {
+                        this._instance = undefined;
+                        this._initialized = false;
+                    }
+                });
             } catch (error) {
                 if (error instanceof CircularDependencyError) {
                     throw error;

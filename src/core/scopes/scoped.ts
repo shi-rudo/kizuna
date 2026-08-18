@@ -5,6 +5,7 @@ import {
     invokeSyncDispose,
     requireSynchronousDispose,
 } from '../services/async-dispose';
+import { observePromiseRejection } from '../services/promise-value';
 
 /**
  * Scoped lifecycle implementation that maintains one instance per scope.
@@ -147,8 +148,15 @@ export class ScopedLifecycle implements ServiceLifecycle {
         
         if (!this._initialized) {
             try {
-                this._instance = this._factory(...args);
+                const instance = this._factory(...args);
+                this._instance = instance;
                 this._initialized = true;
+                observePromiseRejection(instance, () => {
+                    if (!this._isDisposed && this._instance === instance) {
+                        this._instance = undefined;
+                        this._initialized = false;
+                    }
+                });
             } catch (error) {
                 if (error instanceof CircularDependencyError) {
                     throw error;
