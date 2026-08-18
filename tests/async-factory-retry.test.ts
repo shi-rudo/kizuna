@@ -36,6 +36,25 @@ describe("rejected async factory retries", () => {
 		expect(attempts).toBe(1);
 	});
 
+	it("reads a Promise-like then getter once", async () => {
+		let thenReads = 0;
+		// biome-ignore lint/suspicious/noThenProperty: This verifies one-shot thenable assimilation.
+		const factoryValue = Object.defineProperty({}, "then", {
+			get: () => {
+				thenReads++;
+				return thenReads === 1
+					? (resolve: (value: string) => void) => resolve("ready")
+					: undefined;
+			},
+		}) as PromiseLike<string>;
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("service", () => factoryValue)
+			.build();
+
+		await expect(container.get("service")).resolves.toBe("ready");
+		expect(thenReads).toBe(1);
+	});
+
 	it("retries a rejected singleton factory Promise", async () => {
 		const failure = new Error("singleton initialization failed");
 		const failedPromise = Promise.reject(failure);

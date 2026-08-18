@@ -22,6 +22,10 @@ The container treats a `Promise` as an asynchronous service value.
   in each scope.
 - The observer `Promise` has the same result or rejection as the factory
   `Promise`. Its object identity can differ.
+- Singleton and scoped registry types normalize `PromiseLike<T>` to
+  `Promise<Awaited<T>>`. Transient registry types keep the exact factory type.
+- Promise-like detection reads `then` once. The lifecycle invokes the captured
+  function asynchronously.
 - All consumers share the stored `Promise` while it is pending or fulfilled.
 - A transient factory creates a new `Promise` for each resolution.
 - `get()` returns the `Promise` without awaiting it.
@@ -55,6 +59,10 @@ requires the consumer to await the result.
 Synchronous services have no `Promise` cost. Each singleton or scoped factory
 attempt creates one observer `Promise`. Promise caching prevents the factory
 from starting the same operation more than once.
+
+The observer is a native `Promise`. It does not preserve custom properties or
+methods from a Promise subclass or thenable. The registry type reflects this
+runtime value.
 
 The container does not supply async-aware resolution or creation rollback. All
 callers share one pending `Promise` and its result.

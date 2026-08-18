@@ -133,6 +133,10 @@ The lifecycle wraps the factory Promise in an observer Promise. All consumers
 share the stored Promise. It has the same result or rejection as the factory
 Promise, but it can have a different object identity.
 
+For singleton and scoped factories, a `PromiseLike<T>` result becomes a native
+`Promise<Awaited<T>>`. Custom fields from a Promise subclass or thenable are not
+available. Transient factories keep their exact return type.
+
 An active lifecycle removes a rejected Promise from its cache. The next
 resolution request invokes only the failed factory again. The lifecycle does
 not retry automatically. The stored Promise rethrows the rejection, so

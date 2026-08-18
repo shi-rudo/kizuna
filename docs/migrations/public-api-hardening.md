@@ -94,6 +94,10 @@ value, but it can have a different object identity. The lifecycle caches the
 stored `Promise` while it is pending or fulfilled. It removes the stored
 `Promise` after rejection.
 
+The inferred registry type for a singleton or scoped `PromiseLike<T>` factory is
+`Promise<Awaited<T>>`. Do not use custom properties from the original Promise
+subclass or thenable. Transient factories still return their exact factory value.
+
 The next resolution request invokes the failed factory again. The lifecycle
 does not retry automatically.
 
