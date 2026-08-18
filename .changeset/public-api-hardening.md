@@ -9,4 +9,4 @@ Limit the package root to supported consumer contracts and prevent typed registr
 - Require fixed literal keys for all factory registrations.
 - Remove `remove()` and `clear()` from `ContainerBuilder`.
 - Limit `isRegistered()` to string keys.
-- Document that async factories register Promise values without async-aware disposal.
+- Document that async factories register Promise values without async resolution.

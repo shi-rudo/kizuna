@@ -7,11 +7,12 @@ import type { TypeSafeServiceLocator } from "./interfaces";
  * to resolve dependencies and create complex service instances. This is useful
  * for services that require custom initialization logic or conditional creation.
  *
- * The container calls each factory synchronously. If a factory returns a Promise
- * (for example, an `async` function), the container caches and returns the Promise itself. Every
- * consumer must `await` it, and dispose hooks on the eventually resolved value
- * are never invoked by the container. Perform async initialization before
- * building the container and register the resulting value instead.
+ * The container calls each factory synchronously. If a factory returns a Promise,
+ * the container stores and returns that Promise. Each consumer must await it.
+ *
+ * Singleton and scoped lifecycles own their stored Promise. Their `disposeAsync()`
+ * method waits for the Promise and cleans the resolved value. Transient values
+ * are not tracked or cleaned.
  *
  * @template TRegistry - The registry available when the factory is registered
  * @template T - The type of service the factory creates

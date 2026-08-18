@@ -64,20 +64,20 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	 * The provider invokes consumer cleanup before dependency cleanup.
 	 * It attempts all cleanup operations and then throws one `DisposalError`
 	 * with the original failures. It does not write cleanup errors to the
-	 * console. If a cleanup method returns a Promise, the `DisposalError` contains a
-	 * `TypeError` because this method cannot wait for the Promise. Use
-	 * `disposeAsync()` for asynchronous cleanup.
+	 * console. If cleanup needs a Promise, this method starts cleanup but cannot
+	 * wait. The `DisposalError` contains a `TypeError`. Use `disposeAsync()` for
+	 * asynchronous cleanup.
 	 */
 	dispose(): void;
 
 	/**
 	 * Asynchronously disposes of all services and awaits any returned Promises.
 	 *
-	 * Services may implement `[Symbol.asyncDispose]` or return a Promise from
-	 * `dispose()`. The provider waits for consumer cleanup before it starts
-	 * dependency cleanup. Independent handlers run in parallel. A rejection
-	 * does not stop other cleanup. After all cleanup settles, this method rejects
-	 * with one `DisposalError` that contains the original failures.
+	 * Services can implement `[Symbol.asyncDispose]` or return a Promise from
+	 * `dispose()`. This method also waits for stored Promise values and cleans
+	 * their resolved values. The provider cleans consumers before dependencies.
+	 * Independent handlers run in parallel. One rejection does not stop other
+	 * cleanup. This method then rejects with one `DisposalError`.
 	 */
 	disposeAsync(): Promise<void>;
 

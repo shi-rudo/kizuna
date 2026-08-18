@@ -205,7 +205,8 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 
     /**
      * Asynchronously disposes the provider and awaits all service-owned async
-     * dispose handlers (Promise-returning `dispose()` or `[Symbol.asyncDispose]`).
+     * cleanup. This includes resolved values from singleton and scoped Promise
+     * factories.
      *
      * Independent dispose handlers run in parallel. A dependency starts only
      * after all of its consumer groups settle. Rejections do not stop other

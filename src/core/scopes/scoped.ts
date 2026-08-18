@@ -251,8 +251,8 @@ export class ScopedLifecycle implements ServiceLifecycle {
     }
 
     /**
-     * Asynchronously disposes the scoped lifecycle, awaiting the instance's
-     * own async dispose if present.
+     * Asynchronously disposes the scoped lifecycle. For a Promise instance,
+     * it waits for the value and invokes that value's cleanup hook.
      */
     public async disposeAsync(): Promise<void> {
         if (this._isDisposed) {

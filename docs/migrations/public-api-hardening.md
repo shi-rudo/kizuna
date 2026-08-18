@@ -91,6 +91,5 @@ An `async` factory produces a `Promise` service value. The container returns the
 `Promise` without awaiting it. Singleton and scoped lifecycles cache the
 `Promise` for their lifecycle.
 
-The container does not dispose the value that the `Promise` resolves to. Perform
-asynchronous initialization before `build()` when the container must dispose the
-resolved value.
+Use `disposeAsync()` to wait for that Promise and clean its resolved value. The
+container does not track or clean transient values.

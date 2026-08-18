@@ -126,6 +126,13 @@ original errors. Kizuna does not write cleanup errors to the console.
 Kizuna checks object and function values from singleton and scoped factories
 for cleanup hooks.
 
+Singleton and scoped factories can also return Promise values. `disposeAsync()`
+waits for each stored Promise and cleans its resolved value. A rejection becomes
+a cleanup failure in the `DisposalError`.
+
+The container does not track transient values. It cannot clean a value from a
+transient Promise factory.
+
 `DisposalError` extends the JavaScript `AggregateError` class. It reports
 multiple cleanup errors and does not represent a domain aggregate.
 
@@ -152,6 +159,9 @@ After `container.dispose()` or `container.disposeAsync()`:
 - Internal registration maps are cleared to allow GC of all service wrappers and lifecycle objects.
 
 **Pick the async variant when:** any registered service's `dispose` returns a Promise (e.g. `await pool.end()`, `await kafkaProducer.disconnect()`), or implements `Symbol.asyncDispose`. The sync `dispose()` cannot await these and the cleanup may be in flight when the next operation runs.
+
+Also pick the async variant when a singleton or scoped factory returns a
+Promise. Disposal waits for a pending Promise before it cleans the value.
 
 ## startScope() allocates O(n) objects
 
