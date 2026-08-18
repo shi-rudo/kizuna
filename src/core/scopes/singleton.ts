@@ -212,8 +212,8 @@ export class SingletonLifecycle implements ServiceLifecycle {
     }
 
     /**
-     * Asynchronously disposes the singleton lifecycle, awaiting the instance's
-     * own async dispose (`[Symbol.asyncDispose]` or `dispose()` returning a Promise).
+     * Asynchronously disposes the singleton lifecycle. For a Promise instance,
+     * it waits for the value and invokes that value's cleanup hook.
      */
     public async disposeAsync(): Promise<void> {
         if (this._isDisposed) {

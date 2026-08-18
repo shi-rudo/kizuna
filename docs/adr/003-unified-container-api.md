@@ -378,7 +378,7 @@ builder.registerSingletonInterface(EmailService, SMTPEmailService, 'Config');
 - **Generic Factory Types**: Better type inference for complex factory scenarios
 - **Service Decorators**: TypeScript decorator support for class-based registration
 - **Module System**: Higher-level abstractions for organizing related services
-- **Async Factories**: First-class support for promise-returning factories
+- **Async Resolution**: An API that awaits promise-returning factories
 - **Configuration Providers**: Integration with configuration systems
 
 This unified API represents Kizuna's comprehensive dependency injection capabilities, providing a single, powerful, and type-safe container system that supports all registration patterns with excellent developer experience.

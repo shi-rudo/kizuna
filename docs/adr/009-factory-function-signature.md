@@ -52,8 +52,8 @@ builder chain. The returned service becomes the registry value for `Database`.
 An `async` function infers `T` as `Promise<Service>`. The container stores and
 returns that `Promise` as the service value. It does not await the `Promise`.
 
-The container also does not manage disposal for the resolved value. ADR-001
-defines the full Promise-value contract.
+`disposeAsync()` waits for stored singleton and scoped Promises. It cleans each
+resolved value. ADR-001 defines the full Promise-value contract.
 
 ## Consequences
 
@@ -63,5 +63,5 @@ locator. Consumers do not need to import a factory helper type.
 Factories can hide dependencies because they resolve services in their body.
 Constructor registration is better when the dependency list is fixed.
 
-The package does not promise custom lifecycle strategies or async-aware
-lifecycle management.
+The package does not promise custom lifecycle strategies or asynchronous
+service resolution.

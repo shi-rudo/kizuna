@@ -20,10 +20,12 @@ The container treats a `Promise` as a normal service value.
 - A scoped factory caches its `Promise` in each scope.
 - A transient factory creates a new `Promise` for each resolution.
 - `get()` returns the `Promise` without awaiting it.
-- The container does not dispose the value that the `Promise` resolves to.
+- `disposeAsync()` waits for stored singleton and scoped Promises.
+- `disposeAsync()` cleans each resolved value with the standard hook priority.
+- `dispose()` starts this cleanup but reports that it cannot wait.
+- The container does not track or clean transient values.
 
-Use asynchronous initialization before `build()` when the container must own
-the resolved service and its disposal.
+Use `disposeAsync()` when a singleton or scoped factory returns a Promise.
 
 ## Example
 
@@ -43,9 +45,14 @@ requires the consumer to await the result.
 Synchronous services have no `Promise` cost. Promise caching also prevents a
 singleton or scoped factory from starting the same operation more than once.
 
-The container does not supply async-aware creation or rollback. A rejected
-cached `Promise` stays cached for its lifecycle. The consumer owns error
-handling for that `Promise`.
+The container does not supply async-aware resolution or creation rollback. A
+rejected `Promise` stays cached for its lifecycle.
 
-The container cannot call disposal hooks on the resolved value. Register an
-already initialized value if the container must dispose that value.
+`disposeAsync()` reports a rejected stored Promise as a cleanup failure. The
+original rejection is in the `DisposalError`.
+
+Disposal waits while a stored Promise is pending. A Promise that never settles
+also prevents asynchronous disposal from settling.
+
+The consumer owns Promise errors during normal service use. Transient Promise
+values remain the responsibility of the consumer.

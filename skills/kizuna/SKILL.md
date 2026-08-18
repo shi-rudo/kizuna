@@ -208,6 +208,10 @@ Multi-registration keys include all services under that key. Factory lookups do 
 
 Kizuna checks object and function values from singleton and scoped factories for cleanup hooks.
 
+Singleton and scoped factories can return Promise values. `disposeAsync()`
+waits for each stored Promise and cleans its resolved value. Transient values
+are not tracked or cleaned.
+
 Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
 
 Both APIs attempt all cleanup operations. `dispose()` throws one
@@ -259,6 +263,9 @@ await container.disposeAsync();
 - `dispose()` picks the sync cleanup method by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort. If the selected hook returns a Promise, cleanup starts. The `DisposalError` contains a `TypeError` because `dispose()` cannot wait.
 
 **When sync `dispose()` is wrong:** Use `disposeAsync()` when a service has asynchronous cleanup. Examples include database pools, file handles, and network connections. The sync method starts a Promise-based cleanup but does not await it. The `DisposalError` reports this condition.
+
+This rule also applies when a singleton or scoped factory returns a Promise.
+The sync method starts cleanup for its resolved value but cannot wait.
 
 ## Container Inspection
 
