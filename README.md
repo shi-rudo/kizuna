@@ -438,7 +438,9 @@ Use `dispose()` instead when every service has synchronous cleanup. Do not call
 both methods on one container. The first call disposes the container, and later
 calls are no-ops.
 
-Services can implement `dispose()` or `[Symbol.asyncDispose]()`. Kizuna uses `Symbol.asyncDispose` before `Symbol.dispose` and `dispose()` for asynchronous cleanup.
+Services can implement `dispose()`, `[Symbol.dispose]()`, or `[Symbol.asyncDispose]()`. Kizuna uses `Symbol.asyncDispose` before `Symbol.dispose` and `dispose()` for asynchronous cleanup.
+
+Kizuna checks object and function values from singleton and scoped factories for cleanup hooks.
 
 `dispose()` invokes consumer cleanup before dependency cleanup. It cannot wait for asynchronous consumer cleanup.
 

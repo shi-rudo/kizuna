@@ -200,7 +200,7 @@ export class SingletonLifecycle implements ServiceLifecycle {
         this._isDisposed = true;
 
         try {
-            if (this._initialized && this._instance && typeof this._instance === 'object') {
+            if (this._initialized) {
                 const result = invokeSyncDispose(this._instance);
                 requireSynchronousDispose(result);
             }
@@ -222,7 +222,7 @@ export class SingletonLifecycle implements ServiceLifecycle {
         this._isDisposed = true;
 
         try {
-            if (this._initialized && this._instance && typeof this._instance === 'object') {
+            if (this._initialized) {
                 await invokeAsyncDispose(this._instance);
             }
         } finally {

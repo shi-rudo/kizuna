@@ -24,7 +24,7 @@
  * @internal
  */
 export function invokeSyncDispose(instance: unknown): unknown {
-    if (!instance || typeof instance !== 'object') {
+    if (instance === null || (typeof instance !== 'object' && typeof instance !== 'function')) {
         return undefined;
     }
 
@@ -69,7 +69,7 @@ export function requireSynchronousDispose(result: unknown): void {
 }
 
 export async function invokeAsyncDispose(instance: unknown): Promise<void> {
-    if (!instance || typeof instance !== 'object') {
+    if (instance === null || (typeof instance !== 'object' && typeof instance !== 'function')) {
         return;
     }
 

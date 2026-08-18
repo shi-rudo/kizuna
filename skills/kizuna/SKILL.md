@@ -206,6 +206,8 @@ Independent cleanup can run in parallel during `disposeAsync()`. Its order depen
 
 Multi-registration keys include all services under that key. Factory lookups do not affect disposal order because factories do not declare dependency keys.
 
+Kizuna checks object and function values from singleton and scoped factories for cleanup hooks.
+
 Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
 
 Both APIs attempt all cleanup operations. `dispose()` throws one
