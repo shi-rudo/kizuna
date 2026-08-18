@@ -2,6 +2,40 @@ import { describe, expect, it } from "vitest";
 import { ContainerBuilder } from "../src";
 
 describe("rejected async factory retries", () => {
+	it("returns a rejecting observer Promise for a singleton factory", async () => {
+		const failure = new Error("singleton initialization failed");
+		const factoryPromise = Promise.reject(failure);
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("service", () => factoryPromise)
+			.build();
+
+		const servicePromise = container.get("service");
+		const rejection = expect(servicePromise).rejects.toBe(failure);
+
+		expect(servicePromise).not.toBe(factoryPromise);
+		await rejection;
+	});
+
+	it("keeps a singleton service with a throwing then getter", () => {
+		// biome-ignore lint/suspicious/noThenProperty: This reproduces a hostile Promise-like value.
+		const service = Object.defineProperty({}, "then", {
+			get: () => {
+				throw new Error("not a Promise");
+			},
+		});
+		let attempts = 0;
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("service", () => {
+				attempts++;
+				return service;
+			})
+			.build();
+
+		expect(container.get("service")).toBe(service);
+		expect(container.get("service")).toBe(service);
+		expect(attempts).toBe(1);
+	});
+
 	it("retries a rejected singleton factory Promise", async () => {
 		const failure = new Error("singleton initialization failed");
 		const failedPromise = Promise.reject(failure);
@@ -18,7 +52,7 @@ describe("rejected async factory retries", () => {
 		await expect(first).rejects.toBe(failure);
 
 		const second = container.get("service");
-		expect(second).toBe(recoveredPromise);
+		expect(second).not.toBe(recoveredPromise);
 		await expect(second).resolves.toEqual({ state: "ready" });
 		expect(container.get("service")).toBe(second);
 		expect(attempts).toBe(2);
@@ -135,8 +169,9 @@ describe("rejected async factory retries", () => {
 		await expect(first[1]).resolves.toBe("stable");
 
 		const second = container.getAll("services");
-		expect(second[0]).toBe(recoveredPromise);
-		expect(second[1]).toBe(stablePromise);
+		expect(second[0]).not.toBe(recoveredPromise);
+		expect(second[1]).toBe(first[1]);
+		expect(second[1]).not.toBe(stablePromise);
 		expect(failedEntryAttempts).toBe(2);
 		expect(stableEntryAttempts).toBe(1);
 	});

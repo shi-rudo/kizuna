@@ -138,15 +138,16 @@ export class SingletonLifecycle implements ServiceLifecycle {
 
         if (!this._initialized) {
             try {
-                const instance = this._factory(...args);
-                this._instance = instance;
-                this._initialized = true;
-                observePromiseRejection(instance, () => {
+                const factoryValue = this._factory(...args);
+                let instance: any;
+                instance = observePromiseRejection(factoryValue, () => {
                     if (!this._isDisposed && this._instance === instance) {
                         this._instance = undefined;
                         this._initialized = false;
                     }
                 });
+                this._instance = instance;
+                this._initialized = true;
             } catch (error) {
                 if (error instanceof CircularDependencyError) {
                     throw error;

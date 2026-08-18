@@ -1,21 +1,33 @@
 /**
- * Runs a callback when a Promise-like service value rejects.
+ * Returns a Promise-like service value that runs a callback before it rejects.
  *
- * The original value remains unchanged and stays available to the consumer.
+ * Non-Promise values remain unchanged.
  *
  * @internal
  */
-export function observePromiseRejection(
-	value: unknown,
+export function observePromiseRejection<T>(
+	value: T,
 	onRejected: () => void,
-): void {
+): T {
 	if (
 		value === null ||
-		(typeof value !== "object" && typeof value !== "function") ||
-		typeof (value as PromiseLike<unknown>).then !== "function"
+		(typeof value !== "object" && typeof value !== "function")
 	) {
-		return;
+		return value;
 	}
 
-	void Promise.resolve(value).catch(() => onRejected());
+	let then: unknown;
+	try {
+		then = Reflect.get(value, "then");
+	} catch {
+		return value;
+	}
+	if (typeof then !== "function") {
+		return value;
+	}
+
+	return Promise.resolve(value).catch((error: unknown) => {
+		onRejected();
+		throw error;
+	}) as T;
 }

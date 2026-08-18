@@ -212,9 +212,14 @@ Singleton and scoped factories can return Promise values. `disposeAsync()`
 waits for each stored Promise and cleans its resolved value. Transient values
 are not tracked or cleaned.
 
+Singleton and scoped lifecycles wrap a factory Promise in an observer Promise.
+All consumers share the stored Promise. It has the same result or rejection as
+the factory Promise, but it can have a different object identity.
+
 An active singleton or scoped lifecycle removes a rejected Promise from its
 cache. The next `get()` or `getAll()` call invokes only the failed factory again.
-The lifecycle does not retry automatically.
+The lifecycle does not retry automatically. The stored Promise rethrows the
+rejection, so consumers must handle it.
 
 If disposal starts before the Promise settles, the lifecycle keeps ownership.
 `disposeAsync()` reports a later rejection in its `DisposalError`.

@@ -87,9 +87,12 @@ their registered string keys or interface tokens.
 
 ## Promise Factory Values
 
-An `async` factory produces a `Promise` service value. The container returns the
-`Promise` without awaiting it. Singleton and scoped lifecycles cache pending and
-fulfilled Promises. They remove a rejected `Promise` from the cache.
+An `async` factory produces a `Promise` service value. Singleton and scoped
+lifecycles wrap it in an observer `Promise` and return that value without
+awaiting it. The stored value has the same result or rejection as the factory
+value, but it can have a different object identity. The lifecycle caches the
+stored `Promise` while it is pending or fulfilled. It removes the stored
+`Promise` after rejection.
 
 The next resolution request invokes the failed factory again. The lifecycle
 does not retry automatically.
