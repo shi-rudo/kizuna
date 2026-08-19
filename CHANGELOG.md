@@ -1,5 +1,68 @@
 # Changelog
 
+## 1.0.0-rc.10
+
+### Major Changes
+
+- 6f011d3: Report cleanup failures to callers without console output.
+
+  - Attempt all owned cleanup before reporting errors.
+  - Throw or reject with one public `DisposalError` that contains the original errors.
+  - Extend the JavaScript `AggregateError` class for standard error handling.
+  - Report Promise-based cleanup as invalid for sync `dispose()`.
+  - Keep dependency cleanup active after a consumer cleanup fails.
+
+- 972f235: Limit the package root to supported consumer contracts and prevent typed registry drift.
+
+  - Hide concrete providers, lifecycle implementations, wrappers, and legacy helper contracts.
+  - Return the typed locator interface from `ServiceProviderToken`.
+  - Require fixed literal keys for all factory registrations.
+  - Remove `remove()` and `clear()` from `ContainerBuilder`.
+  - Limit `isRegistered()` to string keys.
+  - Document that async factories register Promise values without async resolution.
+
+- 4f805d5: Add reusable interface tokens that carry an interface type and one fixed string
+  key. Use tokens to register and resolve interface implementations without
+  repeating interface, key, and constructor type arguments.
+
+  Replace string interface registration arguments with tokens. Create a token with
+  `interfaceToken<Service>()("service")`, pass it to an interface registration
+  method, and resolve it with `container.get(token)` or `container.getAll(token)`.
+
+  Type-check interface registration dependencies against registered service types
+  and implementation constructor parameter positions.
+
+  Require every public implementation constructor overload to return a service
+  that is assignable to the token interface.
+
+  Require TypeScript 5.0 or newer. Interface tokens use const type parameters to
+  preserve literal service keys.
+
+### Patch Changes
+
+- 65f96c1: Dispose consumers before their declared dependencies.
+
+  - Use the same dependency graph for sync and async cleanup.
+  - Wait for all async consumers before a dependency cleanup starts.
+  - Include every service under a multi-registration key.
+  - Keep registration order within each sync disposal layer.
+  - Let independent async branches proceed when their own consumers settle.
+
+- 0d4d6d5: Dispose the resolved values of singleton and scoped Promise factories.
+
+  - Make `disposeAsync()` wait for each stored Promise before cleanup.
+  - Report a Promise that rejects after disposal starts as a cleanup failure.
+  - Report Promise-value cleanup as asynchronous when callers use `dispose()`.
+
+- 3433f0d: Dispose singleton and scoped function values when they implement a supported cleanup hook.
+- dfad4eb: Retry singleton and scoped factories after a cached Promise rejects.
+
+  - Keep pending and fulfilled Promises cached.
+  - Preserve each factory result or rejection through a lifecycle-owned Promise.
+  - Normalize cached Promise-like values to a native Promise in types and at runtime.
+  - Remove only the rejected Promise from its active lifecycle.
+  - Invoke the failed factory again on the next resolution request.
+
 ## 1.0.0-rc.9
 
 ### Major Changes
