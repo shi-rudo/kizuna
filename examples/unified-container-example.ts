@@ -8,8 +8,7 @@
  * - All service lifecycles (singleton, scoped, transient)
  * - Full type safety with IDE autocompletion
  */
-import { ContainerBuilder } from '../src/api/container-builder';
-import { interfaceToken } from '../src/api/interface-token';
+import { ContainerBuilder, interfaceToken } from '../src/index';
 
 // =================
 // SERVICE DEFINITIONS
@@ -65,7 +64,7 @@ class RedisCache implements ICache {
         return null;
     }
     
-    async set<T>(key: string, value: T, ttl?: number): Promise<void> {
+    async set<T>(key: string, _value: T, ttl?: number): Promise<void> {
         this.logger.log(`Cache SET: ${key} (TTL: ${ttl || 'none'})`);
     }
 }
@@ -90,7 +89,7 @@ class UserService {
         
         // Query database
         await this.database.connect();
-        const users = await this.database.query(`SELECT * FROM users WHERE id = ${id}`);
+        await this.database.query(`SELECT * FROM users WHERE id = ${id}`);
         
         const user = { id, name: 'John Doe' };
         await this.cache.set(`user:${id}`, user, 300);
@@ -166,11 +165,13 @@ const container = new ContainerBuilder()
         return {
             on: (event: string, callback: Function) => {
                 if (!listeners.has(event)) listeners.set(event, []);
-                listeners.get(event)!.push(callback);
+                listeners.get(event)?.push(callback);
             },
             emit: (event: string, ...args: any[]) => {
                 const callbacks = listeners.get(event) || [];
-                callbacks.forEach(cb => cb(...args));
+                callbacks.forEach(cb => {
+                    cb(...args);
+                });
             },
             off: (event: string, callback: Function) => {
                 const callbacks = listeners.get(event) || [];
@@ -305,7 +306,9 @@ console.log('\n📊 Using the services:\n');
 // Use the user service (demonstrates all integrations working together)
 userService.getUser(123).then(() => {
     console.log('\n📝 All logged messages:');
-    logger.getMessages().forEach((msg, i) => console.log(`${i + 1}. ${msg}`));
+    logger.getMessages().forEach((msg, i) => {
+        console.log(`${i + 1}. ${msg}`);
+    });
     
     console.log('\n🎉 UNIFIED CONTAINER BENEFITS:');
     console.log('✅ One API for all registration patterns');

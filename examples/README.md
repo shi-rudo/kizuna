@@ -1,19 +1,21 @@
 # Kizuna Examples
 
-This directory contains comprehensive examples demonstrating various patterns and use cases with the Kizuna dependency injection library.
+This directory contains TypeScript examples for the Kizuna dependency injection library.
 
 ## Examples
 
 ### [`multiple-containers-domain-separation.ts`](./multiple-containers-domain-separation.ts)
 
-**Domain-Driven Design with Multiple Containers**
+**Domain organization with multiple containers**
 
-A complete e-commerce application example showing how to use multiple containers to separate business domains while sharing infrastructure services.
+This e-commerce example uses separate containers for two domains. Both containers use services from a shared infrastructure container.
 
-**What you'll learn:**
+Kizuna does not enforce domain boundaries. The application structure defines and maintains each boundary.
+
+**What the example shows:**
 - How to create domain-specific containers (User, Order domains)
 - Sharing infrastructure services (Logger, EmailService) across domains
-- Preventing cross-domain dependencies
+- Keeping domain registrations in separate containers
 - Request-scoped processing with Express.js integration
 - Testing individual domains in isolation
 - Cross-domain workflows
@@ -26,33 +28,23 @@ A complete e-commerce application example showing how to use multiple containers
 - Resource cleanup and disposal
 - Mock testing strategies
 
-**Run the example:**
+## Check the Examples
+
 ```bash
-npm run build
-node dist/examples/multiple-containers-domain-separation.js
+pnpm test:examples
 ```
 
-This example is perfect for understanding how to architect larger applications with clear domain boundaries while maintaining shared infrastructure concerns.
+This command type-checks every TypeScript file in this directory. The main build does not create a `dist/examples` directory.
 
-## Running Examples
-
-1. **Build the project:**
-   ```bash
-   npm run build
-   ```
-
-2. **Run individual examples:**
-   ```bash
-   node dist/examples/[example-name].js
-   ```
+The repository does not provide a command that executes these source files.
 
 ## Contributing Examples
 
 When adding new examples:
-1. Include comprehensive TypeScript documentation
-2. Demonstrate a specific pattern or use case
-3. Add error handling and cleanup
-4. Update this README with the new example
-5. Ensure examples compile without errors
+1. Add clear TypeScript documentation.
+2. Demonstrate one pattern or use case.
+3. Add error handling and cleanup.
+4. Update this README.
+5. Run `pnpm test:examples`.
 
-Examples should be self-contained and runnable, providing clear learning value for different Kizuna usage patterns.
+Each example must type-check without errors.
