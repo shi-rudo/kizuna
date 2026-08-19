@@ -669,16 +669,29 @@ are not resolution keys. Resolve registered services through their string keys.
 
 ### Promise Factory Values
 
-Factory methods are synchronous container operations. An `async` factory stores
-and returns its `Promise` as the service value. Singleton and scoped lifecycles
-cache that `Promise`.
+Factory methods are synchronous container operations. An `async` factory returns
+a `Promise`. Singleton and scoped lifecycles wrap this value in an observer
+`Promise` and cache it while it is pending or fulfilled.
+
+All consumers share the stored `Promise`. It has the same result or rejection as
+the factory `Promise`, but it can have a different object identity.
+
+For singleton and scoped factories, TypeScript normalizes a `PromiseLike<T>`
+result to `Promise<Awaited<T>>`. Custom properties from a Promise subclass or
+thenable are not available on the stored Promise. Transient factories return
+their exact factory value.
 
 `get()` does not await the `Promise`. Each consumer must await the returned
 value. `disposeAsync()` waits for a stored singleton or scoped `Promise`. It then
 cleans the resolved value with the standard cleanup-hook priority.
 
-If the stored `Promise` rejects, `disposeAsync()` reports the rejection in its
-`DisposalError`. A rejected `Promise` stays cached for its lifecycle.
+If a stored `Promise` rejects, its active lifecycle removes it from the cache.
+The next `get()` call invokes the factory again. The lifecycle does not retry
+automatically. The stored `Promise` rethrows the original rejection. Consumers
+must handle it. An ignored rejection remains visible to the runtime.
+
+If disposal starts while a `Promise` is pending, the lifecycle keeps ownership.
+`disposeAsync()` reports a later rejection in its `DisposalError`.
 
 `dispose()` starts the cleanup chain but cannot wait for it. Its `DisposalError`
 contains a `TypeError` that tells the caller to use `disposeAsync()`.

@@ -87,9 +87,19 @@ their registered string keys or interface tokens.
 
 ## Promise Factory Values
 
-An `async` factory produces a `Promise` service value. The container returns the
-`Promise` without awaiting it. Singleton and scoped lifecycles cache the
-`Promise` for their lifecycle.
+An `async` factory produces a `Promise` service value. Singleton and scoped
+lifecycles wrap it in an observer `Promise` and return that value without
+awaiting it. The stored value has the same result or rejection as the factory
+value, but it can have a different object identity. The lifecycle caches the
+stored `Promise` while it is pending or fulfilled. It removes the stored
+`Promise` after rejection.
+
+The inferred registry type for a singleton or scoped `PromiseLike<T>` factory is
+`Promise<Awaited<T>>`. Do not use custom properties from the original Promise
+subclass or thenable. Transient factories still return their exact factory value.
+
+The next resolution request invokes the failed factory again. The lifecycle
+does not retry automatically.
 
 Use `disposeAsync()` to wait for that Promise and clean its resolved value. The
 container does not track or clean transient values.

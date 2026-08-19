@@ -7,12 +7,19 @@ import type { TypeSafeServiceLocator } from "./interfaces";
  * to resolve dependencies and create complex service instances. This is useful
  * for services that require custom initialization logic or conditional creation.
  *
- * The container calls each factory synchronously. If a factory returns a Promise,
- * the container stores and returns that Promise. Each consumer must await it.
+ * The container calls each factory synchronously. If a singleton or scoped
+ * factory returns a Promise, its lifecycle stores and returns an observer
+ * Promise. The observer has the same result or rejection, but it can have a
+ * different object identity. Its registry type is `Promise<Awaited<T>>` for a
+ * Promise-like factory result. Each consumer must await it.
  *
  * Singleton and scoped lifecycles own their stored Promise. Their `disposeAsync()`
  * method waits for the Promise and cleans the resolved value. Transient values
  * are not tracked or cleaned.
+ *
+ * An active singleton or scoped lifecycle removes a rejected Promise from its
+ * cache. The next resolution request invokes the factory again. The lifecycle
+ * does not retry automatically. The stored Promise rethrows the rejection.
  *
  * @template TRegistry - The registry available when the factory is registered
  * @template T - The type of service the factory creates
@@ -25,6 +32,17 @@ import type { TypeSafeServiceLocator } from "./interfaces";
 export type Factory<TRegistry extends ServiceRegistry, T> = (
 	serviceProvider: TypeSafeServiceLocator<TRegistry>,
 ) => T;
+
+/**
+ * Normalizes a cached Promise-like factory value to the native observer Promise
+ * that singleton and scoped lifecycles return. Transient factories do not use
+ * this type and keep their exact return value.
+ *
+ * @internal
+ */
+export type ObservedFactoryValue<T> = T extends PromiseLike<unknown>
+	? Promise<Awaited<T>>
+	: T;
 
 /**
  * Represents a service registry mapping string keys to their service types.

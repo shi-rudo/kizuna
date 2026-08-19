@@ -3,6 +3,10 @@ import * as Kizuna from "../src";
 
 class Logger {}
 
+class TaggedPromise<T> extends Promise<T> {
+	readonly tag = "factory-promise";
+}
+
 test("the package root does not expose provider construction or internals", () => {
 	// @ts-expect-error ServiceProvider construction is internal to ContainerBuilder.
 	new Kizuna.ServiceProvider<{ ghost: Logger }>({});
@@ -61,6 +65,26 @@ test("factory registrations require one fixed service key", () => {
 	expectTypeOf(provider.get("answer")).toEqualTypeOf<number>();
 	// @ts-expect-error Only the fixed registered key is available.
 	provider.get("never-registered");
+});
+
+test("cached Promise factories expose their normalized observer type", () => {
+	const factoryPromise = new TaggedPromise<string>(() => undefined);
+	const provider = new Kizuna.ContainerBuilder()
+		.registerSingletonFactory("singleton", () => factoryPromise)
+		.registerScopedFactory("scoped", () => factoryPromise)
+		.registerTransientFactory("transient", () => factoryPromise)
+		.addSingletonFactory("cached", () => factoryPromise)
+		.addScopedFactory("cached", () => factoryPromise)
+		.addTransientFactory("transient-group", () => factoryPromise)
+		.build();
+
+	expectTypeOf(provider.get("singleton")).toEqualTypeOf<Promise<string>>();
+	expectTypeOf(provider.get("scoped")).toEqualTypeOf<Promise<string>>();
+	expectTypeOf(provider.getAll("cached")).toEqualTypeOf<Promise<string>[]>();
+	expectTypeOf(provider.get("transient")).toEqualTypeOf<TaggedPromise<string>>();
+	expectTypeOf(provider.getAll("transient-group")).toEqualTypeOf<
+		TaggedPromise<string>[]
+	>();
 });
 
 test("typed builders do not expose destructive registry mutations", () => {

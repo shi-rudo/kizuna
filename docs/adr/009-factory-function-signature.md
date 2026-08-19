@@ -49,11 +49,16 @@ builder chain. The returned service becomes the registry value for `Database`.
 
 ## Promise Values
 
-An `async` function infers `T` as `Promise<Service>`. The container stores and
-returns that `Promise` as the service value. It does not await the `Promise`.
+An `async` function infers `T` as `Promise<Service>`. A singleton or scoped
+lifecycle wraps that value and stores the observer `Promise`. It does not await
+the `Promise`. The stored value has the same result or rejection as the factory
+value, but it can have a different object identity. Singleton and scoped
+registrations normalize a `PromiseLike<T>` result to `Promise<Awaited<T>>`.
+Transient registrations keep the exact factory return type.
 
 `disposeAsync()` waits for stored singleton and scoped Promises. It cleans each
-resolved value. ADR-001 defines the full Promise-value contract.
+resolved value. An active lifecycle removes a rejected `Promise` from its cache.
+ADR-001 defines the full Promise-value contract.
 
 ## Consequences
 

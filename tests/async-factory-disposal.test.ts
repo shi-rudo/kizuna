@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ContainerBuilder, DisposalError } from "../src";
 
 describe("async factory value disposal", () => {
-	it("returns the original singleton Promise and disposes its resolved value once", async () => {
+	it("caches the singleton observer Promise and disposes its resolved value once", async () => {
 		let disposeCalls = 0;
 		const service = {
 			async [Symbol.asyncDispose](): Promise<void> {
@@ -14,8 +14,9 @@ describe("async factory value disposal", () => {
 			.registerSingletonFactory("service", () => servicePromise)
 			.build();
 
-		expect(container.get("service")).toBe(servicePromise);
-		expect(container.get("service")).toBe(servicePromise);
+		const storedPromise = container.get("service");
+		expect(storedPromise).not.toBe(servicePromise);
+		expect(container.get("service")).toBe(storedPromise);
 
 		await container.disposeAsync();
 		await container.disposeAsync();
@@ -33,7 +34,9 @@ describe("async factory value disposal", () => {
 			.build();
 		const scope = container.startScope();
 
-		expect(scope.get("service")).toBe(factoryResult.promise);
+		const storedPromise = scope.get("service");
+		expect(storedPromise).not.toBe(factoryResult.promise);
+		expect(scope.get("service")).toBe(storedPromise);
 
 		let disposalFinished = false;
 		const disposal = scope.disposeAsync().then(() => {
