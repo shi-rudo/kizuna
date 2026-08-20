@@ -6,8 +6,8 @@
  * unified ContainerBuilder with full type safety.
  * 
  * Benefits:
- * - Clear domain boundaries with type safety
- * - Prevents cross-domain dependencies
+ * - Separate registries for each domain
+ * - Application-owned domain boundaries
  * - Shared infrastructure services
  * - Independent domain evolution
  * - Easier testing and maintenance
@@ -422,18 +422,22 @@ function createSharedContainer() {
 /**
  * Creates the User domain container with type-safe dependencies.
  * This container manages user-specific services with shared infrastructure.
+ * Domain factories resolve shared services directly.
+ * The domain container does not register or dispose these shared services.
  */
 function createUserDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
   return new ContainerBuilder()
-    // Import shared services (singleton instances from shared container)
-    .registerSingletonFactory('Logger', () => sharedContainer.get('Logger'))
-    .registerSingletonFactory('EmailService', () => sharedContainer.get('EmailService'))
-    .registerSingletonFactory('IMetrics', () => sharedContainer.get(Metrics))
-    
     // User domain-specific services
     .registerScopedInterface(UserRepositoryToken, UserRepository)
-    .registerScoped('UserService', UserService, 'IUserRepository', 'Logger', 'IMetrics')
-    .registerScoped('UserNotificationService', UserNotificationService, 'EmailService', 'Logger')
+    .registerScopedFactory('UserService', (provider) => new UserService(
+      provider.get(UserRepositoryToken),
+      sharedContainer.get('Logger'),
+      sharedContainer.get(Metrics),
+    ))
+    .registerScopedFactory('UserNotificationService', () => new UserNotificationService(
+      sharedContainer.get('EmailService'),
+      sharedContainer.get('Logger'),
+    ))
     
     .build();
 }
@@ -441,18 +445,24 @@ function createUserDomainContainer(sharedContainer: ReturnType<typeof createShar
 /**
  * Creates the Order domain container with type-safe dependencies.
  * This container manages order-specific services with shared infrastructure.
+ * Domain factories resolve shared services directly.
+ * The domain container does not register or dispose these shared services.
  */
 function createOrderDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
   return new ContainerBuilder()
-    // Import shared services (singleton instances from shared container)
-    .registerSingletonFactory('Logger', () => sharedContainer.get('Logger'))
-    .registerSingletonFactory('IMetrics', () => sharedContainer.get(Metrics))
-    
     // Order domain-specific services
     .registerScopedInterface(OrderRepositoryToken, OrderRepository)
-    .registerScoped('OrderService', OrderService, 'IOrderRepository', 'Logger', 'IMetrics')
+    .registerScopedFactory('OrderService', (provider) => new OrderService(
+      provider.get(OrderRepositoryToken),
+      sharedContainer.get('Logger'),
+      sharedContainer.get(Metrics),
+    ))
     .registerScopedInterface(PaymentGatewayToken, PaymentGateway)
-    .registerScoped('PaymentService', PaymentService, 'IPaymentGateway', 'Logger', 'IMetrics')
+    .registerScopedFactory('PaymentService', (provider) => new PaymentService(
+      provider.get(PaymentGatewayToken),
+      sharedContainer.get('Logger'),
+      sharedContainer.get(Metrics),
+    ))
     
     .build();
 }
@@ -504,7 +514,7 @@ class ECommerceApplication {
 
   /**
    * Domain-specific service accessors with full type safety.
-   * These methods provide clean access to domain services while maintaining boundaries.
+   * These methods provide access to services without exposing the domain containers.
    */
   
   // User Domain Services (fully typed!)
@@ -580,7 +590,7 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
     // All services are fully typed! ✨
     const userService = userScope.get('UserService');            // Type: UserService
     const notificationService = userScope.get('UserNotificationService'); // Type: UserNotificationService
-    const metrics = userScope.get('IMetrics');                  // Type: IMetrics
+    const metrics = app.getMetrics();                           // Type: IMetrics
 
     const userData: CreateUserDto = {
       name: 'Alice Johnson',
@@ -605,7 +615,7 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
     // All services are fully typed! ✨
     const orderService = orderScope.get('OrderService');        // Type: OrderService
     const paymentService = orderScope.get('PaymentService');    // Type: PaymentService
-    const metrics = orderScope.get('IMetrics');                 // Type: IMetrics
+    const metrics = app.getMetrics();                           // Type: IMetrics
 
     const orderData: CreateOrderDto = {
       userId: 'user_123',
@@ -782,7 +792,7 @@ async function main(): Promise<void> {
 
     console.log('\n🎉 TYPE-SAFE MULTI-CONTAINER BENEFITS:');
     console.log('✅ Full type safety across all domains');
-    console.log('✅ Clear domain boundaries with interface separation');  
+    console.log('✅ Application code defines each domain boundary');
     console.log('✅ Shared infrastructure with singleton management');
     console.log('✅ IDE autocompletion for all service access');
     console.log('✅ Compile-time error detection');

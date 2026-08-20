@@ -23,10 +23,12 @@ Kizuna does not enforce domain boundaries. The application structure defines and
 **Key patterns demonstrated:**
 - Shared infrastructure container
 - Domain container factories
-- Cross-container dependency injection
+- Shared-service access from domain factories
 - Scoped request handling
 - Resource cleanup and disposal
 - Mock testing strategies
+
+Domain factories resolve shared services directly. They do not register borrowed shared services. The shared container keeps disposal ownership.
 
 ## Check the Examples
 

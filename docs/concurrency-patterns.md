@@ -232,7 +232,10 @@ Scopes cannot accept new registrations. Keep request data on the request or pass
 ```typescript
 // Advanced middleware with request context
 app.use((req, res, next) => {
-    const requestId = req.headers['x-request-id'] || generateId();
+    const requestIdHeader = req.headers['x-request-id'];
+    const requestId = typeof requestIdHeader === 'string'
+        ? requestIdHeader
+        : generateId();
     const userId = req.headers['x-user-id'];
     
     // Create the service scope and keep request data separate.
