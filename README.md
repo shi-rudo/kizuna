@@ -468,7 +468,13 @@ Factory registrations do not declare dependency keys. Thus, service lookups insi
 
 ### 🌍 **Multiple Containers for Domain Separation**
 
-For complex applications, separate containers maintain domain boundaries:
+An application can use separate containers for separate domains. Kizuna keeps
+their registries separate. Your application still defines and enforces each
+domain boundary.
+
+Use `borrowSingletonFrom()` when a domain needs one shared singleton. The source
+container remains the sole owner. The borrowed key also remains visible in the
+domain dependency graph.
 
 ```typescript
 // Shared infrastructure
@@ -482,23 +488,40 @@ const sharedContainer = new ContainerBuilder()
 
 // User domain container
 const userContainer = new ContainerBuilder()
-  .registerSingletonFactory('Logger', () => sharedContainer.get('Logger'))
-  .registerSingletonFactory('EmailService', () => sharedContainer.get('EmailService'))
+  .borrowSingletonFrom(sharedContainer, 'Logger')
+  .borrowSingletonFrom(sharedContainer, 'EmailService')
   .registerScoped('UserService', UserService, 'Logger')
   .registerScoped('UserNotificationService', UserNotificationService, 'EmailService')
   .build();
 
 // Order domain container
 const orderContainer = new ContainerBuilder()
-  .registerSingletonFactory('Logger', () => sharedContainer.get('Logger'))
+  .borrowSingletonFrom(sharedContainer, 'Logger')
   .registerScoped('OrderService', OrderService, 'Logger')
   .registerScoped('PaymentService', PaymentService, 'Logger')
   .build();
 
-// Each domain has isolated services but shares infrastructure
-const userService = userContainer.startScope().get('UserService');
-const orderService = orderContainer.startScope().get('OrderService');
+const userScope = userContainer.startScope();
+const orderScope = orderContainer.startScope();
+
+try {
+  const userService = userScope.get('UserService');
+  const orderService = orderScope.get('OrderService');
+} finally {
+  userScope.dispose();
+  orderScope.dispose();
+}
+
+// Dispose borrowers before their source.
+userContainer.dispose();
+orderContainer.dispose();
+sharedContainer.dispose();
 ```
+
+The source registration must be a singleton. Scoped, transient, and
+multi-service registrations cannot be borrowed. The source container must
+outlive all borrowers and their scopes. A borrower never runs cleanup hooks on
+the borrowed value.
 
 ### 🧪 **Testing with Type-Safe Mocks**
 

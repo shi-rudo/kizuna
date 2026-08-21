@@ -422,22 +422,29 @@ function createSharedContainer() {
 /**
  * Creates the User domain container with type-safe dependencies.
  * This container manages user-specific services with shared infrastructure.
- * Domain factories resolve shared services directly.
- * The domain container does not register or dispose these shared services.
+ * It borrows shared singletons without taking ownership of them.
  */
 function createUserDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
   return new ContainerBuilder()
+    .borrowSingletonFrom(sharedContainer, 'Logger')
+    .borrowSingletonFrom(sharedContainer, 'EmailService')
+    .borrowSingletonFrom(sharedContainer, Metrics)
+
     // User domain-specific services
     .registerScopedInterface(UserRepositoryToken, UserRepository)
-    .registerScopedFactory('UserService', (provider) => new UserService(
-      provider.get(UserRepositoryToken),
-      sharedContainer.get('Logger'),
-      sharedContainer.get(Metrics),
-    ))
-    .registerScopedFactory('UserNotificationService', () => new UserNotificationService(
-      sharedContainer.get('EmailService'),
-      sharedContainer.get('Logger'),
-    ))
+    .registerScoped(
+      'UserService',
+      UserService,
+      UserRepositoryToken,
+      'Logger',
+      Metrics,
+    )
+    .registerScoped(
+      'UserNotificationService',
+      UserNotificationService,
+      'EmailService',
+      'Logger',
+    )
     
     .build();
 }
@@ -445,24 +452,30 @@ function createUserDomainContainer(sharedContainer: ReturnType<typeof createShar
 /**
  * Creates the Order domain container with type-safe dependencies.
  * This container manages order-specific services with shared infrastructure.
- * Domain factories resolve shared services directly.
- * The domain container does not register or dispose these shared services.
+ * It borrows shared singletons without taking ownership of them.
  */
 function createOrderDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
   return new ContainerBuilder()
+    .borrowSingletonFrom(sharedContainer, 'Logger')
+    .borrowSingletonFrom(sharedContainer, Metrics)
+
     // Order domain-specific services
     .registerScopedInterface(OrderRepositoryToken, OrderRepository)
-    .registerScopedFactory('OrderService', (provider) => new OrderService(
-      provider.get(OrderRepositoryToken),
-      sharedContainer.get('Logger'),
-      sharedContainer.get(Metrics),
-    ))
+    .registerScoped(
+      'OrderService',
+      OrderService,
+      OrderRepositoryToken,
+      'Logger',
+      Metrics,
+    )
     .registerScopedInterface(PaymentGatewayToken, PaymentGateway)
-    .registerScopedFactory('PaymentService', (provider) => new PaymentService(
-      provider.get(PaymentGatewayToken),
-      sharedContainer.get('Logger'),
-      sharedContainer.get(Metrics),
-    ))
+    .registerScoped(
+      'PaymentService',
+      PaymentService,
+      PaymentGatewayToken,
+      'Logger',
+      Metrics,
+    )
     
     .build();
 }

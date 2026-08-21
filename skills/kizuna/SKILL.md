@@ -5,7 +5,7 @@ description: >
   Covers ContainerBuilder, registerSingleton, registerSingletonInterface,
   registerSingletonFactory, registerScoped, registerTransient, addSingleton,
   addScoped, addTransient, addSingletonFactory, addScopedFactory,
-  addTransientFactory, build(), validate(), get(), getAll(), startScope(),
+  addTransientFactory, borrowSingletonFrom, build(), validate(), get(), getAll(), startScope(),
   dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose,
   getRegisteredServiceNames(), TypeSafeServiceLocator,
   disableStrictParameterValidation, CircularDependencyError.
@@ -16,7 +16,7 @@ description: >
   frameworks.
 type: core
 library: kizuna
-library_version: "1.0.0-rc.3"
+library_version: "1.0.0-rc.9"
 sources:
   - "shi-rudo/kizuna:src/api/container-builder.ts"
   - "shi-rudo/kizuna:src/api/base-container-builder.ts"
@@ -26,6 +26,7 @@ sources:
   - "shi-rudo/kizuna:src/core/scopes/singleton.ts"
   - "shi-rudo/kizuna:src/core/scopes/scoped.ts"
   - "shi-rudo/kizuna:src/core/scopes/transient.ts"
+  - "shi-rudo/kizuna:src/core/scopes/borrowed-singleton.ts"
   - "shi-rudo/kizuna:src/core/services/service-wrapper.ts"
   - "shi-rudo/kizuna:src/core/services/async-dispose.ts"
   - "shi-rudo/kizuna:README.md"
@@ -149,6 +150,39 @@ const allValid = validators.every(v => v.validate('hello')); // true
 - Factory variants available: `addSingletonFactory`, `addScopedFactory`, `addTransientFactory`
 - `validate()` checks multi-registration dependencies, circular deps, and captive dependencies
 
+### Borrow a singleton from another container
+
+Use `borrowSingletonFrom()` when one container needs a singleton that another
+container owns. Borrow only the keys that the consumer container needs.
+
+```typescript
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
+
+interface Metrics {
+  increment(name: string): void;
+}
+
+const Metrics = interfaceToken<Metrics>()('metrics');
+
+const sharedContainer = new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .registerSingletonInterface(Metrics, MetricsCollector)
+  .build();
+
+const domainContainer = new ContainerBuilder()
+  .borrowSingletonFrom(sharedContainer, 'logger')
+  .borrowSingletonFrom(sharedContainer, Metrics)
+  .registerScoped('userService', UserService, 'logger', Metrics)
+  .build();
+```
+
+The source registration must be a singleton. You cannot borrow scoped,
+transient, or multi-service registrations. The source remains the sole owner.
+Dispose all borrowers and their scopes before you dispose the source.
+
+The borrowed key is part of the borrower dependency graph. Constructor
+dependencies therefore keep their normal validation and disposal order.
+
 ### Request scoping for web servers
 
 Create a scope per request. Scoped services share one instance within the scope. Singletons are shared across all scopes.
@@ -205,6 +239,10 @@ Both APIs process consumers before their declared dependencies. Sync disposal ke
 Independent cleanup can run in parallel during `disposeAsync()`. Its order depends on completion timing.
 
 Multi-registration keys include all services under that key. Factory lookups do not affect disposal order because factories do not declare dependency keys.
+
+A borrowed singleton is a declared dependency but not an owned value. Disposing
+the borrower never invokes cleanup on that value. The source container invokes
+the cleanup hook when it is disposed.
 
 Kizuna checks object and function values from singleton and scoped factories for cleanup hooks.
 
@@ -399,6 +437,28 @@ Correct:
 Constructor registration is shorter, declares dependencies explicitly for `validate()`, and lets Kizuna handle the wiring. Factories hide dependencies from validation.
 
 Source: maintainer interview
+
+### HIGH Re-registering a shared singleton in another container
+
+Wrong:
+
+```typescript
+const domainContainer = new ContainerBuilder()
+  .registerSingletonFactory('logger', () => sharedContainer.get('logger'))
+  .build();
+```
+
+Correct:
+
+```typescript
+const domainContainer = new ContainerBuilder()
+  .borrowSingletonFrom(sharedContainer, 'logger')
+  .build();
+```
+
+The factory registration gives the domain container disposal ownership over
+the returned value. This can run the same cleanup hook more than once. Borrowing
+keeps ownership in the source container.
 
 ### HIGH Mixing add* and register* on the same key
 

@@ -1,9 +1,10 @@
 import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar";
 import type { ServiceLifecycle } from "../core/contracts";
+import { BorrowedSingletonLifecycle } from "../core/scopes/borrowed-singleton";
 import { ScopedLifecycle } from "../core/scopes/scoped";
 import { SingletonLifecycle } from "../core/scopes/singleton";
 import { TransientLifecycle } from "../core/scopes/transient";
-import type { ServiceWrapper } from "../core/services/service-wrapper";
+import { ServiceWrapper } from "../core/services/service-wrapper";
 import { BaseContainerBuilder } from "./base-container-builder";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces";
 import type {
@@ -17,6 +18,7 @@ import type {
     InterfaceToken,
     InterfaceTokenKey,
     InterfaceTokenService,
+    RegisteredInterfaceToken,
 } from "./interface-token";
 import type { LiteralServiceKey } from "./literal-service-key";
 import { ServiceProvider } from "./service-provider";
@@ -96,6 +98,7 @@ type DependencyKeys<
  * - **All lifecycles**: Singleton, scoped, and transient service lifetimes
  * - **Factory functions**: Support for complex service initialization with type-safe providers
  * - **Interface registration**: Type-safe interface-to-implementation mapping
+ * - **Singleton borrowing**: Selective, non-owning imports from another container
  * - **Dependency injection**: Automatic resolution of service dependencies
  *
  * @template TRegistry - The service registry type tracking registered services
@@ -136,6 +139,52 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /** Creates a root builder with an empty service registry. */
     constructor(..._rootRegistryOnly: keyof TRegistry extends never ? [] : [never]) {
         super();
+    }
+
+    /**
+     * Borrows one singleton from another Kizuna container.
+     *
+     * The source container owns the service. Dispose every borrower before you
+     * dispose the source container.
+     */
+    borrowSingletonFrom<
+        TSourceRegistry extends ServiceRegistry,
+        TToken extends InterfaceToken<unknown, string>,
+    >(
+        source: TypeSafeServiceLocator<TSourceRegistry>,
+        token: RegisteredInterfaceToken<TSourceRegistry, TToken>,
+    ): ContainerBuilder<
+        TRegistry &
+            Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>
+    >;
+    borrowSingletonFrom<
+        TSourceRegistry extends ServiceRegistry,
+        K extends string & keyof TSourceRegistry,
+    >(
+        source: TypeSafeServiceLocator<TSourceRegistry>,
+        key: K extends InterfaceToken<unknown, string>
+            ? never
+            : LiteralServiceKey<K>,
+    ): ContainerBuilder<TRegistry & Record<K, TSourceRegistry[K]>>;
+    borrowSingletonFrom(
+        source: TypeSafeServiceLocator<ServiceRegistry>,
+        key: string,
+    ): ContainerBuilder<any> {
+        this.ensureNotBuilt();
+        this.validateServiceName(key);
+
+        if (!(source instanceof ServiceProvider)) {
+            throw new TypeError("The source must be a Kizuna service container");
+        }
+        source.assertBorrowableSingleton(key);
+
+        const serviceWrapper = new ServiceWrapper(
+            key,
+            new BorrowedSingletonLifecycle(source, key),
+            [],
+        );
+        this.registerService(key, serviceWrapper);
+        return this as ContainerBuilder<any>;
     }
 
     // =================

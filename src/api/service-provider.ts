@@ -3,7 +3,10 @@ import {
     createDisposalLayers,
     createDisposalPlan,
 } from "../core/services/disposal-order";
-import type { ServiceWrapper } from "../core/services/service-wrapper";
+import type {
+    ServiceLifetime,
+    ServiceWrapper,
+} from "../core/services/service-wrapper";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces";
 import type { ServiceRegistry } from "./contracts/types";
 import type {
@@ -172,6 +175,34 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             newMultiRegistrations,
             scopedRegistrationOrder,
         );
+    }
+
+    /**
+     * Verifies that one registration can be borrowed by another container.
+     * @internal
+     */
+    assertBorrowableSingleton(key: string): void {
+        this.ensureNotDisposed();
+
+        if (this.multiRegistrations[key]) {
+            throw new Error(
+                `Cannot borrow service '${key}'. Multi-service registrations are not supported.`,
+            );
+        }
+
+        const registration = this.registrations[key];
+        if (!registration) {
+            throw new Error(
+                `Cannot borrow service '${key}'. The source has no such registration.`,
+            );
+        }
+
+        const lifetime: ServiceLifetime = registration.getLifetime();
+        if (lifetime !== "singleton") {
+            throw new Error(
+                `Cannot borrow service '${key}'. The source registration is ${lifetime}. Only singleton registrations can be borrowed.`,
+            );
+        }
     }
 
     /**

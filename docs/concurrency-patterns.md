@@ -135,7 +135,7 @@ function workerThreadHandler() {
                 // Initialize worker-specific container
                 workerContainer = new ContainerBuilder()
                     .registerSingleton('Logger', Logger)
-                    .registerSingleton('WorkerConfig', () => data.config)
+                    .registerSingletonFactory('WorkerConfig', () => data.config)
                     .registerScoped('TaskProcessor', TaskProcessor, 'Logger', 'WorkerConfig')
                     .build();
                 break;
@@ -496,7 +496,7 @@ process.send({
 describe('Container Isolation', () => {
     it('should isolate containers between workers', async () => {
         const createContainer = () => new ContainerBuilder()
-            .registerSingleton('Counter', () => ({ value: 0 }))
+            .registerSingletonFactory('Counter', () => ({ value: 0 }))
             .build();
         
         const container1 = createContainer();
@@ -514,7 +514,7 @@ describe('Container Isolation', () => {
     
     it('should isolate request scopes', () => {
         const rootContainer = new ContainerBuilder()
-            .registerScoped('RequestData', () => ({ id: Math.random() }))
+            .registerScopedFactory('RequestData', () => ({ id: Math.random() }))
             .build();
         
         const scope1 = rootContainer.startScope();

@@ -10,6 +10,7 @@ Kizuna has two registration modes: **single-registration** (`register*`) and **m
 | Resolved type must be an interface or abstraction | Interface | `registerSingletonInterface(Foo, FooImpl, 'dep')` |
 | Needs runtime logic, returns primitive, or needs provider | Factory | `registerSingletonFactory('cfg', (p) => ({ ... }))` |
 | Multiple implementations under one key | Multi-reg | `addSingleton('plugins', PluginA)` then `addSingleton('plugins', PluginB)` |
+| Singleton owned by another container | Borrow | `borrowSingletonFrom(shared, 'logger')` |
 | Default choice when unsure | Constructor | Shorter, explicit deps, works with validate() |
 
 ## Constructor registration
@@ -89,6 +90,29 @@ const container = new ContainerBuilder()
 ```
 
 Factory dependencies are hidden from `validate()`. Prefer constructor registration when possible.
+
+## Borrowed singleton
+
+Use `borrowSingletonFrom()` to import one singleton without taking ownership.
+The method accepts a fixed string key or a registered interface token.
+
+```typescript
+const shared = new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .build();
+
+const domain = new ContainerBuilder()
+  .borrowSingletonFrom(shared, 'logger')
+  .registerScoped('userService', UserService, 'logger')
+  .build();
+```
+
+Only singleton registrations can be borrowed. The source must be a Kizuna
+container. It must outlive every borrower and borrower scope. Dispose the domain
+container before you dispose `shared`.
+
+The source owns the value and runs its cleanup hook. The borrowed key remains a
+declared dependency in the domain container.
 
 ## Multi-registration (add* / getAll)
 

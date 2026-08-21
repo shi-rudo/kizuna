@@ -1,4 +1,5 @@
 import type { ServiceLifecycle } from '../contracts';
+import { BorrowedSingletonLifecycle } from '../scopes/borrowed-singleton';
 import { ScopedLifecycle } from '../scopes/scoped';
 import { SingletonLifecycle } from '../scopes/singleton';
 import { TransientLifecycle } from '../scopes/transient';
@@ -140,6 +141,9 @@ export class ServiceWrapper {
      * @returns The lifetime classification
      */
     getLifetime(): ServiceLifetime {
+        if (this._lifecycle instanceof BorrowedSingletonLifecycle) {
+            return 'singleton';
+        }
         if (this._lifecycle instanceof SingletonLifecycle) return 'singleton';
         if (this._lifecycle instanceof ScopedLifecycle) return 'scoped';
         if (this._lifecycle instanceof TransientLifecycle) return 'transient';

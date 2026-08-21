@@ -6,7 +6,6 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -55,7 +54,7 @@ function codeBlockAfter(markdown: string, heading: string): string {
 }
 
 function strictTypeErrors(source: string): string[] {
-	const directory = mkdtempSync(join(tmpdir(), "kizuna-doc-example-"));
+	const directory = mkdtempSync(join(repositoryRoot, ".kizuna-doc-example-"));
 	const fileName = join(directory, "advanced-request-scope.ts");
 	writeFileSync(fileName, source);
 
@@ -64,8 +63,11 @@ function strictTypeErrors(source: string): string[] {
 			process.execPath,
 			[
 				join(repositoryRoot, "node_modules", "typescript", "bin", "tsc"),
+				"--ignoreConfig",
 				"--module",
 				"esnext",
+				"--moduleResolution",
+				"bundler",
 				"--noEmit",
 				"--skipLibCheck",
 				"--strict",
@@ -119,18 +121,34 @@ describe("published TypeScript examples", () => {
 			"### Advanced Request Scope Pattern:",
 		);
 		const source = `
+import { ContainerBuilder } from "../src";
+
+class Logger {}
+class Database {
+    constructor(readonly logger: Logger) {}
+}
+class UserService {
+    constructor(
+        readonly database: Database,
+        readonly logger: Logger,
+    ) {}
+}
+
+const rootContainer = new ContainerBuilder()
+    .registerSingleton("Logger", Logger)
+    .registerSingleton("Database", Database, "Logger")
+    .registerScoped("UserService", UserService, "Database", "Logger")
+    .build();
+
 interface RequestContext {
     requestId: string;
     userId: string | undefined;
     requestTime: number;
 }
-interface RequestScope {
-    disposeAsync(): Promise<void>;
-}
 interface ExampleRequest {
     headers: Record<string, string | string[] | undefined>;
     requestContext: RequestContext;
-    services: RequestScope;
+    services: ReturnType<typeof rootContainer.startScope>;
 }
 interface ExampleResponse {
     once(event: "close", callback: () => void): void;
@@ -142,13 +160,67 @@ declare const app: {
         next: () => void,
     ) => void): void;
 };
-declare const rootContainer: { startScope(): RequestScope };
 declare function generateId(): string;
 
 ${example}
 `;
 
 		expect(strictTypeErrors(source)).toEqual([]);
+	});
+
+	it("keeps the multiple-container README example type-safe", () => {
+		const markdown = readFileSync(join(repositoryRoot, "README.md"), "utf8");
+		const example = codeBlockAfter(
+			markdown,
+			"### 🌍 **Multiple Containers for Domain Separation**",
+		);
+		const source = `
+import { ContainerBuilder, interfaceToken } from "../src";
+
+interface IConfig {}
+class Logger {}
+class EmailService {
+    constructor(readonly logger: Logger) {}
+}
+class DatabaseConfig implements IConfig {}
+class UserService {
+    constructor(readonly logger: Logger) {}
+}
+class UserNotificationService {
+    constructor(readonly emailService: EmailService) {}
+}
+class OrderService {
+    constructor(readonly logger: Logger) {}
+}
+class PaymentService {
+    constructor(readonly logger: Logger) {}
+}
+
+${example}
+`;
+
+		expect(strictTypeErrors(source)).toEqual([]);
+	});
+
+	it("does not pass factories to constructor registration methods", () => {
+		const violations: string[] = [];
+		const factoryPassedToConstructorRegistration =
+			/\.register(?:Singleton|Scoped|Transient)\s*\(\s*[^,]+,\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>/g;
+
+		for (const path of publishedMarkdown) {
+			const markdown = readFileSync(path, "utf8");
+			for (const match of markdown.matchAll(
+				/```(?:ts|typescript)\s*\n([\s\S]*?)```/g,
+			)) {
+				const code = match[1] ?? "";
+				if (factoryPassedToConstructorRegistration.test(code)) {
+					violations.push(relative(repositoryRoot, path));
+				}
+				factoryPassedToConstructorRegistration.lastIndex = 0;
+			}
+		}
+
+		expect(violations).toEqual([]);
 	});
 
 	it("does not claim that containers enforce domain boundaries", () => {
