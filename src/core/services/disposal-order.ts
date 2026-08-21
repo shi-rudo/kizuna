@@ -1,4 +1,4 @@
-import type { ServiceWrapper } from "./service-wrapper";
+import type { ServiceWrapper } from "./service-wrapper.js";
 
 /** One circular or acyclic unit in the disposal graph. */
 export interface DisposalGroup {

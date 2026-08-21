@@ -1,18 +1,31 @@
-import { CircularDependencyError, DisposalError } from "../core/errors";
+import {
+    CircularDependencyError,
+    DisposalError,
+    type DisposalFailure,
+    type DisposalOperation,
+} from "../core/errors.js";
 import {
     createDisposalLayers,
     createDisposalPlan,
-} from "../core/services/disposal-order";
-import type { ServiceWrapper } from "../core/services/service-wrapper";
-import type { TypeSafeServiceLocator } from "./contracts/interfaces";
-import type { ServiceRegistry } from "./contracts/types";
+} from "../core/services/disposal-order.js";
+import type { ServiceWrapper } from "../core/services/service-wrapper.js";
+import {
+    borrowableSourceCapability,
+    type BorrowableSingletonSource,
+    type BorrowedSingletonReference,
+} from "./borrowed-singleton-capability.js";
+import type {
+    TypeSafeServiceLocator,
+} from "./contracts/interfaces.js";
+import type { ServiceRegistry } from "./contracts/types.js";
 import type {
     InterfaceToken,
     InterfaceTokenService,
     RegisteredInterfaceToken,
-} from "./interface-token";
+} from "./interface-token.js";
 
-export { CircularDependencyError, DisposalError } from "../core/errors";
+export { CircularDependencyError, DisposalError } from "../core/errors.js";
+export type { DisposalFailure, DisposalOperation } from "../core/errors.js";
 
 /** Stable identity token for resolving the current service provider. */
 export const ServiceProviderToken: unique symbol = Symbol("ServiceProvider");
@@ -26,12 +39,21 @@ export const ServiceProviderToken: unique symbol = Symbol("ServiceProvider");
  * @template TRegistry - The service registry type mapping string keys to service types
  */
 export class ServiceProvider<TRegistry extends ServiceRegistry>
-    implements TypeSafeServiceLocator<TRegistry> {
+    implements TypeSafeServiceLocator<TRegistry>, BorrowableSingletonSource {
 
-    private readonly registrations: Readonly<Record<string, ServiceWrapper>>;
-    private readonly multiRegistrations: Readonly<Record<string, ServiceWrapper[]>>;
+    private readonly registrations: Map<string, ServiceWrapper>;
+    private readonly multiRegistrations: Map<string, ServiceWrapper[]>;
     private readonly registrationOrder: ServiceWrapper[];
+    private readonly isRootContainer: boolean;
     private _disposed = false;
+
+    get [Symbol.toStringTag]():
+        | "KizunaRootServiceContainer"
+        | "KizunaServiceScope" {
+        return this.isRootContainer
+            ? "KizunaRootServiceContainer"
+            : "KizunaServiceScope";
+    }
 
     /**
      * Keys currently being resolved on this provider. Guards against
@@ -40,22 +62,24 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     private readonly _resolutionStack: string[] = [];
 
     constructor(
-        registrations: Record<string, ServiceWrapper>,
-        multiRegistrations: Record<string, ServiceWrapper[]> = {},
+        registrations: ReadonlyMap<string, ServiceWrapper>,
+        multiRegistrations: ReadonlyMap<string, readonly ServiceWrapper[]> = new Map(),
         registrationOrder?: readonly ServiceWrapper[],
+        isRootContainer = true,
     ) {
         if (!registrations) {
             throw new Error("Registrations cannot be null or undefined");
         }
-        this.registrations = { ...registrations };
-        this.multiRegistrations = Object.fromEntries(
-            Object.entries(multiRegistrations).map(([k, v]) => [k, [...v]])
+        this.registrations = new Map(registrations);
+        this.multiRegistrations = new Map(
+            [...multiRegistrations].map(([key, resolvers]) => [key, [...resolvers]]),
         );
+        this.isRootContainer = isRootContainer;
         this.registrationOrder = registrationOrder
             ? [...registrationOrder]
             : [
-                ...Object.values(this.registrations),
-                ...Object.values(this.multiRegistrations).flat(),
+                ...this.registrations.values(),
+                ...[...this.multiRegistrations.values()].flat(),
             ];
     }
 
@@ -83,12 +107,12 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         const typeName = keyOrType;
 
         // Check multi-registrations first
-        const multiResolvers = this.multiRegistrations[typeName];
+        const multiResolvers = this.multiRegistrations.get(typeName);
         if (multiResolvers) {
             return this.resolveMulti(typeName, multiResolvers);
         }
 
-        const resolver = this.registrations[typeName];
+        const resolver = this.registrations.get(typeName);
         if (!resolver) {
             throw new Error(`No service registered for key: ${String(typeName)}`);
         }
@@ -119,13 +143,13 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         const typeName = String(key);
 
         // Multi-registration key — resolve all wrappers
-        const multiResolvers = this.multiRegistrations[typeName];
+        const multiResolvers = this.multiRegistrations.get(typeName);
         if (multiResolvers) {
             return this.resolveMulti(typeName, multiResolvers);
         }
 
         // Single-registration key — wrap in array
-        const resolver = this.registrations[typeName];
+        const resolver = this.registrations.get(typeName);
         if (resolver) {
             try {
                 return [this.trackResolution(typeName, () => resolver.resolve(this))];
@@ -146,21 +170,21 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     startScope(): TypeSafeServiceLocator<TRegistry> {
         this.ensureNotDisposed();
 
-        const newRegistrations: Record<string, ServiceWrapper> = {};
+        const newRegistrations = new Map<string, ServiceWrapper>();
         const scopedResolvers = new Map<ServiceWrapper, ServiceWrapper>();
-        Object.entries(this.registrations).forEach(([key, resolver]) => {
+        this.registrations.forEach((resolver, key) => {
             const scopedResolver = resolver.createScope();
-            newRegistrations[key] = scopedResolver;
+            newRegistrations.set(key, scopedResolver);
             scopedResolvers.set(resolver, scopedResolver);
         });
 
-        const newMultiRegistrations: Record<string, ServiceWrapper[]> = {};
-        Object.entries(this.multiRegistrations).forEach(([key, resolvers]) => {
-            newMultiRegistrations[key] = resolvers.map((resolver) => {
+        const newMultiRegistrations = new Map<string, ServiceWrapper[]>();
+        this.multiRegistrations.forEach((resolvers, key) => {
+            newMultiRegistrations.set(key, resolvers.map((resolver) => {
                 const scopedResolver = resolver.createScope();
                 scopedResolvers.set(resolver, scopedResolver);
                 return scopedResolver;
-            });
+            }));
         });
 
         const scopedRegistrationOrder = this.registrationOrder
@@ -171,7 +195,52 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             newRegistrations,
             newMultiRegistrations,
             scopedRegistrationOrder,
+            false,
         );
+    }
+
+    /**
+     * Creates a restricted resolver for one directly owned root singleton.
+     * @internal
+     */
+    [borrowableSourceCapability](key: string): BorrowedSingletonReference {
+        this.ensureNotDisposed();
+
+        if (!this.isRootContainer) {
+            throw new Error(
+                `Cannot borrow service '${key}'. The source is a scope. Use the root container that owns the singleton.`,
+            );
+        }
+
+        if (this.multiRegistrations.has(key)) {
+            throw new Error(
+                `Cannot borrow service '${key}'. Multi-service registrations are not supported.`,
+            );
+        }
+
+        const registration = this.registrations.get(key);
+        if (!registration) {
+            throw new Error(
+                `Cannot borrow service '${key}'. The source has no such registration.`,
+            );
+        }
+
+        const lifetime = registration.getLifetime();
+        if (lifetime !== "singleton") {
+            throw new Error(
+                `Cannot borrow service '${key}'. The source registration is ${lifetime}. Only singleton registrations can be borrowed.`,
+            );
+        }
+
+        if (!registration.ownsSingletonValue()) {
+            throw new Error(
+                `Cannot borrow service '${key}'. The source does not own this singleton.`,
+            );
+        }
+
+        return Object.freeze({
+            resolve: () => this.get(key as never),
+        });
     }
 
     /**
@@ -185,14 +254,18 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
         this._disposed = true;
 
-        const errors: unknown[] = [];
+        const failures: DisposalFailure[] = [];
         try {
             for (const layer of createDisposalLayers(this.registrationOrder)) {
                 for (const resolver of layer) {
                     try {
                         resolver.dispose();
                     } catch (error) {
-                        errors.push(error);
+                        failures.push(this.createDisposalFailure(
+                            resolver,
+                            "dispose",
+                            error,
+                        ));
                     }
                 }
             }
@@ -200,7 +273,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             this.clearRegistrations();
         }
 
-        this.throwDisposalErrors(errors);
+        this.throwDisposalFailures(failures);
     }
 
     /**
@@ -220,14 +293,14 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
         this._disposed = true;
 
-        let errors: readonly unknown[] = [];
+        let failures: readonly DisposalFailure[] = [];
         try {
-            errors = await this.runDependencyAwareDisposeAsync();
+            failures = await this.runDependencyAwareDisposeAsync();
         } finally {
             this.clearRegistrations();
         }
 
-        this.throwDisposalErrors(errors);
+        this.throwDisposalFailures(failures);
     }
 
     /**
@@ -244,13 +317,13 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         await this.disposeAsync();
     }
 
-    private async runDependencyAwareDisposeAsync(): Promise<readonly unknown[]> {
+    private async runDependencyAwareDisposeAsync(): Promise<readonly DisposalFailure[]> {
         const plan = createDisposalPlan(this.registrationOrder);
         if (plan.groups.length === 0) {
             return [];
         }
 
-        const errorsByResolver = new Map<ServiceWrapper, unknown>();
+        const failuresByResolver = new Map<ServiceWrapper, DisposalFailure>();
 
         const remainingConsumerGroups = plan.groups.map(
             (group) => group.consumerGroupCount,
@@ -265,7 +338,14 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
                         try {
                             await resolver.disposeAsync();
                         } catch (error) {
-                            errorsByResolver.set(resolver, error);
+                            failuresByResolver.set(
+                                resolver,
+                                this.createDisposalFailure(
+                                    resolver,
+                                    "disposeAsync",
+                                    error,
+                                ),
+                            );
                         }
                     },
                 );
@@ -292,28 +372,37 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         });
 
         return this.registrationOrder.flatMap((resolver) => {
-            if (!errorsByResolver.has(resolver)) {
-                return [];
-            }
-            return [errorsByResolver.get(resolver)];
+            const failure = failuresByResolver.get(resolver);
+            return failure ? [failure] : [];
         });
     }
 
-    private throwDisposalErrors(errors: readonly unknown[]): void {
-        if (errors.length > 0) {
-            throw new DisposalError(errors);
+    private createDisposalFailure(
+        resolver: ServiceWrapper,
+        operation: DisposalOperation,
+        error: unknown,
+    ): DisposalFailure {
+        return Object.freeze({
+            serviceKey: resolver.getName(),
+            lifetime: resolver.getLifetime(),
+            operation,
+            error,
+        });
+    }
+
+    private throwDisposalFailures(failures: readonly DisposalFailure[]): void {
+        if (failures.length > 0) {
+            throw new DisposalError(
+                failures.map((failure) => failure.error),
+                undefined,
+                failures,
+            );
         }
     }
 
     private clearRegistrations(): void {
-        const regs = this.registrations as Record<string, ServiceWrapper>;
-        for (const key of Object.keys(regs)) {
-            delete regs[key];
-        }
-        const multiRegs = this.multiRegistrations as Record<string, ServiceWrapper[]>;
-        for (const key of Object.keys(multiRegs)) {
-            delete multiRegs[key];
-        }
+        this.registrations.clear();
+        this.multiRegistrations.clear();
         this.registrationOrder.length = 0;
     }
 

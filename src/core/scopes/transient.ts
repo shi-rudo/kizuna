@@ -1,5 +1,5 @@
-import type { ServiceLifecycle } from '../contracts';
-import { CircularDependencyError } from '../errors';
+import type { ConfigurableServiceLifecycle } from '../contracts.js';
+import { CircularDependencyError } from '../errors.js';
 
 /**
  * Transient lifecycle implementation that creates a new instance every time.
@@ -46,7 +46,9 @@ import { CircularDependencyError } from '../errors';
  * 
  * @implements {ServiceLifecycle}
  */
-export class TransientLifecycle implements ServiceLifecycle {
+export class TransientLifecycle implements ConfigurableServiceLifecycle {
+    public readonly lifetime = 'transient' as const;
+    public readonly valueOwnership = 'untracked' as const;
     /**
      * The factory function used to create new instances.
      * @private

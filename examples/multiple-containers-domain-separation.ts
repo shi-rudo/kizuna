@@ -6,16 +6,18 @@
  * unified ContainerBuilder with full type safety.
  * 
  * Benefits:
- * - Clear domain boundaries with type safety
- * - Prevents cross-domain dependencies
+ * - Separate registries for each domain
+ * - Application-owned domain boundaries
  * - Shared infrastructure services
  * - Independent domain evolution
  * - Easier testing and maintenance
  * - Full IDE autocompletion and compile-time checking
  */
 
-import { ContainerBuilder } from '../src/api/container-builder';
-import { TypeSafeServiceLocator } from '../src/api/contracts/interfaces';
+import {
+  ContainerBuilder,
+  interfaceToken,
+} from '../src/index';
 
 // ========================================
 // DOMAIN MODELS
@@ -74,7 +76,7 @@ class Logger {
 }
 
 class EmailService {
-  async send(to: string, subject: string, body: string): Promise<void> {
+  async send(to: string, subject: string, _body: string): Promise<void> {
     // Simulate email sending
     await new Promise(resolve => setTimeout(resolve, 30));
     console.log(`📧 Email sent to ${to}: ${subject}`);
@@ -87,13 +89,15 @@ interface IConfig {
   getEnvironment(): string;
 }
 
+const Config = interfaceToken<IConfig>()('IConfig');
+
 class DatabaseConfig implements IConfig {
   getDatabaseUrl(): string {
     return process.env.DATABASE_URL || 'postgresql://localhost:5432/ecommerce';
   }
 
   getMaxConnections(): number {
-    return parseInt(process.env.DB_MAX_CONNECTIONS || '10');
+    return parseInt(process.env.DB_MAX_CONNECTIONS || '10', 10);
   }
 
   getEnvironment(): string {
@@ -105,6 +109,8 @@ interface IMetrics {
   increment(metric: string): void;
   getMetrics(): Record<string, number>;
 }
+
+const Metrics = interfaceToken<IMetrics>()('IMetrics');
 
 class MetricsCollector implements IMetrics {
   private metrics: Map<string, number> = new Map();
@@ -129,6 +135,8 @@ interface IUserRepository {
   findByEmail(email: string): Promise<User | null>;
 }
 
+const UserRepositoryToken = interfaceToken<IUserRepository>()('IUserRepository');
+
 class UserRepository implements IUserRepository {
   async findById(id: string): Promise<User | null> {
     // Simulate database lookup
@@ -149,7 +157,7 @@ class UserRepository implements IUserRepository {
     };
   }
 
-  async findByEmail(email: string): Promise<User | null> {
+  async findByEmail(_email: string): Promise<User | null> {
     // Simulate email lookup
     await new Promise(resolve => setTimeout(resolve, 10));
     return null; // Simplified for example
@@ -231,6 +239,8 @@ interface IOrderRepository {
   findByUserId(userId: string): Promise<Order[]>;
 }
 
+const OrderRepositoryToken = interfaceToken<IOrderRepository>()('IOrderRepository');
+
 class OrderRepository implements IOrderRepository {
   async findById(id: string): Promise<Order | null> {
     // Simulate database lookup
@@ -261,7 +271,7 @@ class OrderRepository implements IOrderRepository {
     };
   }
 
-  async findByUserId(userId: string): Promise<Order[]> {
+  async findByUserId(_userId: string): Promise<Order[]> {
     // Simulate fetching user orders
     await new Promise(resolve => setTimeout(resolve, 20));
     return []; // Simplified for example
@@ -317,8 +327,10 @@ interface IPaymentGateway {
   refund(transactionId: string): Promise<boolean>;
 }
 
+const PaymentGatewayToken = interfaceToken<IPaymentGateway>()('IPaymentGateway');
+
 class PaymentGateway implements IPaymentGateway {
-  async charge(amount: number): Promise<PaymentResult> {
+  async charge(_amount: number): Promise<PaymentResult> {
     // Simulate payment processing
     await new Promise(resolve => setTimeout(resolve, 100));
     
@@ -331,7 +343,7 @@ class PaymentGateway implements IPaymentGateway {
     };
   }
 
-  async refund(transactionId: string): Promise<boolean> {
+  async refund(_transactionId: string): Promise<boolean> {
     // Simulate refund processing
     await new Promise(resolve => setTimeout(resolve, 50));
     return true;
@@ -379,14 +391,14 @@ class PaymentService {
 function createSharedContainer() {
   return new ContainerBuilder()
     // Infrastructure services - singletons shared across the application
-    .registerInterface<IConfig>('IConfig', DatabaseConfig)
+    .registerSingletonInterface(Config, DatabaseConfig)
     .registerSingleton('Logger', Logger)
     .registerSingleton('EmailService', EmailService)
-    .registerInterface<IMetrics>('IMetrics', MetricsCollector)
+    .registerSingletonInterface(Metrics, MetricsCollector)
     
     // Configuration factory with environment-specific logic
-    .registerFactory('AppSettings', (provider) => {
-      const config = provider.get('IConfig');
+    .registerSingletonFactory('AppSettings', (provider) => {
+      const config = provider.get(Config);
       const logger = provider.get('Logger');
       
       logger.log(`Initializing app settings for ${config.getEnvironment()}`);
@@ -410,18 +422,29 @@ function createSharedContainer() {
 /**
  * Creates the User domain container with type-safe dependencies.
  * This container manages user-specific services with shared infrastructure.
+ * It borrows shared singletons without taking ownership of them.
  */
 function createUserDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
   return new ContainerBuilder()
-    // Import shared services (singleton instances from shared container)
-    .registerFactory('Logger', () => sharedContainer.get('Logger'))
-    .registerFactory('EmailService', () => sharedContainer.get('EmailService'))
-    .registerFactory('IMetrics', () => sharedContainer.get('IMetrics'))
-    
+    .borrowSingletonFrom(sharedContainer, 'Logger')
+    .borrowSingletonFrom(sharedContainer, 'EmailService')
+    .borrowSingletonFrom(sharedContainer, Metrics)
+
     // User domain-specific services
-    .registerInterface<IUserRepository>('IUserRepository', UserRepository)
-    .registerScoped('UserService', UserService, 'IUserRepository', 'Logger', 'IMetrics')
-    .registerScoped('UserNotificationService', UserNotificationService, 'EmailService', 'Logger')
+    .registerScopedInterface(UserRepositoryToken, UserRepository)
+    .registerScoped(
+      'UserService',
+      UserService,
+      UserRepositoryToken,
+      'Logger',
+      Metrics,
+    )
+    .registerScoped(
+      'UserNotificationService',
+      UserNotificationService,
+      'EmailService',
+      'Logger',
+    )
     
     .build();
 }
@@ -429,18 +452,30 @@ function createUserDomainContainer(sharedContainer: ReturnType<typeof createShar
 /**
  * Creates the Order domain container with type-safe dependencies.
  * This container manages order-specific services with shared infrastructure.
+ * It borrows shared singletons without taking ownership of them.
  */
 function createOrderDomainContainer(sharedContainer: ReturnType<typeof createSharedContainer>) {
   return new ContainerBuilder()
-    // Import shared services (singleton instances from shared container)
-    .registerFactory('Logger', () => sharedContainer.get('Logger'))
-    .registerFactory('IMetrics', () => sharedContainer.get('IMetrics'))
-    
+    .borrowSingletonFrom(sharedContainer, 'Logger')
+    .borrowSingletonFrom(sharedContainer, Metrics)
+
     // Order domain-specific services
-    .registerInterface<IOrderRepository>('IOrderRepository', OrderRepository)
-    .registerScoped('OrderService', OrderService, 'IOrderRepository', 'Logger', 'IMetrics')
-    .registerInterface<IPaymentGateway>('IPaymentGateway', PaymentGateway)
-    .registerScoped('PaymentService', PaymentService, 'IPaymentGateway', 'Logger', 'IMetrics')
+    .registerScopedInterface(OrderRepositoryToken, OrderRepository)
+    .registerScoped(
+      'OrderService',
+      OrderService,
+      OrderRepositoryToken,
+      'Logger',
+      Metrics,
+    )
+    .registerScopedInterface(PaymentGatewayToken, PaymentGateway)
+    .registerScoped(
+      'PaymentService',
+      PaymentService,
+      PaymentGatewayToken,
+      'Logger',
+      Metrics,
+    )
     
     .build();
 }
@@ -449,6 +484,8 @@ function createOrderDomainContainer(sharedContainer: ReturnType<typeof createSha
 type SharedContainer = ReturnType<typeof createSharedContainer>;
 type UserDomainContainer = ReturnType<typeof createUserDomainContainer>;
 type OrderDomainContainer = ReturnType<typeof createOrderDomainContainer>;
+type UserDomainScope = ReturnType<UserDomainContainer['startScope']>;
+type OrderDomainScope = ReturnType<OrderDomainContainer['startScope']>;
 
 // ========================================
 // TYPE-SAFE APPLICATION CLASS
@@ -492,7 +529,7 @@ class ECommerceApplication {
 
   /**
    * Domain-specific service accessors with full type safety.
-   * These methods provide clean access to domain services while maintaining boundaries.
+   * These methods provide access to services without exposing the domain containers.
    */
   
   // User Domain Services (fully typed!)
@@ -529,11 +566,11 @@ class ECommerceApplication {
   /**
    * Create domain-specific scopes for request processing with type safety.
    */
-  createUserDomainScope(): UserDomainContainer {
+  createUserDomainScope(): UserDomainScope {
     return this.userDomainContainer.startScope();
   }
 
-  createOrderDomainScope(): OrderDomainContainer {
+  createOrderDomainScope(): OrderDomainScope {
     return this.orderDomainContainer.startScope();
   }
 
@@ -568,7 +605,7 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
     // All services are fully typed! ✨
     const userService = userScope.get('UserService');            // Type: UserService
     const notificationService = userScope.get('UserNotificationService'); // Type: UserNotificationService
-    const metrics = userScope.get('IMetrics');                  // Type: IMetrics
+    const metrics = app.getMetrics();                           // Type: IMetrics
 
     const userData: CreateUserDto = {
       name: 'Alice Johnson',
@@ -593,7 +630,7 @@ async function simulateHttpRequestHandlers(app: ECommerceApplication): Promise<v
     // All services are fully typed! ✨
     const orderService = orderScope.get('OrderService');        // Type: OrderService
     const paymentService = orderScope.get('PaymentService');    // Type: PaymentService
-    const metrics = orderScope.get('IMetrics');                 // Type: IMetrics
+    const metrics = app.getMetrics();                           // Type: IMetrics
 
     const orderData: CreateOrderDto = {
       userId: 'user_123',
@@ -708,12 +745,12 @@ async function demonstrateTestingWithTypeSafety(): Promise<void> {
 
   // Create a type-safe test container that exactly matches the shared container signature
   const testSharedContainer = new ContainerBuilder()
-    .registerInterface<IConfig>('IConfig', TestConfig)
+    .registerSingletonInterface(Config, TestConfig)
     .registerSingleton('Logger', TestLogger)
     .registerSingleton('EmailService', TestEmailService)
-    .registerInterface<IMetrics>('IMetrics', TestMetrics)
-    .registerFactory('AppSettings', (provider) => {
-      const config = provider.get('IConfig');
+    .registerSingletonInterface(Metrics, TestMetrics)
+    .registerSingletonFactory('AppSettings', (provider) => {
+      const config = provider.get(Config);
       const logger = provider.get('Logger');
       
       logger.log('Initializing test app settings');
@@ -770,7 +807,7 @@ async function main(): Promise<void> {
 
     console.log('\n🎉 TYPE-SAFE MULTI-CONTAINER BENEFITS:');
     console.log('✅ Full type safety across all domains');
-    console.log('✅ Clear domain boundaries with interface separation');  
+    console.log('✅ Application code defines each domain boundary');
     console.log('✅ Shared infrastructure with singleton management');
     console.log('✅ IDE autocompletion for all service access');
     console.log('✅ Compile-time error detection');
