@@ -1,27 +1,32 @@
-import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar";
-import type { ServiceLifecycle } from "../core/contracts";
-import { BorrowedSingletonLifecycle } from "../core/scopes/borrowed-singleton";
-import { ScopedLifecycle } from "../core/scopes/scoped";
-import { SingletonLifecycle } from "../core/scopes/singleton";
-import { TransientLifecycle } from "../core/scopes/transient";
-import { ServiceWrapper } from "../core/services/service-wrapper";
-import { BaseContainerBuilder } from "./base-container-builder";
-import type { TypeSafeServiceLocator } from "./contracts/interfaces";
+import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar.js";
+import type { ConfigurableServiceLifecycle } from "../core/contracts.js";
+import { BorrowedSingletonLifecycle } from "../core/scopes/borrowed-singleton.js";
+import { ScopedLifecycle } from "../core/scopes/scoped.js";
+import { SingletonLifecycle } from "../core/scopes/singleton.js";
+import { TransientLifecycle } from "../core/scopes/transient.js";
+import { ServiceWrapper } from "../core/services/service-wrapper.js";
+import {
+    borrowableSourceCapability,
+    isBorrowedSingletonReference,
+    type BorrowableSingletonSource,
+} from "./borrowed-singleton-capability.js";
+import { BaseContainerBuilder } from "./base-container-builder.js";
+import type { RootServiceContainer } from "./contracts/interfaces.js";
 import type {
     AddToRegistry,
     Factory,
     ObservedFactoryValue,
     ServiceRegistry,
     TypeSafeRegistrar,
-} from "./contracts/types";
+} from "./contracts/types.js";
 import type {
     InterfaceToken,
     InterfaceTokenKey,
     InterfaceTokenService,
     RegisteredInterfaceToken,
-} from "./interface-token";
-import type { LiteralServiceKey } from "./literal-service-key";
-import { ServiceProvider } from "./service-provider";
+} from "./interface-token.js";
+import type { LiteralServiceKey } from "./literal-service-key.js";
+import { ServiceProvider } from "./service-provider.js";
 
 type ServiceConstructor = new (...args: any[]) => any;
 
@@ -142,16 +147,26 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     }
 
     /**
-     * Borrows one singleton from another Kizuna container.
+     * Borrows one directly owned singleton from a Kizuna root container.
      *
-     * The source container owns the service. Dispose every borrower before you
-     * dispose the source container.
+     * The source keeps ownership. A scope or another borrower cannot lend the
+     * registration. Dispose each borrower before the source container.
+     *
+     * @template TSourceRegistry - The registry of the source root container
+     * @template TToken - A registered interface token in the source registry
+     * @template K - A fixed string key in the source registry
+     * @param source - The compatible root container that owns the singleton
+     * @param token - The registered interface token to borrow
+     * @param key - The registered singleton key to borrow
+     * @returns This builder with the borrowed service in its registry type
+     * @throws {TypeError} If the source does not implement the compatible protocol
+     * @throws {Error} If the source is disposed or does not own the singleton
      */
     borrowSingletonFrom<
         TSourceRegistry extends ServiceRegistry,
         TToken extends InterfaceToken<unknown, string>,
     >(
-        source: TypeSafeServiceLocator<TSourceRegistry>,
+        source: RootServiceContainer<TSourceRegistry>,
         token: RegisteredInterfaceToken<TSourceRegistry, TToken>,
     ): ContainerBuilder<
         TRegistry &
@@ -161,26 +176,34 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         TSourceRegistry extends ServiceRegistry,
         K extends string & keyof TSourceRegistry,
     >(
-        source: TypeSafeServiceLocator<TSourceRegistry>,
+        source: RootServiceContainer<TSourceRegistry>,
         key: K extends InterfaceToken<unknown, string>
             ? never
             : LiteralServiceKey<K>,
     ): ContainerBuilder<TRegistry & Record<K, TSourceRegistry[K]>>;
     borrowSingletonFrom(
-        source: TypeSafeServiceLocator<ServiceRegistry>,
+        source: RootServiceContainer<ServiceRegistry>,
         key: string,
     ): ContainerBuilder<any> {
         this.ensureNotBuilt();
         this.validateServiceName(key);
 
-        if (!(source instanceof ServiceProvider)) {
-            throw new TypeError("The source must be a Kizuna service container");
+        const borrow = (source as unknown as Partial<BorrowableSingletonSource>)[
+            borrowableSourceCapability
+        ];
+        if (typeof borrow !== "function") {
+            throw new TypeError(
+                "The source must be a compatible Kizuna root container",
+            );
         }
-        source.assertBorrowableSingleton(key);
+        const reference = borrow.call(source, key);
+        if (!isBorrowedSingletonReference(reference)) {
+            throw new TypeError("The source returned an invalid singleton reference");
+        }
 
         const serviceWrapper = new ServiceWrapper(
             key,
-            new BorrowedSingletonLifecycle(source, key),
+            new BorrowedSingletonLifecycle(reference),
             [],
         );
         this.registerService(key, serviceWrapper);
@@ -598,7 +621,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /**
      * Builds the fully type-safe service container.
      * 
-     * @returns The configured type-safe service locator with complete type inference
+     * @returns The configured root container with complete type inference
      * @throws {Error} If the builder has already been built
      * 
      * @example
@@ -612,7 +635,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * const config = container.get('Config'); // Type: { env: string }
      * ```
      */
-    build(): TypeSafeServiceLocator<TRegistry> {
+    build(): RootServiceContainer<TRegistry> {
         this.ensureNotBuilt();
         this.markAsBuilt();
 
@@ -620,17 +643,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
             this.logWarning("Building ServiceProvider with no registered services");
         }
 
-        const registrationsObject = Object.fromEntries(this.registrations);
-        const multiRegistrationsObject: Record<string, ServiceWrapper[]> = {};
-        this.multiRegistrations.forEach((wrappers, key) => {
-            multiRegistrationsObject[key] = [...wrappers];
-        });
-
         return new ServiceProvider<TRegistry>(
-            registrationsObject,
-            multiRegistrationsObject,
+            this.registrations,
+            this.multiRegistrations,
             this.registrationOrder,
-        );
+        ) as unknown as RootServiceContainer<TRegistry>;
     }
 
     // =================
@@ -644,7 +661,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     private registerTypeSafe<K extends string, T, TRegistered = T>(
         key: K,
         configurator: (registrar: TypeSafeRegistrar<TRegistry, T>) => void,
-        lifecycle: ServiceLifecycle
+        lifecycle: ConfigurableServiceLifecycle
     ): ContainerBuilder<TRegistry & Record<K, TRegistered>> {
         this.ensureNotBuilt();
 
@@ -669,7 +686,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
         key: K,
         serviceType: new (...args: any[]) => T,
         dependencies: string[],
-        lifecycle: ServiceLifecycle
+        lifecycle: ConfigurableServiceLifecycle
     ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
         this.ensureNotBuilt();
 
@@ -688,7 +705,7 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     private addFactoryTypeSafe<K extends string, T, TRegistered = T>(
         key: K,
         factory: Factory<TRegistry, T>,
-        lifecycle: ServiceLifecycle
+        lifecycle: ConfigurableServiceLifecycle
     ): ContainerBuilder<AddToRegistry<TRegistry, K, TRegistered>> {
         this.ensureNotBuilt();
 

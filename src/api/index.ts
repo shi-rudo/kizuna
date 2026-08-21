@@ -36,12 +36,16 @@
  * @packageDocumentation
  */
 
-export { ContainerBuilder } from "./container-builder";
-export type { TypeSafeServiceLocator } from "./contracts/interfaces";
-export type { InterfaceToken } from "./interface-token";
-export { interfaceToken } from "./interface-token";
+export { ContainerBuilder } from "./container-builder.js";
+export type {
+	RootServiceContainer,
+	TypeSafeServiceLocator,
+} from "./contracts/interfaces.js";
+export type { InterfaceToken } from "./interface-token.js";
+export { interfaceToken } from "./interface-token.js";
 export {
 	CircularDependencyError,
 	DisposalError,
 	ServiceProviderToken,
-} from "./service-provider";
+} from "./service-provider.js";
+export type { DisposalFailure, DisposalOperation } from "./service-provider.js";

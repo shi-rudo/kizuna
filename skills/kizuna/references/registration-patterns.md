@@ -107,9 +107,12 @@ const domain = new ContainerBuilder()
   .build();
 ```
 
-Only singleton registrations can be borrowed. The source must be a Kizuna
-container. It must outlive every borrower and borrower scope. Dispose the domain
-container before you dispose `shared`.
+The source must be the root container that registered and owns the singleton.
+You cannot borrow scoped, transient, multi-service, or borrowed registrations.
+A scope cannot lend a singleton. The source must outlive each borrower and its
+scopes.
+
+Dispose the domain container before you dispose `shared`.
 
 The source owns the value and runs its cleanup hook. The borrowed key remains a
 declared dependency in the domain container.

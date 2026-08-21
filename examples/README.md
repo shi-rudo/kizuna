@@ -29,8 +29,9 @@ Kizuna does not enforce domain boundaries. The application structure defines and
 - Mock testing strategies
 
 Each domain borrows only the shared singletons that it needs. The shared
-container keeps disposal ownership. The application disposes each domain
-container before it disposes the shared container.
+root container keeps disposal ownership. A scope or borrower cannot lend these
+singletons. The application disposes each domain container before the shared
+container.
 
 ## Check the Examples
 

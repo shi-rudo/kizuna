@@ -2,8 +2,8 @@ import type {
 	InterfaceToken,
 	InterfaceTokenService,
 	RegisteredInterfaceToken,
-} from "../interface-token";
-import type { ServiceProviderToken } from "../service-provider";
+} from "../interface-token.js";
+import type { ServiceProviderToken } from "../service-provider.js";
 
 /**
  * Type-safe ServiceLocator that provides compile-time safety and IDE autocompletion.
@@ -92,4 +92,16 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	 * Equivalent to `disposeAsync()`.
 	 */
 	[Symbol.asyncDispose](): Promise<void>;
+}
+
+/**
+ * A root container that owns its local singleton registrations.
+ *
+ * `ContainerBuilder.build()` returns this type. `startScope()` returns a
+ * `TypeSafeServiceLocator` that cannot lend singleton registrations.
+ */
+export interface RootServiceContainer<
+	TRegistry extends Record<string, any>,
+> extends TypeSafeServiceLocator<TRegistry> {
+	readonly [Symbol.toStringTag]: "KizunaRootServiceContainer";
 }

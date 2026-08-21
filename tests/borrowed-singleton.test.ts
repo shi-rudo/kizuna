@@ -65,7 +65,74 @@ describe("borrowSingletonFrom()", () => {
 				{} as never,
 				"Logger" as never,
 			),
-		).toThrow("The source must be a Kizuna service container");
+		).toThrow("The source must be a compatible Kizuna root container");
+	});
+
+	it("rejects a malformed borrow capability", () => {
+		const source = {
+			[Symbol.for("@shirudo/kizuna.borrowable-source.v1")]() {
+				return {};
+			},
+		};
+
+		expect(() =>
+			new ContainerBuilder().borrowSingletonFrom(
+				source as never,
+				"Logger" as never,
+			),
+		).toThrow("The source returned an invalid singleton reference");
+	});
+
+	it("rejects a missing source key at runtime", () => {
+		class Logger {}
+
+		const source = new ContainerBuilder()
+			.registerSingleton("Logger", Logger)
+			.build();
+
+		expect(() =>
+			new ContainerBuilder().borrowSingletonFrom(
+				source,
+				"Missing" as never,
+			),
+		).toThrow(
+			"Cannot borrow service 'Missing'. The source has no such registration.",
+		);
+	});
+
+	it("rejects a child scope as the source", () => {
+		class Logger {}
+
+		const owner = new ContainerBuilder()
+			.registerSingleton("Logger", Logger)
+			.build();
+		const sourceScope = owner.startScope();
+
+		expect(() =>
+			new ContainerBuilder().borrowSingletonFrom(
+				sourceScope as never,
+				"Logger" as never,
+			),
+		).toThrow(
+			"Cannot borrow service 'Logger'. The source is a scope. Use the root container that owns the singleton.",
+		);
+	});
+
+	it("rejects a registration that the source borrowed", () => {
+		class Logger {}
+
+		const owner = new ContainerBuilder()
+			.registerSingleton("Logger", Logger)
+			.build();
+		const firstBorrower = new ContainerBuilder()
+			.borrowSingletonFrom(owner, "Logger")
+			.build();
+
+		expect(() =>
+			new ContainerBuilder().borrowSingletonFrom(firstBorrower, "Logger"),
+		).toThrow(
+			"Cannot borrow service 'Logger'. The source does not own this singleton.",
+		);
 	});
 
 	it("rejects a source that was already disposed", () => {
@@ -102,6 +169,36 @@ describe("borrowSingletonFrom()", () => {
 
 		expect(borrower.get(Clock)).toBe(source.get(Clock));
 	});
+
+	it.each(["toString", "constructor", "hasOwnProperty", "__proto__"])(
+		"supports the prototype-colliding key %s",
+		(key) => {
+			let disposeCalls = 0;
+			class SharedService {
+				dispose(): void {
+					disposeCalls++;
+				}
+			}
+
+			const source = new ContainerBuilder()
+				.registerSingleton(key as never, SharedService)
+				.build();
+			const borrower = new ContainerBuilder()
+				.borrowSingletonFrom(source, key as never)
+				.build();
+			const scope = borrower.startScope();
+
+			expect(borrower.get(key as never)).toBe(source.get(key as never));
+			expect(scope.get(key as never)).toBe(source.get(key as never));
+
+			scope.dispose();
+			borrower.dispose();
+			expect(disposeCalls).toBe(0);
+
+			source.dispose();
+			expect(disposeCalls).toBe(1);
+		},
+	);
 
 	it("does not dispose a borrowed value on the synchronous path", () => {
 		let disposeCalls = 0;

@@ -451,6 +451,10 @@ Both methods attempt all cleanup operations. If one or more operations fail,
 the same error type. The `errors` property contains the original errors. Kizuna
 does not write these errors to the console.
 
+For errors that a container throws, the `failures` property adds the service
+key, lifetime, and cleanup operation. This context identifies the service that
+failed.
+
 `DisposalError` extends the JavaScript `AggregateError` class. It reports
 multiple cleanup errors and does not represent a domain aggregate.
 
@@ -472,9 +476,10 @@ An application can use separate containers for separate domains. Kizuna keeps
 their registries separate. Your application still defines and enforces each
 domain boundary.
 
-Use `borrowSingletonFrom()` when a domain needs one shared singleton. The source
-container remains the sole owner. The borrowed key also remains visible in the
-domain dependency graph.
+When a domain needs one shared singleton, use `borrowSingletonFrom()`. Pass the
+root container that registered and owns the singleton.
+
+The borrowed key remains visible in the domain dependency graph.
 
 ```typescript
 // Shared infrastructure
@@ -518,10 +523,10 @@ orderContainer.dispose();
 sharedContainer.dispose();
 ```
 
-The source registration must be a singleton. Scoped, transient, and
-multi-service registrations cannot be borrowed. The source container must
-outlive all borrowers and their scopes. A borrower never runs cleanup hooks on
-the borrowed value.
+The source must be a root container. It must directly own the singleton.
+You cannot lend scoped, transient, multi-service, or borrowed registrations.
+A scope cannot lend a singleton. The source must outlive all borrowers and
+their scopes. A borrower never runs cleanup hooks on the borrowed value.
 
 ### 🧪 **Testing with Type-Safe Mocks**
 
@@ -651,10 +656,20 @@ The main class for configuring your dependency injection container.
 .addTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
 ```
 
+#### Cross-Container Composition
+
+```typescript
+.borrowSingletonFrom<TSourceRegistry, K>(source: RootServiceContainer<TSourceRegistry>, key: K)
+.borrowSingletonFrom<TSourceRegistry, TToken>(source: RootServiceContainer<TSourceRegistry>, token: TToken)
+```
+
+The source must be the root container that registered and owns the singleton.
+Scopes and borrowers cannot lend a registration.
+
 #### Container Management
 
 ```typescript
-.build(): TypeSafeServiceLocator<TRegistry>            // Build the container
+.build(): RootServiceContainer<TRegistry>              // Build the root container
 .validate(): string[]                                  // Validate configuration
 .disableStrictParameterValidation(): ContainerBuilder  // Disable param name validation (auto-off in production)
 .count: number                                         // Number of registered services
@@ -662,11 +677,15 @@ The main class for configuring your dependency injection container.
 .getRegisteredServiceNames(): string[]                 // List all registered keys
 ```
 
-### TypeSafeServiceLocator
+### RootServiceContainer and TypeSafeServiceLocator
 
-The built container interface for service resolution.
+`build()` returns a `RootServiceContainer`. This type can lend owned singletons.
+`startScope()` returns a `TypeSafeServiceLocator`. A scope cannot lend services.
 
 ```typescript
+interface RootServiceContainer<TRegistry>
+  extends TypeSafeServiceLocator<TRegistry> {}
+
 interface TypeSafeServiceLocator<TRegistry> {
   get<K extends keyof TRegistry>(key: K): TRegistry[K];      // Resolve service
   get(token: typeof ServiceProviderToken): TypeSafeServiceLocator<TRegistry>; // Get current locator

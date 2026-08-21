@@ -123,6 +123,10 @@ Both APIs attempt all cleanup operations. `dispose()` throws one
 `DisposalError` after all cleanup settles. The `errors` property contains the
 original errors. Kizuna does not write cleanup errors to the console.
 
+For errors that a container throws, the `failures` property adds the service
+key, lifetime, and cleanup operation. This context identifies the service that
+failed.
+
 Kizuna checks object and function values from singleton and scoped factories
 for cleanup hooks.
 

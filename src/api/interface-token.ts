@@ -1,4 +1,4 @@
-import type { LiteralServiceKey } from "./literal-service-key";
+import type { LiteralServiceKey } from "./literal-service-key.js";
 
 declare const interfaceTokenBrand: unique symbol;
 

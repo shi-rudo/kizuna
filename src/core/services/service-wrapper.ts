@@ -1,16 +1,13 @@
-import type { ServiceLifecycle } from '../contracts';
-import { BorrowedSingletonLifecycle } from '../scopes/borrowed-singleton';
-import { ScopedLifecycle } from '../scopes/scoped';
-import { SingletonLifecycle } from '../scopes/singleton';
-import { TransientLifecycle } from '../scopes/transient';
+import type {
+    ServiceLifecycle,
+    ServiceLifetime,
+    ServiceValueOwnership,
+} from '../contracts.js';
 
 /** Minimal contract for dependency resolution within ServiceWrapper. */
 interface ServiceResolver {
     get(key: string): any;
 }
-
-/** Lifetime classification of a service's lifecycle manager. */
-export type ServiceLifetime = 'singleton' | 'scoped' | 'transient' | 'unknown';
 
 /**
  * Wraps a service with its scope, dependencies, and lifecycle management.
@@ -21,6 +18,8 @@ export class ServiceWrapper {
     private _dependencies: readonly string[];
     private _constructorFn?: new (...args: any[]) => any;
     private _ownsLifecycle: boolean;
+    private readonly _lifetime: ServiceLifetime;
+    private readonly _valueOwnership: ServiceValueOwnership;
 
     constructor(name: string, lifecycle: ServiceLifecycle, dependencies: string[], constructorFn?: new (...args: any[]) => any, ownsLifecycle = true) {
         this._name = name;
@@ -28,6 +27,8 @@ export class ServiceWrapper {
         this._dependencies = Object.freeze([...dependencies]); // Immutable copy
         this._constructorFn = constructorFn;
         this._ownsLifecycle = ownsLifecycle;
+        this._lifetime = lifecycle.lifetime;
+        this._valueOwnership = lifecycle.valueOwnership;
     }
 
     /**
@@ -136,17 +137,19 @@ export class ServiceWrapper {
     }
 
     /**
-     * Classifies the lifetime of the underlying lifecycle manager.
-     * Custom lifecycle implementations report 'unknown'.
+     * Gets the declared lifetime of the lifecycle manager.
      * @returns The lifetime classification
      */
     getLifetime(): ServiceLifetime {
-        if (this._lifecycle instanceof BorrowedSingletonLifecycle) {
-            return 'singleton';
-        }
-        if (this._lifecycle instanceof SingletonLifecycle) return 'singleton';
-        if (this._lifecycle instanceof ScopedLifecycle) return 'scoped';
-        if (this._lifecycle instanceof TransientLifecycle) return 'transient';
-        return 'unknown';
+        return this._lifetime;
+    }
+
+    /** Returns true only when this wrapper owns one local singleton value. */
+    ownsSingletonValue(): boolean {
+        return (
+            this._ownsLifecycle &&
+            this._lifetime === 'singleton' &&
+            this._valueOwnership === 'owned'
+        );
     }
 }

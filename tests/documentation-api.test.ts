@@ -28,6 +28,7 @@ const publishedMarkdown = [
 	join(repositoryRoot, "README.md"),
 	join(repositoryRoot, "examples", "README.md"),
 	...markdownFiles(join(repositoryRoot, "docs")),
+	...markdownFiles(join(repositoryRoot, "skills")),
 ];
 
 const removedCallsFromAudit = [
@@ -53,9 +54,9 @@ function codeBlockAfter(markdown: string, heading: string): string {
 	return codeBlock[1];
 }
 
-function strictTypeErrors(source: string): string[] {
+function strictTypeErrors(source: string, exampleName = "example"): string[] {
 	const directory = mkdtempSync(join(repositoryRoot, ".kizuna-doc-example-"));
-	const fileName = join(directory, "advanced-request-scope.ts");
+	const fileName = join(directory, `${exampleName}.ts`);
 	writeFileSync(fileName, source);
 
 	try {
@@ -88,6 +89,17 @@ function strictTypeErrors(source: string): string[] {
 }
 
 describe("published TypeScript examples", () => {
+	it("lists singleton borrowing in the formal builder API", () => {
+		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
+		const formalApi = readme.slice(
+			readme.indexOf("### ContainerBuilder"),
+			readme.indexOf("### RootServiceContainer and TypeSafeServiceLocator"),
+		);
+
+		expect(formalApi).toContain("#### Cross-Container Composition");
+		expect(formalApi).toContain(".borrowSingletonFrom<");
+	});
+
 	it("do not reintroduce removed calls from the documentation audit", () => {
 		const violations: string[] = [];
 
@@ -165,7 +177,7 @@ declare function generateId(): string;
 ${example}
 `;
 
-		expect(strictTypeErrors(source)).toEqual([]);
+		expect(strictTypeErrors(source, "advanced-request-scope")).toEqual([]);
 	});
 
 	it("keeps the multiple-container README example type-safe", () => {
@@ -199,7 +211,53 @@ class PaymentService {
 ${example}
 `;
 
-		expect(strictTypeErrors(source)).toEqual([]);
+		expect(strictTypeErrors(source, "multiple-containers")).toEqual([]);
+	});
+
+	it("keeps the packaged skill borrowing examples type-safe", () => {
+		const skill = readFileSync(
+			join(repositoryRoot, "skills", "kizuna", "SKILL.md"),
+			"utf8",
+		);
+		const skillExample = codeBlockAfter(
+			skill,
+			"### Borrow a singleton from another container",
+		);
+		const reference = readFileSync(
+			join(
+				repositoryRoot,
+				"skills",
+				"kizuna",
+				"references",
+				"registration-patterns.md",
+			),
+			"utf8",
+		);
+		const referenceExample = codeBlockAfter(reference, "## Borrowed singleton");
+		const declarations = `
+class Logger {
+    log(_message: string): void {}
+}
+class MetricsCollector {
+    increment(_name: string): void {}
+}
+class UserService {
+    constructor(..._dependencies: unknown[]) {}
+}
+`;
+
+		expect(
+			strictTypeErrors(
+				`${declarations}\n${skillExample}`,
+				"skill-borrowed-singleton",
+			),
+		).toEqual([]);
+		expect(
+			strictTypeErrors(
+				`import { ContainerBuilder } from "../src";\n${declarations}\n${referenceExample}`,
+				"skill-registration-pattern",
+			),
+		).toEqual([]);
 	});
 
 	it("does not pass factories to constructor registration methods", () => {

@@ -153,7 +153,7 @@ const allValid = validators.every(v => v.validate('hello')); // true
 ### Borrow a singleton from another container
 
 Use `borrowSingletonFrom()` when one container needs a singleton that another
-container owns. Borrow only the keys that the consumer container needs.
+root container owns. Borrow only the keys that the consumer container needs.
 
 ```typescript
 import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
@@ -176,9 +176,10 @@ const domainContainer = new ContainerBuilder()
   .build();
 ```
 
-The source registration must be a singleton. You cannot borrow scoped,
-transient, or multi-service registrations. The source remains the sole owner.
-Dispose all borrowers and their scopes before you dispose the source.
+The source must be the root container that registered and owns the singleton.
+You cannot borrow scoped, transient, multi-service, or borrowed registrations.
+A scope cannot lend a singleton. Dispose all borrowers and their scopes first.
+Then dispose the source.
 
 The borrowed key is part of the borrower dependency graph. Constructor
 dependencies therefore keep their normal validation and disposal order.
@@ -272,6 +273,10 @@ Both APIs attempt all cleanup operations. `dispose()` throws one
 `DisposalError` after sync cleanup completes. `disposeAsync()` rejects with one
 `DisposalError` after all cleanup settles. The `errors` property contains the
 original errors. Kizuna does not write cleanup errors to the console.
+
+For errors that a container throws, the `failures` property adds the service
+key, lifetime, and cleanup operation. This context identifies the service that
+failed.
 
 `DisposalError` extends the JavaScript `AggregateError` class. It reports
 multiple cleanup errors and does not represent a domain aggregate.
@@ -605,7 +610,7 @@ Source: types.ts vs container-builder.ts factory signatures
 
 Wrong:
 
-```typescript
+```text
 // These methods do not exist on ContainerBuilder
 .registerInterface<IDatabase>('db', PostgresDatabase, 'logger')
 .registerFactory('config', () => ({ port: 3000 }))
@@ -629,9 +634,8 @@ new ContainerBuilder()
   .registerScopedFactory('requestId', () => crypto.randomUUID())
 ```
 
-The examples and docs reference `registerInterface()`, `registerFactory()`, `registerInstance()`, and `scope.reset()` as planned features (ADR-003) that were never implemented.
-
-Source: examples/unified-container-example.ts:109,113; docs/concurrency-patterns.md:229,582
+Old examples used `registerInterface()`, `registerFactory()`,
+`registerInstance()`, and `scope.reset()`. These methods are not public APIs.
 
 ### HIGH Using get() instead of getAll() for multi-registration keys
 

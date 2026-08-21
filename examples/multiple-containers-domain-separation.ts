@@ -484,6 +484,8 @@ function createOrderDomainContainer(sharedContainer: ReturnType<typeof createSha
 type SharedContainer = ReturnType<typeof createSharedContainer>;
 type UserDomainContainer = ReturnType<typeof createUserDomainContainer>;
 type OrderDomainContainer = ReturnType<typeof createOrderDomainContainer>;
+type UserDomainScope = ReturnType<UserDomainContainer['startScope']>;
+type OrderDomainScope = ReturnType<OrderDomainContainer['startScope']>;
 
 // ========================================
 // TYPE-SAFE APPLICATION CLASS
@@ -564,11 +566,11 @@ class ECommerceApplication {
   /**
    * Create domain-specific scopes for request processing with type safety.
    */
-  createUserDomainScope(): UserDomainContainer {
+  createUserDomainScope(): UserDomainScope {
     return this.userDomainContainer.startScope();
   }
 
-  createOrderDomainScope(): OrderDomainContainer {
+  createOrderDomainScope(): OrderDomainScope {
     return this.orderDomainContainer.startScope();
   }
 

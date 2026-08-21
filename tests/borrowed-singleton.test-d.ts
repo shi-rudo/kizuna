@@ -1,5 +1,10 @@
 import { expectTypeOf, test } from "vitest";
-import { ContainerBuilder, interfaceToken } from "../src";
+import {
+	ContainerBuilder,
+	interfaceToken,
+	type RootServiceContainer,
+	type TypeSafeServiceLocator,
+} from "../src";
 
 test("borrowSingletonFrom preserves string-key service types", () => {
 	class Logger {}
@@ -15,9 +20,19 @@ test("borrowSingletonFrom preserves string-key service types", () => {
 		.borrowSingletonFrom(source, "Logger")
 		.registerScoped("Consumer", Consumer, "Logger")
 		.build();
+	const sourceScope = source.startScope();
 
+	expectTypeOf(source).toMatchTypeOf<
+		RootServiceContainer<{ Logger: Logger }>
+	>();
+	expectTypeOf(sourceScope).toEqualTypeOf<
+		TypeSafeServiceLocator<{ Logger: Logger }>
+	>();
 	expectTypeOf(borrower.get("Logger")).toEqualTypeOf<Logger>();
 	expectTypeOf(borrower.get("Consumer")).toEqualTypeOf<Consumer>();
+
+	// @ts-expect-error Only a root container can lend an owned singleton.
+	new ContainerBuilder().borrowSingletonFrom(sourceScope, "Logger");
 
 	// @ts-expect-error The source does not register this key.
 	new ContainerBuilder().borrowSingletonFrom(source, "Missing");

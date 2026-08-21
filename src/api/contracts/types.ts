@@ -1,4 +1,4 @@
-import type { TypeSafeServiceLocator } from "./interfaces";
+import type { TypeSafeServiceLocator } from "./interfaces.js";
 
 /**
  * Factory function type for creating service instances.

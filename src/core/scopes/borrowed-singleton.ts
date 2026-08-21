@@ -1,32 +1,26 @@
-import type { ServiceLifecycle } from "../contracts";
-
-interface BorrowedServiceSource {
-	get(key: any): unknown;
-}
+import type {
+	BorrowedSingletonReference,
+	ServiceLifecycle,
+} from "../contracts.js";
 
 /**
  * Resolves a singleton from another container without owning its value.
  * The source container remains responsible for service cleanup.
  */
 export class BorrowedSingletonLifecycle implements ServiceLifecycle {
-	private source: BorrowedServiceSource | null;
+	readonly lifetime = "singleton" as const;
+	readonly valueOwnership = "borrowed" as const;
+	private reference: BorrowedSingletonReference | null;
 
-	constructor(
-		source: BorrowedServiceSource,
-		private readonly key: string,
-	) {
-		this.source = source;
+	constructor(reference: BorrowedSingletonReference) {
+		this.reference = reference;
 	}
 
 	getInstance<T>(): T {
-		if (!this.source) {
+		if (!this.reference) {
 			throw new Error("Cannot resolve from a disposed borrowed singleton");
 		}
-		return this.source.get(this.key) as T;
-	}
-
-	setFactory(): void {
-		throw new Error("A borrowed singleton does not accept a factory");
+		return this.reference.resolve() as T;
 	}
 
 	createScope(): ServiceLifecycle {
@@ -34,7 +28,7 @@ export class BorrowedSingletonLifecycle implements ServiceLifecycle {
 	}
 
 	dispose(): void {
-		this.source = null;
+		this.reference = null;
 	}
 
 	async disposeAsync(): Promise<void> {
