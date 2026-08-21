@@ -111,77 +111,116 @@ Both `SingletonLifecycle` and `ScopedLifecycle` use a boolean `_initialized` fla
 
 ## Disposal behavior
 
-Two disposal APIs on every lifecycle and on the container:
+### Ownership
 
-- `dispose()` — synchronous. Calls each instance's cleanup method. It cannot await Promises.
-- `disposeAsync()` — awaits service-owned async cleanup. It waits for all consumers before it starts dependency cleanup.
+Kizuna cleans only values that it owns and tracks.
 
-Both APIs process consumers before their declared dependencies. `disposeAsync()` starts a dependency after all its consumers complete cleanup.
+| Value | Cleanup owner |
+|---|---|
+| Singleton | The root container that registered it |
+| Scoped | The container or scope that resolved it |
+| Transient | The caller. Kizuna does not track transient values. |
+| Borrowed singleton | The source root container |
 
-Both APIs attempt all cleanup operations. `dispose()` throws one
-`DisposalError` after sync cleanup completes. `disposeAsync()` rejects with one
-`DisposalError` after all cleanup settles. The `errors` property contains the
-original errors. Kizuna does not write cleanup errors to the console.
+A child scope does not clean shared singletons. A borrower does not clean
+borrowed values.
 
-For errors that a container throws, the `failures` property adds the service
-key, lifetime, and cleanup operation. This context identifies the service that
-failed.
+Kizuna does not track child scopes. Dispose each scope before its root
+container. With borrowed singletons, use this shutdown order:
 
-Kizuna checks object and function values from singleton and scoped factories
-for cleanup hooks.
+1. Child scopes
+2. Borrower root containers
+3. The source root container
 
-Singleton and scoped factories can also return Promise values. `disposeAsync()`
-waits for each stored Promise and cleans its resolved value.
+### Choose the API
 
-The lifecycle wraps the factory Promise in an observer Promise. All consumers
-share the stored Promise. It has the same result or rejection as the factory
-Promise, but it can have a different object identity.
+`disposeAsync()` is the default for application shutdown. It supports
+synchronous hooks and waits for asynchronous hooks.
 
-For singleton and scoped factories, a `PromiseLike<T>` result becomes a native
-`Promise<Awaited<T>>`. Custom fields from a Promise subclass or thenable are not
-available. Transient factories keep their exact return type.
+The `dispose()` method is suitable only when every owned value has synchronous
+cleanup. It cannot wait for a Promise.
 
-An active lifecycle removes a rejected Promise from its cache. The next
-resolution request invokes only the failed factory again. The lifecycle does
-not retry automatically. The stored Promise rethrows the rejection, so
-consumers must handle it.
+Call only one disposal API on a container. The first call marks the container
+as disposed. Later disposal calls are no-ops.
 
-If disposal starts before a Promise settles, the lifecycle keeps ownership. A
-later rejection becomes a cleanup failure in the `DisposalError`.
+### Hook selection
 
-The container does not track transient values. It cannot clean a value from a
-transient Promise factory.
+Each value uses at most one cleanup hook.
 
-`DisposalError` extends the JavaScript `AggregateError` class. It reports
-multiple cleanup errors and does not represent a domain aggregate.
+| Container API | Hook priority |
+|---|---|
+| `disposeAsync()` | `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()` |
+| `dispose()` | `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]` |
 
-Independent cleanup can run in parallel. A slow, unrelated service does not delay dependency cleanup in another graph branch.
+The async API waits for the selected hook. If the sync API receives a Promise,
+cleanup starts, but the API cannot wait for it. The `DisposalError` then
+contains a `TypeError`.
 
-This order includes all services under a multi-registration key. Sync disposal keeps registration order within each disposal layer.
+`[Symbol.dispose]()` calls `dispose()`. `[Symbol.asyncDispose]()` calls
+`disposeAsync()`. These symbols support `using` and `await using`.
 
-Async order between independent branches depends on completion timing. If cleanup order is required, declare a dependency.
+### Cleanup order
 
-Factory lookups do not affect disposal order because factories do not declare dependency keys.
+Kizuna gets cleanup order from declared registration dependencies. It cleans a
+consumer before its dependencies.
 
-Both are idempotent (second call is a no-op). All check `_isDisposed` before `_factory` in `getInstance()`, so after disposal you always get a clear "disposed" error, not a misleading "no factory" error.
+For example, `UserService` can depend on `UserRepository`. The repository can
+depend on `DatabasePool`. Kizuna cleans these values in this order:
 
-The `ServiceProvider` (container) also exposes TC39 hooks:
-- `[Symbol.dispose]()` — alias for `dispose()`. Enables `using` syntax.
-- `[Symbol.asyncDispose]()` — alias for `disposeAsync()`. Enables `await using` syntax.
+1. `UserService`
+2. `UserRepository`
+3. `DatabasePool`
 
-**Per-API resolution rules:**
-- `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
-- `dispose()` picks the sync cleanup method by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort. If the selected hook returns a Promise, cleanup starts. The `DisposalError` contains a `TypeError` because `dispose()` cannot wait.
+The async API starts a dependency after all its consumers finish cleanup.
+Independent graph branches run in parallel. Their relative completion order is
+not defined.
 
-After `container.dispose()` or `container.disposeAsync()`:
-- `get()`, `getAll()`, `startScope()` throw `"Cannot access services from a disposed container"`.
-- Internal registration maps are cleared to allow GC of all service wrappers and lifecycle objects.
+Sync cleanup keeps registration order inside each disposal layer. All services
+under a multi-registration key are part of the graph.
 
-**Pick the async variant when:** any registered service's `dispose` returns a Promise (e.g. `await pool.end()`, `await kafkaProducer.disconnect()`), or implements `Symbol.asyncDispose`. The sync `dispose()` cannot await these and the cleanup may be in flight when the next operation runs.
+Factory lookups do not declare dependency keys. Therefore, these lookups do not
+define cleanup order. When cleanup order is necessary, use a constructor
+registration with explicit dependency keys.
 
-Also pick the async variant when a singleton or scoped factory returns a
-Promise. Disposal waits for a pending Promise before it cleans the value.
+### Promise factory values
+
+Singleton and scoped factories can return Promises. The lifecycle stores an
+observer Promise. All consumers share that stored Promise.
+
+The stored Promise has the same result or rejection as the factory Promise. It
+can have a different object identity.
+
+Singleton and scoped factories normalize `PromiseLike<T>` to
+`Promise<Awaited<T>>`. Transient factories keep their exact return type.
+
+The async API waits for a stored Promise and cleans its resolved value. The
+container does not track transient values or transient Promises.
+
+If an active lifecycle stores a rejected Promise, it removes that Promise from
+the cache. The next resolution invokes the factory again. Consumers must handle
+the original rejection.
+
+If disposal starts before the Promise settles, the lifecycle keeps ownership.
+The async API reports a later rejection in its `DisposalError`.
+
+### Errors and final state
+
+Both APIs attempt every cleanup operation. They report all failures in one
+`DisposalError`. Kizuna does not write cleanup errors to the console.
+
+The `errors` property contains the original errors. The `failures` property
+identifies the service key, lifetime, cleanup operation, and original error.
+
+`DisposalError` extends the JavaScript `AggregateError` class. It does not
+represent a domain aggregate.
+
+The container clears its internal maps before it reports errors. Later calls to
+`get()`, `getAll()`, or `startScope()` throw
+`"Cannot access services from a disposed container"`.
 
 ## startScope() allocates O(n) objects
 
-Every `startScope()` call creates a new `ServiceProvider`, a new record, and a new `ServiceWrapper` for every registered service — including singletons (whose `createScope()` returns `this` but still gets wrapped). With many services and high request throughput, this can produce significant allocation pressure.
+Every `startScope()` call creates a new `ServiceProvider`, new maps, and one new
+`ServiceWrapper` for each registration. Singleton wrappers still share their
+lifecycle. Large containers can create allocation pressure at high request
+rates.

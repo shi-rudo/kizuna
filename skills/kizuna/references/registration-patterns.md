@@ -93,8 +93,20 @@ Factory dependencies are hidden from `validate()`. Prefer constructor registrati
 
 ## Borrowed singleton
 
-Use `borrowSingletonFrom()` to import one singleton without taking ownership.
-The method accepts a fixed string key or a registered interface token.
+Borrowing fits an application that uses separate containers inside one process.
+A shared root container owns long-lived infrastructure. Another container
+imports only the instances that its services need.
+
+Typical shared services include loggers, metrics collectors, configuration
+readers, and connection pools. Borrowing prevents duplicate resources and keeps
+the consumer registry small.
+
+Borrowing creates a lifetime dependency. The source must outlive each borrower.
+When most registrations are shared, a single container is clearer. Borrowing
+is not suitable for request state or communication between processes.
+
+`borrowSingletonFrom()` accepts a fixed string key or a registered interface
+token.
 
 ```typescript
 const shared = new ContainerBuilder()
@@ -115,7 +127,7 @@ scopes.
 Dispose the domain container before you dispose `shared`.
 
 The source owns the value and runs its cleanup hook. The borrowed key remains a
-declared dependency in the domain container.
+declared dependency. Validation can see this dependency.
 
 ## Multi-registration (add* / getAll)
 
