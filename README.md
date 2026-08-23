@@ -11,7 +11,8 @@ A lightweight, type-safe dependency injection container for TypeScript and JavaS
 - **🚀 Unified API**: Single API supporting all registration patterns with a focus on developer experience
 - **🔄 Multiple Lifecycles**: Singleton, Scoped, and Transient service management
 - **🏭 Flexible Registration**: Constructor, interface, and factory-based service registration
-- **🛡️ Parameter Validation**: Automatic validation of dependency names vs constructor parameters
+- **🛡️ Constructor Dependency Checks**: Compile-time checks for dependency count, type, and position
+- **🔎 Development Diagnostics**: Optional comparison of dependency keys and constructor parameter names
 - **📝 Enhanced IDE Support**: Full autocompletion and compile-time validation
 - **⚡ Zero Dependencies**: Lightweight with no external dependencies
 - **🌍 Cross-Platform**: Works in Node.js, browsers, and edge environments
@@ -48,13 +49,13 @@ class UserService {
 
 // 🎯 Register services with full type safety
 const container = new ContainerBuilder()
-  .registerSingleton('Logger', Logger)                      // Type: Logger ✨
-  .registerSingleton('Database', DatabaseService, 'Logger') // Typed dependency key
-  .registerScoped('UserService', UserService, 'Database', 'Logger')
+  .registerSingleton('logger', Logger)                      // Type: Logger ✨
+  .registerSingleton('db', DatabaseService, 'logger')       // Typed dependency key
+  .registerScoped('userService', UserService, 'db', 'logger')
   .build();
 
 // ✅ Get services with enhanced IDE autocompletion
-const userService = container.get('UserService'); // Type: UserService (auto-inferred!)
+const userService = container.get('userService'); // Type: UserService (auto-inferred!)
 const user = userService.getUser('123');          // Full IntelliSense support
 ```
 
@@ -66,7 +67,11 @@ Kizuna provides a single, comprehensive API that combines type safety and flexib
 
 For services with constructor dependencies:
 
-TypeScript checks each dependency key against the constructor parameter at the same position. Register each dependency before its consumer.
+Dependency keys are positional. The first key provides the first constructor
+parameter. The second key provides the second constructor parameter.
+
+TypeScript checks the type at each position. Register each dependency before
+its consumer.
 
 Each registration key must be one fixed string literal. Broad strings, unions, and open template patterns fail compilation.
 
@@ -423,6 +428,8 @@ before its root container. With borrowed singletons, use this shutdown order:
 3. The source root container
 
 #### Choose the disposal API
+
+Choose one disposal API for each container.
 
 `disposeAsync()` is the default for application shutdown. It supports
 synchronous hooks and waits for asynchronous hooks.
