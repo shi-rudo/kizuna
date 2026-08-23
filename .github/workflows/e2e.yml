@@ -42,12 +42,21 @@ jobs:
           pnpm add "./$PKG_FILE"
 
       - name: Create test file
-        run: cp -f tests/fixtures/package-consumer.ts test-app/src/test.ts
+        run: |
+          cp -f tests/fixtures/package-consumer.ts test-app/src/test.ts
+          cp -f tests/fixtures/package-interop.mjs test-app/package-interop.mjs
+          cp -f tests/fixtures/tsconfig.nodenext.json test-app/tsconfig.nodenext.json
 
       - name: Check packed runtime exports
         run: |
           cd test-app
           node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['CircularDependencyError','ContainerBuilder','DisposalError','ServiceProviderToken','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
+
+      - name: Check ESM and CommonJS borrowing
+        run: cd test-app && node package-interop.mjs
+
+      - name: Check NodeNext declarations
+        run: cd test-app && pnpm exec tsc -p tsconfig.nodenext.json
 
       - name: Build test app
         run: cd test-app && pnpm run build

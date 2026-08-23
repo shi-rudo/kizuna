@@ -8,6 +8,6 @@
 		"sourceMap": false,
 		"types": ["node"]
 	},
-	"include": ["src", "examples/unified-container-example.ts"],
+	"include": ["src", "examples/**/*.ts"],
 	"exclude": ["node_modules", "dist"]
 }

@@ -10,6 +10,7 @@ Kizuna has two registration modes: **single-registration** (`register*`) and **m
 | Resolved type must be an interface or abstraction | Interface | `registerSingletonInterface(Foo, FooImpl, 'dep')` |
 | Needs runtime logic, returns primitive, or needs provider | Factory | `registerSingletonFactory('cfg', (p) => ({ ... }))` |
 | Multiple implementations under one key | Multi-reg | `addSingleton('plugins', PluginA)` then `addSingleton('plugins', PluginB)` |
+| Singleton owned by another container | Borrow | `borrowSingletonFrom(shared, 'logger')` |
 | Default choice when unsure | Constructor | Shorter, explicit deps, works with validate() |
 
 ## Constructor registration
@@ -89,6 +90,44 @@ const container = new ContainerBuilder()
 ```
 
 Factory dependencies are hidden from `validate()`. Prefer constructor registration when possible.
+
+## Borrowed singleton
+
+Borrowing fits an application that uses separate containers inside one process.
+A shared root container owns long-lived infrastructure. Another container
+imports only the instances that its services need.
+
+Typical shared services include loggers, metrics collectors, configuration
+readers, and connection pools. Borrowing prevents duplicate resources and keeps
+the consumer registry small.
+
+Borrowing creates a lifetime dependency. The source must outlive each borrower.
+When most registrations are shared, a single container is clearer. Borrowing
+is not suitable for request state or communication between processes.
+
+`borrowSingletonFrom()` accepts a fixed string key or a registered interface
+token.
+
+```typescript
+const shared = new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .build();
+
+const domain = new ContainerBuilder()
+  .borrowSingletonFrom(shared, 'logger')
+  .registerScoped('userService', UserService, 'logger')
+  .build();
+```
+
+The source must be the root container that registered and owns the singleton.
+You cannot borrow scoped, transient, multi-service, or borrowed registrations.
+A scope cannot lend a singleton. The source must outlive each borrower and its
+scopes.
+
+Dispose the domain container before you dispose `shared`.
+
+The source owns the value and runs its cleanup hook. The borrowed key remains a
+declared dependency. Validation can see this dependency.
 
 ## Multi-registration (add* / getAll)
 

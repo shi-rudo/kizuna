@@ -23,6 +23,10 @@ After sync cleanup completes, `dispose()` throws one `DisposalError` if an
 operation failed. After async cleanup settles, `disposeAsync()` rejects with the
 same error type. The `errors` property contains the original error values.
 
+For errors that a container throws, the `failures` property adds the service
+key, lifetime, and cleanup operation. This context identifies the service that
+failed.
+
 `DisposalError` extends the JavaScript `AggregateError` class. It reports
 multiple cleanup errors. It does not represent a domain aggregate.
 

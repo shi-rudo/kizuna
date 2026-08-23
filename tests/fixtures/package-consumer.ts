@@ -6,8 +6,16 @@ const container = new Kizuna.ContainerBuilder()
 	.registerSingleton("Logger", Logger)
 	.build();
 
+const borrower = new Kizuna.ContainerBuilder()
+	.borrowSingletonFrom(container, "Logger")
+	.build();
+
 container.get("Logger");
 container.get(Kizuna.ServiceProviderToken);
+borrower.get("Logger");
+
+borrower.dispose();
+container.dispose();
 
 // @ts-expect-error The concrete provider is not public API.
 Kizuna.ServiceProvider;

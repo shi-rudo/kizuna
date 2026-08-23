@@ -1,11 +1,11 @@
-import type { ServiceLifecycle } from '../contracts';
-import { CircularDependencyError } from '../errors';
+import type { ConfigurableServiceLifecycle } from '../contracts.js';
+import { CircularDependencyError } from '../errors.js';
 import {
     invokeAsyncDispose,
     invokeSyncDispose,
     requireSynchronousDispose,
-} from '../services/async-dispose';
-import { observePromiseRejection } from '../services/promise-value';
+} from '../services/async-dispose.js';
+import { observePromiseRejection } from '../services/promise-value.js';
 
 /**
  * Scoped lifecycle implementation that maintains one instance per scope.
@@ -53,7 +53,9 @@ import { observePromiseRejection } from '../services/promise-value';
  * 
  * @implements {ServiceLifecycle}
  */
-export class ScopedLifecycle implements ServiceLifecycle {
+export class ScopedLifecycle implements ConfigurableServiceLifecycle {
+    public readonly lifetime = 'scoped' as const;
+    public readonly valueOwnership = 'owned' as const;
     /**
      * The scoped instance.
      * @private

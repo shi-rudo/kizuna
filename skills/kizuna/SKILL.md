@@ -5,7 +5,7 @@ description: >
   Covers ContainerBuilder, registerSingleton, registerSingletonInterface,
   registerSingletonFactory, registerScoped, registerTransient, addSingleton,
   addScoped, addTransient, addSingletonFactory, addScopedFactory,
-  addTransientFactory, build(), validate(), get(), getAll(), startScope(),
+  addTransientFactory, borrowSingletonFrom, build(), validate(), get(), getAll(), startScope(),
   dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose,
   getRegisteredServiceNames(), TypeSafeServiceLocator,
   disableStrictParameterValidation, CircularDependencyError.
@@ -16,7 +16,7 @@ description: >
   frameworks.
 type: core
 library: kizuna
-library_version: "1.0.0-rc.3"
+library_version: "1.0.0-rc.9"
 sources:
   - "shi-rudo/kizuna:src/api/container-builder.ts"
   - "shi-rudo/kizuna:src/api/base-container-builder.ts"
@@ -26,6 +26,7 @@ sources:
   - "shi-rudo/kizuna:src/core/scopes/singleton.ts"
   - "shi-rudo/kizuna:src/core/scopes/scoped.ts"
   - "shi-rudo/kizuna:src/core/scopes/transient.ts"
+  - "shi-rudo/kizuna:src/core/scopes/borrowed-singleton.ts"
   - "shi-rudo/kizuna:src/core/services/service-wrapper.ts"
   - "shi-rudo/kizuna:src/core/services/async-dispose.ts"
   - "shi-rudo/kizuna:README.md"
@@ -149,6 +150,49 @@ const allValid = validators.every(v => v.validate('hello')); // true
 - Factory variants available: `addSingletonFactory`, `addScopedFactory`, `addTransientFactory`
 - `validate()` checks multi-registration dependencies, circular deps, and captive dependencies
 
+### Borrow a singleton from another container
+
+Borrowing fits an application that uses separate containers inside one process.
+A shared root container owns long-lived infrastructure. A domain container
+imports only the instances that its services need.
+
+Typical shared services include loggers, metrics collectors, configuration
+readers, and connection pools. Borrowing prevents duplicate resources and keeps
+the domain registry small.
+
+Borrowing also creates a lifetime dependency. The shared root container must
+outlive each borrower. When most registrations are shared, a single container
+is clearer.
+
+```typescript
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
+
+interface Metrics {
+  increment(name: string): void;
+}
+
+const Metrics = interfaceToken<Metrics>()('metrics');
+
+const sharedContainer = new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .registerSingletonInterface(Metrics, MetricsCollector)
+  .build();
+
+const domainContainer = new ContainerBuilder()
+  .borrowSingletonFrom(sharedContainer, 'logger')
+  .borrowSingletonFrom(sharedContainer, Metrics)
+  .registerScoped('userService', UserService, 'logger', Metrics)
+  .build();
+```
+
+The source must be the root container that registered and owns the singleton.
+You cannot borrow scoped, transient, multi-service, or borrowed registrations.
+A scope cannot lend a singleton. Dispose all borrowers and their scopes first.
+Then dispose the source.
+
+The borrowed key is part of the borrower dependency graph. Validation can see
+the dependency. The source container still controls cleanup of the value.
+
 ### Request scoping for web servers
 
 Create a scope per request. Scoped services share one instance within the scope. Singletons are shared across all scopes.
@@ -196,54 +240,18 @@ const issues = builder.validate();
 
 ### Disposal
 
-Two disposal APIs:
-- `container.dispose()` — synchronous. Invokes each instance's sync dispose hook (see priority below). It cannot await Promises.
-- `container.disposeAsync()` — awaits service-owned async cleanup. Waits for all consumers before it starts dependency cleanup.
+Kizuna cleans only values that it owns and tracks.
 
-Both APIs process consumers before their declared dependencies. Sync disposal keeps registration order within each disposal layer.
+| Value | Cleanup owner |
+|---|---|
+| Singleton | The root container that registered it |
+| Scoped | The container or scope that resolved it |
+| Transient | The caller. Kizuna does not track transient values. |
+| Borrowed singleton | The source root container |
 
-Independent cleanup can run in parallel during `disposeAsync()`. Its order depends on completion timing.
-
-Multi-registration keys include all services under that key. Factory lookups do not affect disposal order because factories do not declare dependency keys.
-
-Kizuna checks object and function values from singleton and scoped factories for cleanup hooks.
-
-Singleton and scoped factories can return Promise values. `disposeAsync()`
-waits for each stored Promise and cleans its resolved value. Transient values
-are not tracked or cleaned.
-
-Singleton and scoped lifecycles wrap a factory Promise in an observer Promise.
-All consumers share the stored Promise. It has the same result or rejection as
-the factory Promise, but it can have a different object identity.
-
-For singleton and scoped factories, a `PromiseLike<T>` result becomes a native
-`Promise<Awaited<T>>`. Custom fields from a Promise subclass or thenable are not
-available. Transient factories keep their exact return type.
-
-An active singleton or scoped lifecycle removes a rejected Promise from its
-cache. The next `get()` or `getAll()` call invokes only the failed factory again.
-The lifecycle does not retry automatically. The stored Promise rethrows the
-rejection, so consumers must handle it.
-
-If disposal starts before the Promise settles, the lifecycle keeps ownership.
-`disposeAsync()` reports a later rejection in its `DisposalError`.
-
-Plus TC39 explicit-resource-management hooks: `[Symbol.dispose]` (alias for `dispose()`) and `[Symbol.asyncDispose]` (alias for `disposeAsync()`) — enable `using` and `await using` syntax.
-
-Both APIs attempt all cleanup operations. `dispose()` throws one
-`DisposalError` after sync cleanup completes. `disposeAsync()` rejects with one
-`DisposalError` after all cleanup settles. The `errors` property contains the
-original errors. Kizuna does not write cleanup errors to the console.
-
-`DisposalError` extends the JavaScript `AggregateError` class. It reports
-multiple cleanup errors and does not represent a domain aggregate.
-
-For each lifecycle, disposal does:
-- **Singleton**: Invokes the instance's dispose hook (sync or async path, see priority below) if present, then marks lifecycle as permanently disposed
-- **Scoped**: Same on a per-scope basis, clears instance reference
-- **Transient**: Clears factory reference (individual instances are not tracked)
-
-After disposal, `get()`, `getAll()`, and `startScope()` throw `"Cannot access services from a disposed container"`. Disposal is idempotent — calling it (or `disposeAsync`) twice is safe.
+`disposeAsync()` is the default for application shutdown. It supports
+synchronous hooks and waits for asynchronous hooks. The `dispose()` method is
+suitable only when all owned services have synchronous cleanup.
 
 ```typescript
 class DatabasePool {
@@ -253,35 +261,66 @@ class DatabasePool {
 const container = builder.build();
 const pool = container.get('dbPool');
 
-// Pick ONE of the patterns below — they are alternatives, not steps.
-// Once disposed, a container cannot be used again.
+try {
+  // ...use the container...
+} finally {
+  await container.disposeAsync();
+}
+```
 
-// Option A — Sync. Fine only for purely-synchronous services.
-container.dispose();
+Each value uses at most one cleanup hook. Kizuna uses these priorities:
 
-// Option B — Async. Waits for consumers before their dependencies.
-//            Use this whenever any service has async cleanup.
-await container.disposeAsync();
+| Container API | Hook priority |
+|---|---|
+| `disposeAsync()` | `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()` |
+| `dispose()` | `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]` |
 
-// Option C — TC39 explicit resource management (scoped to a block).
-//            Best for per-request scopes; the container itself can
-//            still be disposed separately at shutdown.
+The async API waits for the selected hook. If the sync API receives a Promise,
+cleanup starts, but the API cannot wait for it. The `DisposalError` then
+contains a `TypeError`.
+
+Kizuna gets cleanup order from declared registration dependencies. It cleans a
+consumer before its dependencies. The async API runs independent graph branches
+in parallel. Their relative completion order is not defined.
+
+For example, Kizuna cleans `UserService`, `UserRepository`, and `DatabasePool`
+in that order when each service depends on the next service.
+
+Factory lookups do not declare dependency keys. Therefore, these lookups do not
+define cleanup order. When cleanup order is necessary, use a constructor
+registration with explicit dependency keys.
+
+Both APIs attempt all cleanup operations. They report all failures in one
+`DisposalError`. The `errors` property contains the original errors. The
+`failures` property identifies the service key, lifetime, and cleanup operation.
+Kizuna does not write cleanup errors to the console.
+
+Singleton and scoped factories can return Promises. The async API waits for a
+stored Promise and cleans its resolved value. The container does not track
+transient values or transient Promises.
+
+If a stored Promise rejects before disposal, the lifecycle removes it from the
+cache. The next resolution invokes the factory again. Consumers must handle the
+original rejection.
+
+The container clears its internal state before it reports errors. Later calls
+to `get()`, `getAll()`, or `startScope()` fail. A second disposal call is a
+no-op.
+
+Kizuna does not track child scopes. Dispose each scope before its root
+container. Dispose each borrower before the source root container.
+
+TC39 resource management uses the same APIs:
+
+```typescript
 {
   await using scope = container.startScope();
   // ...use scope...
 } // scope.disposeAsync() called automatically on block exit
 ```
 
-> **Note:** `await using` requires TypeScript ≥ 5.2 and a modern V8 runtime (Node ≥ 22, Bun, Deno, Cloudflare Workers, Vercel Edge). On older Node versions use the explicit `try/finally + await disposeAsync()` pattern.
-
-**Per-API resolution rules (exactly one hook is invoked per instance):**
-- `disposeAsync()` picks the instance's cleanup method by priority: `[Symbol.asyncDispose]` → `[Symbol.dispose]` → `dispose()`. The first one present is awaited.
-- `dispose()` picks the sync cleanup method by priority: `[Symbol.dispose]` → `dispose()` → `[Symbol.asyncDispose]`. The async hook is a last resort. If the selected hook returns a Promise, cleanup starts. The `DisposalError` contains a `TypeError` because `dispose()` cannot wait.
-
-**When sync `dispose()` is wrong:** Use `disposeAsync()` when a service has asynchronous cleanup. Examples include database pools, file handles, and network connections. The sync method starts a Promise-based cleanup but does not await it. The `DisposalError` reports this condition.
-
-This rule also applies when a singleton or scoped factory returns a Promise.
-The sync method starts cleanup for its resolved value but cannot wait.
+`await using` requires TypeScript 5.2 or newer and a compatible runtime. On an
+older runtime, use `try` and `finally` with `disposeAsync()`.
 
 ## Container Inspection
 
@@ -399,6 +438,28 @@ Correct:
 Constructor registration is shorter, declares dependencies explicitly for `validate()`, and lets Kizuna handle the wiring. Factories hide dependencies from validation.
 
 Source: maintainer interview
+
+### HIGH Re-registering a shared singleton in another container
+
+Wrong:
+
+```typescript
+const domainContainer = new ContainerBuilder()
+  .registerSingletonFactory('logger', () => sharedContainer.get('logger'))
+  .build();
+```
+
+Correct:
+
+```typescript
+const domainContainer = new ContainerBuilder()
+  .borrowSingletonFrom(sharedContainer, 'logger')
+  .build();
+```
+
+The factory registration gives the domain container disposal ownership over
+the returned value. This can run the same cleanup hook more than once. Borrowing
+keeps ownership in the source container.
 
 ### HIGH Mixing add* and register* on the same key
 
@@ -545,7 +606,7 @@ Source: types.ts vs container-builder.ts factory signatures
 
 Wrong:
 
-```typescript
+```text
 // These methods do not exist on ContainerBuilder
 .registerInterface<IDatabase>('db', PostgresDatabase, 'logger')
 .registerFactory('config', () => ({ port: 3000 }))
@@ -569,9 +630,8 @@ new ContainerBuilder()
   .registerScopedFactory('requestId', () => crypto.randomUUID())
 ```
 
-The examples and docs reference `registerInterface()`, `registerFactory()`, `registerInstance()`, and `scope.reset()` as planned features (ADR-003) that were never implemented.
-
-Source: examples/unified-container-example.ts:109,113; docs/concurrency-patterns.md:229,582
+Old examples used `registerInterface()`, `registerFactory()`,
+`registerInstance()`, and `scope.reset()`. These methods are not public APIs.
 
 ### HIGH Using get() instead of getAll() for multi-registration keys
 

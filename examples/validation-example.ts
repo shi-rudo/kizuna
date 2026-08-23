@@ -3,7 +3,7 @@
  * 
  * Demonstrates the validation capabilities of the unified ContainerBuilder
  */
-import { ContainerBuilder } from '../src/api/container-builder';
+import { ContainerBuilder } from '../src/index';
 
 // Example services
 class Logger {
@@ -28,22 +28,27 @@ console.log('=== VALIDATION EXAMPLE ===\n');
 // Example 1: Valid configuration
 console.log('1. Testing valid configuration:');
 const validBuilder = new ContainerBuilder()
-    .registerSingleton('Logger', Logger)
-    .registerSingleton('DatabaseService', DatabaseService, 'Logger')
-    .registerScoped('UserService', UserService, 'DatabaseService', 'Logger');
+    .registerSingleton('logger', Logger)
+    .registerSingleton('db', DatabaseService, 'logger')
+    .registerScoped('userService', UserService, 'db', 'logger');
 
 const validationIssues = validBuilder.validate();
 console.log(`Validation issues: ${validationIssues.length === 0 ? 'None ✅' : validationIssues.join(', ')}`);
 
 // Example 2: Invalid configuration with missing dependencies
 console.log('\n2. Testing invalid configuration with missing dependencies:');
+// These directives keep the runtime validation example explicit. The typed API rejects both dependencies.
 const invalidBuilder = new ContainerBuilder()
+    // @ts-expect-error -- MissingLogger is not registered.
     .registerSingleton('DatabaseService', DatabaseService, 'MissingLogger')  // Missing Logger
+    // @ts-expect-error -- AnotherMissingLogger is not registered.
     .registerScoped('UserService', UserService, 'DatabaseService', 'AnotherMissingLogger'); // Missing Logger
 
 const invalidationIssues = invalidBuilder.validate();
 console.log(`Validation issues found: ${invalidationIssues.length}`);
-invalidationIssues.forEach((issue, i) => console.log(`  ${i + 1}. ${issue}`));
+invalidationIssues.forEach((issue, i) => {
+    console.log(`  ${i + 1}. ${issue}`);
+});
 
 // Example 3: Build and use valid container
 console.log('\n3. Building and using valid container:');
@@ -54,7 +59,7 @@ if (revalidationIssues.length > 0) {
 }
 const container = validBuilder.build();
 
-const userService = container.get('UserService');
+const userService = container.get('userService');
 userService.getUsers();
 
 console.log('\n✅ Validation helps catch configuration issues before runtime!');

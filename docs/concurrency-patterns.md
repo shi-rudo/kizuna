@@ -135,7 +135,7 @@ function workerThreadHandler() {
                 // Initialize worker-specific container
                 workerContainer = new ContainerBuilder()
                     .registerSingleton('Logger', Logger)
-                    .registerSingleton('WorkerConfig', () => data.config)
+                    .registerSingletonFactory('WorkerConfig', () => data.config)
                     .registerScoped('TaskProcessor', TaskProcessor, 'Logger', 'WorkerConfig')
                     .build();
                 break;
@@ -170,24 +170,34 @@ function workerThreadHandler() {
 import express from 'express';
 import { ContainerBuilder } from '@shirudo/kizuna';
 
+interface RequestContext {
+    requestId: string;
+    userId: string | undefined;
+    requestTime: number;
+}
+
 // Create root container (shared, read-only after build)
 const rootContainer = new ContainerBuilder()
     .registerSingleton('Logger', Logger)
     .registerSingleton('Database', Database, 'Logger')
     .registerScoped('UserService', UserService, 'Database', 'Logger')
-    .registerScoped('RequestContext', RequestContext)
     .build();
+
+type RequestServices = ReturnType<typeof rootContainer.startScope>;
 
 const app = express();
 
 // Middleware: Create request scope
 app.use((req, res, next) => {
     // Each request gets its own scope
-    req.services = rootContainer.startScope();
+    const requestScope = rootContainer.startScope();
+    req.services = requestScope;
     
-    // Cleanup when request completes
-    res.on('finish', () => {
-        req.services.dispose();
+    // The close event also runs when the client disconnects early.
+    res.once('close', () => {
+        void requestScope.disposeAsync().catch((error) => {
+            console.error('Request scope cleanup failed', error);
+        });
     });
     
     next();
@@ -209,30 +219,39 @@ app.get('/users/:id', async (req, res) => {
 // Extend Express Request type
 declare module 'express' {
     interface Request {
-        services: TypeSafeServiceLocator<any>;
+        services: RequestServices;
+        requestContext: RequestContext;
     }
 }
 ```
 
 ### Advanced Request Scope Pattern:
 
+Scopes cannot accept new registrations. Keep request data on the request or pass it to service methods.
+
 ```typescript
 // Advanced middleware with request context
 app.use((req, res, next) => {
-    const requestId = req.headers['x-request-id'] || generateId();
+    const requestIdHeader = req.headers['x-request-id'];
+    const requestId = typeof requestIdHeader === 'string'
+        ? requestIdHeader
+        : generateId();
     const userId = req.headers['x-user-id'];
     
-    // Create request scope with context
-    req.services = rootContainer.startScope();
+    // Create the service scope and keep request data separate.
+    const requestScope = rootContainer.startScope();
+    req.services = requestScope;
+    req.requestContext = {
+        requestId,
+        userId: typeof userId === 'string' ? userId : undefined,
+        requestTime: Date.now(),
+    };
     
-    // Register request-specific instances
-    req.services.registerInstance('RequestId', requestId);
-    req.services.registerInstance('UserId', userId);
-    req.services.registerInstance('RequestTime', Date.now());
-    
-    // Cleanup — disposeAsync() awaits any async service cleanup (DB pools, etc.)
-    res.on('finish', async () => {
-        await req.services.disposeAsync();
+    // Report cleanup failures because event handlers do not await returned promises.
+    res.once('close', () => {
+        void requestScope.disposeAsync().catch((error) => {
+            console.error('Request scope cleanup failed', error);
+        });
     });
     
     next();
@@ -241,7 +260,8 @@ app.use((req, res, next) => {
 
 ### Benefits:
 - ✅ Complete isolation between concurrent requests
-- ✅ Request-specific service instances and state
+- ✅ Request-specific scoped service instances
+- ✅ Request data stays explicit
 - ✅ Automatic cleanup when requests complete
 - ✅ Shared singletons (database, cache) across requests
 - ✅ Easy to test and reason about
@@ -476,7 +496,7 @@ process.send({
 describe('Container Isolation', () => {
     it('should isolate containers between workers', async () => {
         const createContainer = () => new ContainerBuilder()
-            .registerSingleton('Counter', () => ({ value: 0 }))
+            .registerSingletonFactory('Counter', () => ({ value: 0 }))
             .build();
         
         const container1 = createContainer();
@@ -494,7 +514,7 @@ describe('Container Isolation', () => {
     
     it('should isolate request scopes', () => {
         const rootContainer = new ContainerBuilder()
-            .registerScoped('RequestData', () => ({ id: Math.random() }))
+            .registerScopedFactory('RequestData', () => ({ id: Math.random() }))
             .build();
         
         const scope1 = rootContainer.startScope();
@@ -568,18 +588,18 @@ const createContainer = () => new ContainerBuilder()
     .build();
 ```
 
-2. **Pool Request Scopes for High-Throughput:**
+2. **Create and Dispose Short-Lived Scopes:**
+
+Do not pool scopes. Disposal permanently closes a scope, and Kizuna does not provide a reset operation.
+
 ```typescript
-class ScopePool {
-    private pool: TypeSafeServiceLocator<any>[] = [];
-    
-    getScope() {
-        return this.pool.pop() || this.rootContainer.startScope();
-    }
-    
-    returnScope(scope: TypeSafeServiceLocator<any>) {
-        scope.reset(); // Clear instance cache
-        this.pool.push(scope);
+async function handleRequest(userId: string) {
+    const scope = rootContainer.startScope();
+
+    try {
+        return await scope.get('UserService').getUser(userId);
+    } finally {
+        await scope.disposeAsync();
     }
 }
 ```

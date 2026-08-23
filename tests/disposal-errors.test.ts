@@ -62,6 +62,20 @@ describe("disposal errors", () => {
 			firstFailure,
 			secondFailure,
 		]);
+		expect((error as DisposalError).failures).toEqual([
+			{
+				serviceKey: "first",
+				lifetime: "singleton",
+				operation: "dispose",
+				error: firstFailure,
+			},
+			{
+				serviceKey: "second",
+				lifetime: "singleton",
+				operation: "dispose",
+				error: secondFailure,
+			},
+		]);
 		expect(events).toEqual(["first", "good", "second"]);
 		expect(errorSpy).not.toHaveBeenCalled();
 		expect(warnSpy).not.toHaveBeenCalled();
@@ -113,6 +127,20 @@ describe("disposal errors", () => {
 		expect((error as DisposalError).errors).toEqual([
 			firstFailure,
 			secondFailure,
+		]);
+		expect((error as DisposalError).failures).toEqual([
+			{
+				serviceKey: "first",
+				lifetime: "singleton",
+				operation: "disposeAsync",
+				error: firstFailure,
+			},
+			{
+				serviceKey: "second",
+				lifetime: "singleton",
+				operation: "disposeAsync",
+				error: secondFailure,
+			},
 		]);
 		expect(events).toEqual(expect.arrayContaining(["first", "good", "second"]));
 		expect(errorSpy).not.toHaveBeenCalled();

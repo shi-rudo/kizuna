@@ -2,9 +2,12 @@ import type {
     Factory,
     ServiceRegistry,
     TypeSafeRegistrar,
-} from "../../api/contracts/types";
-import type { ServiceBuilder, ServiceLifecycle } from "../contracts";
-import { ServiceWrapper } from "../services/service-wrapper";
+} from "../../api/contracts/types.js";
+import type {
+	ConfigurableServiceLifecycle,
+	ServiceBuilder,
+} from "../contracts.js";
+import { ServiceWrapper } from "../services/service-wrapper.js";
 
 /**
  * Implementation of TypeSafeRegistrar that creates ServiceWrapper instances.
@@ -39,7 +42,7 @@ export class TypeSafeRegistrarImpl<TRegistry extends ServiceRegistry, T>
         return this.constructorFn;
     }
 
-    build(lifecycleManager: ServiceLifecycle): ServiceWrapper {
+    build(lifecycleManager: ConfigurableServiceLifecycle): ServiceWrapper {
         if (!this.factory) {
             throw new Error(`No factory configured for service '${this.serviceName}'`);
         }

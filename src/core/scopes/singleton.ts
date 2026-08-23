@@ -1,11 +1,11 @@
-import type { ServiceLifecycle } from '../contracts';
-import { CircularDependencyError } from '../errors';
+import type { ConfigurableServiceLifecycle } from '../contracts.js';
+import { CircularDependencyError } from '../errors.js';
 import {
     invokeAsyncDispose,
     invokeSyncDispose,
     requireSynchronousDispose,
-} from '../services/async-dispose';
-import { observePromiseRejection } from '../services/promise-value';
+} from '../services/async-dispose.js';
+import { observePromiseRejection } from '../services/promise-value.js';
 
 /**
  * Singleton lifecycle implementation that maintains one instance for the entire application lifetime.
@@ -47,7 +47,9 @@ import { observePromiseRejection } from '../services/promise-value';
  *
  * @implements {ServiceLifecycle}
  */
-export class SingletonLifecycle implements ServiceLifecycle {
+export class SingletonLifecycle implements ConfigurableServiceLifecycle {
+    public readonly lifetime = 'singleton' as const;
+    public readonly valueOwnership = 'owned' as const;
     /**
      * The singleton instance.
      * @private

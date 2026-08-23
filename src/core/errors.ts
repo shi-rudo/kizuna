@@ -1,3 +1,5 @@
+import type { ServiceLifetime } from "./contracts.js";
+
 /**
  * Thrown when resolving a service would recurse into a service that is
  * already being resolved (a dependency cycle at resolve time).
@@ -16,6 +18,17 @@ export class CircularDependencyError extends Error {
 	}
 }
 
+/** The cleanup operation that produced a disposal failure. */
+export type DisposalOperation = "dispose" | "disposeAsync";
+
+/** Structured context for one service cleanup failure. */
+export interface DisposalFailure {
+	readonly serviceKey: string;
+	readonly lifetime: ServiceLifetime;
+	readonly operation: DisposalOperation;
+	readonly error: unknown;
+}
+
 /**
  * Reports one or more failures that occurred while services were disposed.
  * The original failures are available through the inherited `errors` property.
@@ -23,12 +36,16 @@ export class CircularDependencyError extends Error {
  */
 export class DisposalError extends AggregateError {
 	declare readonly errors: unknown[];
+	/** Structured service context for errors raised by container disposal. */
+	public readonly failures: readonly DisposalFailure[];
 
 	constructor(
 		errors: Iterable<unknown>,
 		message = "One or more services failed to dispose",
+		failures: readonly DisposalFailure[] = [],
 	) {
 		super(errors, message);
 		this.name = "DisposalError";
+		this.failures = Object.freeze([...failures]);
 	}
 }

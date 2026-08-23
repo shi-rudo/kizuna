@@ -1,4 +1,4 @@
-import type { ObservedFactoryValue } from "../../api/contracts/types";
+import type { ObservedFactoryValue } from "../../api/contracts/types.js";
 
 /**
  * Returns a Promise-like service value that runs a callback before it rejects.

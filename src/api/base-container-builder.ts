@@ -1,4 +1,4 @@
-import type { ServiceWrapper } from "../core/services/service-wrapper";
+import type { ServiceWrapper } from "../core/services/service-wrapper.js";
 
 /**
  * Environment detection utility for cross-platform compatibility.
