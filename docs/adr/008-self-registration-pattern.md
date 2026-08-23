@@ -1,100 +1,61 @@
-# ADR-008: Decoupled Provider and Explicit Self-Resolution
+# ADR-008: Explicit Provider Self-Resolution
 
 ## Status
 
-Accepted (Supersedes previous "Self-Registration Pattern")
+Accepted. This decision supersedes automatic provider registration under a
+string key.
 
 ## Context
 
-For factory functions to be useful, they need a mechanism to resolve the dependencies required to construct a service. A key architectural decision was how to provide this capability. The primary options were:
+Factories and infrastructure code sometimes need the current service provider.
+An automatic string registration made that dependency look like a normal
+application service. It also reserved a user-facing key.
 
-1.  **Automatic Self-Registration**: The service provider would automatically register itself as a resolvable service within the container. This would allow any service to inject the provider.
-2.  **No Self-Registration**: The service provider would not be a resolvable service, preventing it from being injected into regular services.
-3.  **Manual Registration**: Require the user to explicitly register the service provider if they wanted to inject it.
-
-The library initially implemented automatic self-registration.
+The provider needs one stable identity that cannot collide with a user key.
+Normal services still need explicit constructor dependencies.
 
 ## Decision
 
-We have **reversed the original automatic self-registration decision**. The
-service provider is not stored in the normal string-key registry.
+The provider is not part of the string-key registry. Kizuna does not create a
+hidden provider registration.
 
-The `TypeSafeServiceLocator` is passed directly to factory functions at
-resolution time. Infrastructure code can also call `get(ServiceProviderToken)`
-to get the current root or scoped provider. This lookup uses an exported unique
-symbol; it is not a hidden service registration.
+`get(ServiceProviderToken)` returns the current provider. A root call returns
+the root container. A scope call returns that scope.
 
-The symbol token `ServiceProviderToken` and the string key `"ServiceProvider"`
-are separate. Users can register the string key without
-overwriting provider self-resolution. The provider cannot be injected through a
-string dependency unless the user registers a value under that string. No other
-constructor is a resolution token. Registered services are resolved through
-their string keys, so runtime resolution does not depend on `constructor.name`.
+`ServiceProviderToken` is an exported unique symbol. It cannot collide with the
+string key `"ServiceProvider"`.
 
-## Rationale
+A factory receives the current `TypeSafeServiceLocator` as its parameter.
+ADR-009 defines this factory contract.
 
-This change was made to enforce a cleaner dependency injection architecture and discourage the use of the Service Locator, which is widely considered an anti-pattern.
+Constructor dependencies still use registered service keys. They cannot use
+`ServiceProviderToken` as a dependency key. Arbitrary constructors are also not
+resolution tokens.
 
-1.  **Discourages the Service Locator Anti-Pattern**: The provider is not placed
-    in the string-key registry, so normal constructor injection does not receive
-    it implicitly. Services must declare their actual dependencies.
+## Type-safety boundary
 
-2.  **Promotes Clear, Explicit Dependencies**: A class's dependencies should be part of its public contract (the constructor signature). The new model enforces this. It is immediately clear what a service needs to function, without having to read its implementation to see what it resolves from a service locator.
+TypeScript rejects an unregistered provider dependency during registration.
+JavaScript callers and unsafe casts can defer this error to validation or
+resolution.
 
-3.  **Vastly Improved Testability**: Services that do not depend on the container are much easier to unit test. Dependencies can be mocked and passed directly to the constructor. If a service depends on the provider, tests would need to construct and configure a full container instance, which is complex and couples the test to the DI framework.
+The token gives infrastructure code explicit access to the current provider.
+It does not make the provider a normal registered dependency.
 
-4.  **Preserves the Power of Factories**: Factory functions receive the current
-    provider directly for complex or conditional service creation.
-
-5.  **Prevents Key Collisions**: Symbol identity cannot overwrite a user
-    registration that happens to use the same text as the token description.
-
-## Implementation Pattern
-
-The service provider is not a registered string-key service. Attempting to
-inject it without a user registration will fail.
-
-### Incorrect Usage (No Longer Possible)
+## Factory example
 
 ```typescript
-// This service attempts to inject the provider, which is an anti-pattern.
-class MyService {
-  constructor(private provider: TypeSafeServiceLocator<{}>) { // This will fail
-    // ...
-  }
-}
-
-// The following registration would lead to a resolution error because
-// `TypeSafeServiceLocator` is not a registered service.
-const builder = new ContainerBuilder()
-  .registerSingleton('MyService', MyService, 'TypeSafeServiceLocator');
-```
-
-### Correct Usage (Factory-Based)
-
-The provider is passed as an argument to the factory function, where its use is appropriate.
-
-```typescript
-// A factory function receives the provider to resolve dependencies.
 const container = new ContainerBuilder()
-  .registerSingleton('Logger', Logger)
-  .registerSingletonFactory('ComplexService', (provider) => { // provider is passed here
-    const logger = provider.get('Logger'); // Correctly resolve dependencies
-    
-    // Perform complex or conditional logic
-    if (process.env.NODE_ENV === 'development') {
-      return new ComplexService(logger, new DevTools());
-    } else {
-      return new ComplexService(logger, new ProdTools());
-    }
+  .registerSingleton('logger', Logger)
+  .registerSingletonFactory('diagnostics', (provider) => {
+    const logger = provider.get('logger');
+    return new Diagnostics(logger);
   })
   .build();
-
-// The service is created via its factory, which correctly uses the provider.
-const service = container.get('ComplexService');
 ```
 
-### Explicit Infrastructure Lookup
+The factory parameter is the preferred provider access for factory code.
+
+## Explicit infrastructure lookup
 
 ```typescript
 import { ContainerBuilder, ServiceProviderToken } from '@shirudo/kizuna';
@@ -106,38 +67,18 @@ const container = new ContainerBuilder()
   .build();
 
 container.get(ServiceProviderToken); // The current provider
-container.get('ServiceProvider');    // DiagnosticService
+container.get('ServiceProvider'); // DiagnosticService
 ```
+
+The symbol lookup and the string lookup return different values.
 
 ## Consequences
 
-### Positive
+The container does not reserve a string key for itself. User registrations can
+use the text `"ServiceProvider"`.
 
-*   **Architectural Integrity**: Prevents the Service Locator anti-pattern and promotes a clean DI architecture.
-*   **Improved Testability**: Services are easier to unit test in isolation.
-*   **Clear Dependencies**: A service's dependencies are made explicit in its constructor.
-*   **Reduced Complexity**: Eliminates hidden provider registrations and keeps
-    the one explicit infrastructure token separate from user keys.
+Constructor signatures continue to show normal service dependencies. Dynamic
+provider access remains explicit in factories and infrastructure code.
 
-*   **Stable Resolution**: Service lookup does not depend on constructor names,
-    which build tools can change.
-
-### Negative
-
-*   **More Ceremony for Dynamic Resolution**: If a service genuinely needs to resolve dependencies dynamically, it *must* be constructed via a factory. This is a positive trade-off, as it makes the choice to use dynamic resolution an explicit architectural decision.
-
-## Alternatives Considered
-
-### Automatic Self-Registration
-
-*   **Description**: The provider automatically registers itself under a string
-    key within the container.
-*   **Reason for Rejection**: This was the previous model. It was rejected because it actively encourages the Service Locator anti-pattern, which leads to poor architectural outcomes regarding testability and maintainability.
-
-### Manual Registration
-
-*   **Description**: Require the user to explicitly register the provider under
-    a string key if they want to inject it.
-*   **Reason for Rejection**: This is verbose and enables hidden service-locator
-    dependencies. Factory arguments and explicit symbol-token lookup cover
-    the intended infrastructure use cases.
+The API cannot prevent service-locator use inside a factory. Code review and
+application architecture must control that use.

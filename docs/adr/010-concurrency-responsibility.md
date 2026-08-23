@@ -1,155 +1,97 @@
-# ADR-010: Concurrency Responsibility Separation
+# ADR-010: Concurrency Responsibility
 
 ## Status
-**Accepted** - 2025-01-24
+
+Accepted. This revision removes unsupported adoption and performance claims
+from the original decision.
 
 ## Context
 
-During development, the question arose whether Kizuna should provide built-in thread-safe implementations of its core lifecycle classes (Singleton, Scoped, Transient) to handle concurrent access scenarios such as:
+Kizuna uses mutable lifecycle state for cached values, factories, disposal,
+and scope creation. The library does not use locks or another serialization
+mechanism.
 
-- Multi-threaded Node.js applications using Worker Threads
-- Browser applications with Web Workers and SharedArrayBuffer
-- High-concurrency server applications with shared container state
+JavaScript tasks in one isolate can interleave. Workers and isolates also have
+separate heaps. Application services can contain their own shared mutable
+state.
 
-Initial exploration included implementing thread-safe versions using async-mutex, but this raised fundamental architectural questions about responsibility separation and performance trade-offs.
+Thread safety for a DI container does not make its service values thread-safe.
+The application owns concurrency rules for those values.
 
 ## Decision
 
-**Kizuna will NOT provide built-in thread-safe implementations.** Instead, concurrency concerns are the responsibility of the consuming application.
+Kizuna does not provide thread-safe lifecycle implementations. Kizuna does not
+serialize concurrent application work.
 
-## Rationale
+Resolution stays synchronous. An `async` factory returns a Promise service
+value as ADR-001 defines. This behavior is not asynchronous resolution.
 
-### 1. Single Responsibility Principle
-- **Kizuna's Core Responsibility**: Dependency injection, service lifecycle management, type safety, and developer experience
-- **Application's Responsibility**: Concurrency patterns, thread coordination, async flow control, and performance optimization
+Kizuna does not promise safe container sharing across workers, isolates, or
+other heaps.
 
-Mixing these concerns would violate separation of responsibilities and create a more complex, harder-to-maintain library.
+## Application rules
 
-### 2. Performance First for Common Cases
-**99% of JavaScript applications run in single-threaded environments:**
-- Node.js main thread (most server applications)
-- Browser main thread (most web applications)  
-- CLI tools and scripts
-- Single-threaded serverless functions
+Create one root container in each worker or isolate. Transfer data between
+workers with messages or another application-owned protocol.
 
-Adding async overhead to **all operations** to solve **rare concurrency cases** would:
-- Degrade performance for the majority use case
-- Force unnecessary Promise handling throughout codebases
-- Add complexity to the API surface area
+Create a scope for each request or operation that needs isolated scoped values.
+Dispose that scope after the operation is complete.
 
-### 3. JavaScript Concurrency Model
-JavaScript's event-driven, single-threaded model means:
-- Most concurrency is handled through async/await and event loops
-- True multi-threading is the exception, not the rule
-- When multi-threading is used, applications typically architect around it
+Remember that scopes share singleton values. Make singleton state safe for the
+concurrent tasks that use it.
 
-### 4. Better Architectural Patterns Exist
-Applications needing concurrency can use proven patterns:
+Coordinate shutdown with request admission and in-flight work. Start disposal
+only after the application stops new resolution work.
 
-**Container-per-Thread/Worker:**
+If owned values have asynchronous cleanup, use `disposeAsync()`. Disposal marks
+the provider as disposed before cleanup starts.
+
+## Example
+
 ```typescript
-// Each thread gets its own container instance
-const container = new ContainerBuilder()
-    .registerSingleton('Service', MyService)
-    .build();
+// Run this composition root separately in each worker or isolate.
+const root = new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .registerScoped('requestContext', RequestContext)
+  .build();
+
+async function handleRequest(): Promise<void> {
+  await using scope = root.startScope();
+  const context = scope.get('requestContext');
+  await processRequest(context);
+}
 ```
-
-**Request-Scoped Isolation:**
-```typescript
-// Each request gets isolated service instances
-app.use((req, res, next) => {
-    req.services = rootContainer.startScope();
-    res.on('finish', () => req.services.dispose());
-});
-```
-
-**Message Passing:**
-```typescript
-// Avoid shared state entirely
-worker.postMessage({ type: 'PROCESS_DATA', data: payload });
-```
-
-### 5. Industry Alignment
-Major DI frameworks follow similar patterns:
-- **ASP.NET Core**: Single-threaded per request with scoped services
-- **Spring Framework**: Thread-safe singletons, but request-scoped instances
-- **Angular**: Single-threaded with hierarchical injectors
-- **Dagger (Android)**: Component-per-scope architecture
-
-None provide built-in async/threading in their core DI resolution.
-
-### 6. Principle of Least Astonishment
-Developers expect DI containers to be:
-- Fast and synchronous by default
-- Simple to use for common cases
-- Free of unnecessary async ceremony
-
-Making all operations async would surprise developers and create friction.
 
 ## Consequences
 
-### Positive
-- **Simple, Fast API**: Synchronous operations with minimal overhead
-- **Clear Responsibility**: Kizuna focuses on DI, apps handle concurrency
-- **Better Performance**: No async overhead for single-threaded scenarios
-- **Easier Testing**: Synchronous operations are easier to test and debug
-- **Smaller Bundle Size**: No additional concurrency dependencies
+The public resolution API remains synchronous. The package has no lock or mutex
+dependency.
 
-### Negative
-- **Manual Concurrency Handling**: Applications must implement their own patterns
-- **Documentation Burden**: Must clearly document concurrency considerations
-- **Potential Misuse**: Developers might share containers unsafely
+Applications must choose their worker, request, and singleton concurrency
+models. Kizuna cannot prevent unsafe mutation inside a resolved service.
 
-### Mitigation Strategies
-1. **Comprehensive Documentation**: Detailed guide on concurrency patterns
-2. **Clear Warnings**: Documentation about unsafe sharing patterns
-3. **Best Practice Examples**: Sample implementations for common scenarios
-4. **Architecture Guidance**: Recommendations for concurrent applications
+Request scopes isolate scoped values. They do not isolate singleton values or
+global application state.
 
-## Implementation
+No benchmark in this ADR proves a performance benefit from this decision.
 
-1. Remove any thread-safe implementations from the codebase
-2. Keep existing synchronous lifecycle implementations
-3. Document concurrency considerations in README
-4. Create detailed concurrency patterns guide
-5. Add examples for common concurrent scenarios
+## Alternatives
 
-## Alternatives Considered
+### Async-first resolution
 
-### Alternative 1: Async-First API
-Make all operations async to support thread-safe implementations.
+An async-only API can serialize some container operations. It cannot make
+arbitrary service values safe for concurrent use.
 
-**Rejected because:**
-- Degrades performance for 99% of use cases
-- Adds unnecessary complexity to simple scenarios
-- Goes against JavaScript's typical DI patterns
+Kizuna keeps Promise values explicit instead. ADR-001 defines that contract.
 
-### Alternative 2: Configurable Thread Safety
-Provide both sync and async versions with configuration flags.
+### Optional locking
 
-**Rejected because:**
-- Doubles the API surface area
-- Creates two different programming models
-- Increases maintenance burden significantly
+Optional locks create two lifecycle models and do not protect state inside
+services. The application can add coordination at its actual concurrency
+boundary.
 
-### Alternative 3: Optional Thread-Safe Package
-Separate `@shirudo/kizuna-threadsafe` package.
+## Related documentation
 
-**Rejected because:**
-- Fragments the ecosystem
-- Creates version compatibility issues
-- Still violates single responsibility principle
-
-## References
-
-- [Dependency Injection Patterns in JavaScript](https://martinfowler.com/articles/injection.html)
-- [Node.js Worker Threads Documentation](https://nodejs.org/api/worker_threads.html)
-- [Web Workers and Service Workers Patterns](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API)
-- [ASP.NET Core Dependency Injection](https://docs.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection)
-
----
-
-**Next Steps:**
-1. Create comprehensive concurrency patterns documentation
-2. Update README with concurrency considerations
-3. Add example implementations for common concurrent scenarios
+- [Concurrency patterns](../concurrency-patterns.md)
+- [Promise values](./001-explicit-async-initialization-pattern.md)
+- [Scope creation](./006-scope-creation-strategy.md)

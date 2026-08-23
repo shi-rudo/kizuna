@@ -2,383 +2,135 @@
 
 ## Status
 
-Accepted
+Accepted.
+
+Later decisions amend parts of this ADR:
+
+- [ADR-001](./001-explicit-async-initialization-pattern.md) defines Promise
+  values from factories.
+- [ADR-008](./008-self-registration-pattern.md) defines provider
+  self-resolution.
+- [ADR-009](./009-factory-function-signature.md) defines the typed factory
+  parameter.
+- [ADR-011](./011-dependency-aware-disposal-order.md) defines cleanup order.
+- [ADR-012](./012-disposal-error-aggregation.md) defines cleanup errors.
 
 ## Context
 
-Kizuna initially explored different API approaches for dependency injection, including separate fluent and type-safe patterns. However, practical experience revealed that users needed the benefits of both patterns in a single, cohesive API. The dual-API approach created several challenges:
-
-1. **API Fragmentation**: Users had to choose between two different APIs for different scenarios
-2. **Learning Curve**: Teams needed to understand when to use which API
-3. **Inconsistent Patterns**: Different projects adopted different APIs, leading to inconsistency
-4. **Maintenance Overhead**: Maintaining two parallel APIs increased complexity
-5. **Feature Gaps**: Some capabilities were only available in one API or the other
-
-Based on user feedback and real-world usage patterns, we needed to evolve toward a unified API that combines the strengths of both approaches.
+Kizuna previously explored separate fluent and typed registration APIs. Two
+APIs increased the learning and maintenance cost. They also had different
+feature sets.
 
 ## Decision
 
-We chose to create a **Unified Container API** that integrates both fluent and type-safe patterns into a single `ContainerBuilder` class, providing all registration patterns with full type safety.
-
-## Rationale
-
-### Unified API Design
+Kizuna supplies one `ContainerBuilder` API for constructor, interface, and
+factory registrations.
 
 ```typescript
-const Database = interfaceToken<IDatabase>()('Database');
-const Cache = interfaceToken<ICache>()('Cache');
+const database = interfaceToken<IDatabase>()('database');
+const cache = interfaceToken<ICache>()('cache');
 
-// The ultimate container - all patterns unified with full type safety!
 const container = new ContainerBuilder()
-  // Constructor-based registration (concise, type-safe)
-  .registerSingleton('Logger', ConsoleLogger)
-  .registerScoped('UserService', UserService, 'Database', 'Logger')
-  
-  // Interface-based registration (abstraction + type safety)
-  .registerSingletonInterface(Database, PostgreSQLDatabase, 'Logger')
-  .registerScopedInterface(Cache, RedisCache, 'Logger')
-  
-  // Factory-based registration (flexibility + type safety)
-  .registerSingletonFactory('Config', (provider) => {
-    const logger = provider.get('Logger'); // Type: ConsoleLogger ✅
+  .registerSingleton('logger', ConsoleLogger)
+  .registerSingletonInterface(database, PostgreSQLDatabase, 'logger')
+  .registerScopedInterface(cache, RedisCache, 'logger')
+  .registerScoped('userService', UserService, database, 'logger')
+  .registerSingletonFactory('config', (provider) => {
+    const logger = provider.get('logger');
     return createConfiguration(logger);
   })
-  
-  .build(); // Returns TypeSafeServiceLocator with full type inference
-
-// Perfect IDE autocompletion and compile-time type safety
-const userService = container.get('UserService'); // Type: UserService ✅
-const database = container.get(Database);         // Type: IDatabase ✅
-const config = container.get('Config');           // Type: inferred from factory ✅
-```
-
-### Benefits of Unified API
-
-#### 1. **Single Learning Model**
-
-```typescript
-const Service2 = interfaceToken<IService>()('Service2');
-const Cache = interfaceToken<ICache>()('Cache');
-
-// One API to learn, with consistent patterns
-const container = new ContainerBuilder()
-  
-  // All registration methods follow the same pattern:
-  // .register[Lifecycle][Pattern](key, implementation, ...dependencies)
-  
-  .registerSingleton('Service1', Service1Class)                    // Constructor
-  .registerSingletonInterface(Service2, Service2Impl) // Interface
-  .registerSingletonFactory('Service3', (provider) => new Service3())      // Factory
-  
-  // Lifecycle variants work identically across all patterns
-  .registerScopedInterface(Cache, CacheImpl)
-  .registerTransientFactory('RequestId', () => crypto.randomUUID())
-  
-  .build();
-```
-
-#### 2. **Full Type Safety Across All Patterns**
-
-```typescript
-const DB = interfaceToken<IDatabase>()('DB');
-
-// Every registration pattern provides complete type safety
-const container = new ContainerBuilder()
-  .registerSingleton('Logger', ConsoleLogger)
-  .registerSingletonInterface(DB, DatabaseService, 'Logger')
-  .registerSingletonFactory('UserRepo', (provider) => {
-    // provider.get() is fully typed based on previous registrations
-    const db = provider.get(DB);           // Type: IDatabase ✅
-    const logger = provider.get('Logger'); // Type: ConsoleLogger ✅
-    return new UserRepository(db, logger);
-  })
   .build();
 
-// Resolution is type-safe regardless of registration pattern
-const logger = container.get('Logger');   // Type: ConsoleLogger
-const db = container.get(DB);             // Type: IDatabase
-const repo = container.get('UserRepo');   // Type: UserRepository (inferred!)
+container.get('logger');
+container.get(database);
+container.get('userService');
+container.get('config');
 ```
 
-#### 3. **Comprehensive Registration Capabilities**
+Each registration method adds its key and service type to the inferred
+registry. Later registrations can use keys that already exist in this
+registry.
 
-```typescript
-const Logger = interfaceToken<ILogger>()('Logger');
-const Cache = interfaceToken<ICache>()('Cache');
-const Validator = interfaceToken<IValidator>()('Validator');
+`build()` returns a `RootServiceContainer<TRegistry>`. `startScope()` returns a
+`TypeSafeServiceLocator<TRegistry>`.
 
-// Every pattern supports all lifecycles
-const container = new ContainerBuilder()
-  
-  // Singleton services (shared across entire container)
-  .registerSingleton('Config', ConfigService)
-  .registerSingletonInterface(Logger, ConsoleLogger)
-  .registerSingletonFactory('Database', (provider) => createConnection())
-  
-  // Scoped services (shared within scope, new per scope)
-  .registerScoped('RequestContext', RequestContext)
-  .registerScopedInterface(Cache, MemoryCache, Logger)
-  .registerScopedFactory('UserId', () => generateUserId())
-  
-  // Transient services (new instance every time)
-  .registerTransient('EmailService', EmailService, Logger)
-  .registerTransientInterface(Validator, DefaultValidator)
-  .registerTransientFactory('Timestamp', () => Date.now())
-  
-  .build();
-```
+## Registration contracts
 
-#### 4. **Advanced Function Registration Support**
+### Constructor registrations
 
-```typescript
-// Comprehensive support for functions as services
-const container = new ContainerBuilder()
-  
-  // Functions returning primitives
-  .registerSingletonFactory('MaxRetries', () => 3)
-  .registerSingletonFactory('Environment', () => process.env.NODE_ENV || 'development')
-  
-  // Functions returning collections
-  .registerSingletonFactory('SupportedLanguages', () => ['en', 'es', 'fr', 'de'])
-  .registerSingletonFactory('FeatureFlags', () => new Map([['analytics', true]]))
-  
-  // Functions returning functions (higher-order)
-  .registerSingletonFactory('Validator', () => ({
-    email: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-    required: (value: any) => value != null && value !== ''
-  }))
-  
-  // Functions returning event systems
-  .registerSingletonFactory('EventBus', () => {
-    const listeners = new Map<string, Function[]>();
-    return {
-      on: (event: string, callback: Function) => { /* ... */ },
-      emit: (event: string, ...args: any[]) => { /* ... */ }
-    };
-  })
-  
-  .build();
-```
+Constructor registrations accept a concrete class and its dependency keys.
+TypeScript compares each key type with the constructor parameter at the same
+position. It also checks the dependency count.
 
-#### 5. **Perfect IDE Integration**
+The builder must contain each dependency before its consumer registration.
+Each registration key must be one fixed string literal.
 
-```typescript
-const EmailService = interfaceToken<IEmailService>()('EmailService');
+TypeScript uses structural assignability. It cannot distinguish two keys when
+both keys provide the same structural type. Development diagnostics can compare
+key text with source parameter names.
 
-const container = new ContainerBuilder()
-  .registerSingleton('UserService', UserService)
-  .registerSingletonInterface(EmailService, SMTPService)
-  .registerSingletonFactory('Config', () => ({ env: 'prod' }))
-  .build();
+### Interface registrations
 
-// IDE provides autocompletion for ALL registered services
-const service = container.get(''); // Suggests: 'UserService', 'EmailService', 'Config'
+`interfaceToken<T>()(key)` connects a string key with an interface type. The
+implementation constructor must produce that interface type.
 
-// Type inference works perfectly for all registration patterns
-const userSvc = container.get('UserService');  // Type: UserService
-const emailSvc = container.get(EmailService);   // Type: IEmailService
-const config = container.get('Config');         // Type: { env: string }
-```
+Interface constructor dependencies use the same count, type, and position
+checks as concrete constructor registrations.
 
-### Implementation Architecture
+### Factory registrations
 
-#### Unified ContainerBuilder Class
+A factory receives a locator for the registry that exists before the factory
+registration. The factory return type becomes the service type for its key.
 
-```typescript
-export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> 
-  extends BaseContainerBuilder {
-  
-  // Constructor-based registration
-  registerSingleton<K extends string, T>(
-    key: K,
-    serviceType: new (...args: any[]) => T,
-    ...dependencies: string[]
-  ): ContainerBuilder<TRegistry & Record<K, T>>;
-  
-  // Interface-based registration
-  registerSingletonInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(
-    token: TToken,
-    implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>,
-    ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>
-  ): ContainerBuilder<TRegistry & Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>>;
-  
-  // Factory-based registration
-  registerSingletonFactory<K extends string, T>(
-    key: K,
-    factory: (provider: TypeSafeServiceLocator<TRegistry>) => T
-  ): ContainerBuilder<TRegistry & Record<K, T>>;
-  
-  // All patterns support all lifecycles
-  registerScoped<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  registerTransient<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  registerScopedInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>>;
-  registerTransientInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(...): ContainerBuilder<TRegistry & Record<InterfaceTokenKey<TToken>, InterfaceTokenService<TToken>>>;
-  registerScopedFactory<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  registerTransientFactory<K extends string, T>(...): ContainerBuilder<TRegistry & Record<K, T>>;
-  
-  // Build with full type safety
-  build(): TypeSafeServiceLocator<TRegistry>;
-}
-```
+Factory keys must be fixed string literals. Factory lookups do not create
+dependency metadata. Therefore, they do not define cleanup order.
 
-#### Type-Safe Provider System
+ADR-009 defines the factory type. ADR-001 defines Promise values from an
+`async` factory.
 
-```typescript
-// Factory functions receive fully typed providers
-.registerSingletonFactory('ComplexService', (provider) => {
-  // Every .get() call is fully typed based on registry
-  const logger = provider.get('Logger');     // Type inferred from registry
-  const database = provider.get('Database'); // Type inferred from registry
-  const config = provider.get('Config');     // Type inferred from registry
-  
-  return new ComplexService(logger, database, config);
-});
-```
+### Lifecycles
 
-#### Registry Type Tracking
+Constructor, interface, and factory registrations support these lifecycles:
 
-```typescript
-// Progressive type building as services are registered
-type EmptyRegistry = {};
-type WithLogger = EmptyRegistry & Record<'Logger', ConsoleLogger>;
-type WithDatabase = WithLogger & Record<'Database', IDatabase>;
-type WithUserService = WithDatabase & Record<'UserService', UserService>;
+- Singleton
+- Scoped
+- Transient
 
-// TypeScript tracks the complete service registry through the fluent chain
-```
+The matching `add*` methods add multiple services under one key. The public API
+does not provide a custom lifecycle extension point.
 
-### Trade-offs Accepted
+## Resolution contracts
 
-#### Advantages
+Registered services use their fixed string keys. An interface token carries
+its fixed string key and its interface type.
 
-- **Unified Learning**: Single API reduces cognitive overhead
-- **Complete Type Safety**: All patterns provide full compile-time validation
-- **Feature Parity**: All registration patterns support all lifecycles
-- **Better DX**: Perfect IDE integration across all scenarios
-- **Maintainability**: Single API surface to maintain and document
-- **Flexibility**: Can mix and match patterns as needed in single container
-- **Future-Proof**: Easy to add new registration patterns without API fragmentation
+`ServiceProviderToken` is the only non-string resolution token. It returns the
+current root container or scope. A user can register the string key
+`"ServiceProvider"` without a collision.
 
-#### Disadvantages
+Arbitrary constructors are not resolution tokens. ADR-008 defines this
+decision.
 
-- **API Complexity**: Single class has many methods (mitigated by clear patterns)
-- **Learning Curve**: Comprehensive API has many methods to learn initially
-- **Bundle Size**: Comprehensive API increases library size
-- **Type Complexity**: Advanced TypeScript features may confuse beginners
+## Validation contracts
 
+TypeScript rejects unknown dependency keys in typed constructor registrations.
+JavaScript callers can still create invalid graphs.
 
-### Validation and Error Handling
+`validate()` reports graph errors, captive dependencies, and development-only
+parameter-name differences. `build()` does not call `validate()`.
 
-#### Comprehensive Validation Support
-
-```typescript
-const builder = new ContainerBuilder()
-  .registerSingleton('Service1', Service1, 'MissingDep') // Missing dependency
-  .registerSingletonFactory('Service2', (provider) => {
-    throw new Error('Factory error');
-  });
-
-// Validation catches issues before runtime
-const validationIssues = builder.validate();
-// Returns: ["Service1 depends on unregistered service 'MissingDep'"]
-```
-
-#### Type-Safe Error Prevention
-
-```typescript
-const container = new ContainerBuilder()
-  .registerSingleton('Logger', ConsoleLogger)
-  .build();
-
-// Compile-time error for non-existent service
-const service = container.get('NonExistent'); // ❌ TypeScript Error!
-
-// Runtime error prevention through validation
-const builder = new ContainerBuilder()
-  .registerSingleton('Service', ServiceClass, 'MissingDep');
-
-builder.validate(); // Catches missing dependency before build
-```
+Some errors occur at registration. Other errors occur during explicit
+validation or first resolution. ADR-007 is the historical fail-fast decision.
 
 ## Consequences
 
-### Positive
+The fluent chain preserves registry inference across all registration
+patterns. Users can mix concrete classes, interface tokens, and factory values
+in one container.
 
-- **Developer Experience**: Single, comprehensive API with perfect type safety
-- **Reduced Complexity**: No need to choose between multiple APIs
-- **Feature Complete**: All patterns support all lifecycles and validation
-- **IDE Excellence**: Perfect autocompletion and error detection
-- **Maintainable**: Single API surface reduces maintenance overhead
-- **Extensible**: Easy to add new patterns without fragmenting the API
-- **Type Safety**: Compile-time validation prevents runtime errors
-- **Performance**: No runtime overhead for type safety features
+The API has many methods because each pattern has three lifecycles and a
+multi-registration variant. The type system also increases compiler work for
+large registries.
 
-### Negative
-
-- **API Surface**: Large number of methods in single class
-- **Learning Curve**: Initial complexity for comprehensive API
-- **Bundle Size**: More complete API increases library footprint
-- **TypeScript Dependency**: Requires advanced TypeScript features
-
-## Implementation Guidelines
-
-### Registration Patterns
-
-#### Use Constructor Registration When
-- Registering concrete classes with constructor dependencies
-- Dependencies can be satisfied by other registered services
-- Simple, straightforward service instantiation
-
-```typescript
-.registerSingleton('UserService', UserService, 'Database', 'Logger')
-```
-
-#### Use Interface Registration When
-- Abstracting behind interfaces
-- Supporting multiple implementations
-- Enabling testing with mocks
-
-```typescript
-const EmailService = interfaceToken<IEmailService>()('EmailService');
-builder.registerSingletonInterface(EmailService, SMTPEmailService, 'Config');
-```
-
-#### Use Factory Registration When
-- Complex initialization logic required
-- Conditional service creation
-- Runtime configuration needed
-- Creating primitive values, functions, or collections
-
-```typescript
-.registerSingletonFactory('DatabaseConnection', async (provider) => {
-  const config = provider.get('Config');
-  return await createConnection(config.connectionString);
-})
-```
-
-### Lifecycle Selection
-
-- **Singleton**: Shared across entire application (configs, loggers, databases)
-- **Scoped**: Shared within request/operation scope (request context, user sessions)
-- **Transient**: New instance every time (commands, value objects, timestamps)
-
-### Best Practices
-
-1. **Consistent Naming**: Use meaningful, descriptive service keys
-2. **Dependency Order**: Register dependencies before dependent services
-3. **Interface Abstraction**: Prefer interfaces for services with multiple implementations
-4. **Factory Sparingly**: Use factories only when constructor registration isn't sufficient
-5. **Validation Always**: Call `validate()` before `build()` in development
-6. **Scoped Cleanup**: Always dispose scoped containers when done
-
-## Future Evolution
-
-### Planned Enhancements
-
-- **Generic Factory Types**: Better type inference for complex factory scenarios
-- **Service Decorators**: TypeScript decorator support for class-based registration
-- **Module System**: Higher-level abstractions for organizing related services
-- **Async Resolution**: An API that awaits promise-returning factories
-- **Configuration Providers**: Integration with configuration systems
-
-This unified API represents Kizuna's comprehensive dependency injection capabilities, providing a single, powerful, and type-safe container system that supports all registration patterns with excellent developer experience.
+The public type contract prevents many invalid TypeScript registrations. It
+does not replace runtime validation for JavaScript or unsafe casts.

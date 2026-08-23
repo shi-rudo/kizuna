@@ -54,6 +54,10 @@ function codeBlockAfter(markdown: string, heading: string): string {
 	return codeBlock[1];
 }
 
+function normalizedMarkdown(markdown: string): string {
+	return markdown.replace(/\s+/g, " ");
+}
+
 function strictTypeErrors(source: string, exampleName = "example"): string[] {
 	const directory = mkdtempSync(join(repositoryRoot, ".kizuna-doc-example-"));
 	const fileName = join(directory, `${exampleName}.ts`);
@@ -371,5 +375,101 @@ class UserService {
 		expect(example).not.toMatch(
 			/Prevents cross-domain dependencies|Clear domain boundaries/,
 		);
+	});
+});
+
+describe("accepted ADR contracts", () => {
+	it("keeps the unified API decision executable", () => {
+		const adr = readFileSync(
+			join(repositoryRoot, "docs", "adr", "003-unified-container-api.md"),
+			"utf8",
+		);
+		const example = codeBlockAfter(adr, "## Decision");
+		const source = `
+import { ContainerBuilder, interfaceToken } from "../src";
+
+interface IDatabase {}
+interface ICache {}
+class Logger {}
+class ConsoleLogger extends Logger {}
+class PostgreSQLDatabase implements IDatabase {
+    constructor(readonly logger: Logger) {}
+}
+class RedisCache implements ICache {
+    constructor(readonly logger: Logger) {}
+}
+class UserService {
+    constructor(
+        readonly database: IDatabase,
+        readonly logger: Logger,
+    ) {}
+}
+declare function createConfiguration(logger: Logger): { logger: Logger };
+
+${example}
+`;
+
+		expect(strictTypeErrors(source, "adr-003-unified-api")).toEqual([]);
+		expect(adr).toContain("ADR-001");
+		expect(adr).toContain("ADR-008");
+		expect(adr).toContain("ADR-009");
+		expect(adr).toContain("`build()` does not call `validate()`");
+	});
+
+	it("documents the current scope replication contract", () => {
+		const adr = normalizedMarkdown(
+			readFileSync(
+				join(repositoryRoot, "docs", "adr", "006-scope-creation-strategy.md"),
+				"utf8",
+			),
+		);
+
+		expect(adr).toContain(
+			"Each scope gets a new wrapper for each registration.",
+		);
+		expect(adr).toContain(
+			"Scoped and transient lifecycles create new lifecycle instances.",
+		);
+		expect(adr).toContain(
+			"Singleton and borrowed singleton lifecycles stay shared.",
+		);
+	});
+
+	it("documents unregistered self-resolution as a compile-time error", () => {
+		const adr = normalizedMarkdown(
+			readFileSync(
+				join(repositoryRoot, "docs", "adr", "008-self-registration-pattern.md"),
+				"utf8",
+			),
+		);
+
+		expect(adr).toContain(
+			"TypeScript rejects an unregistered provider dependency during registration.",
+		);
+		expect(adr).not.toContain("would lead to a resolution error");
+	});
+
+	it("states concurrency limits without unsupported adoption claims", () => {
+		const adr = normalizedMarkdown(
+			readFileSync(
+				join(
+					repositoryRoot,
+					"docs",
+					"adr",
+					"010-concurrency-responsibility.md",
+				),
+				"utf8",
+			),
+		);
+
+		expect(adr).toContain(
+			"Kizuna does not serialize concurrent application work.",
+		);
+		expect(adr).toContain(
+			"Create one root container in each worker or isolate.",
+		);
+		expect(adr).not.toContain("99%");
+		expect(adr).not.toContain("ASP.NET Core");
+		expect(adr).not.toContain("Spring Framework");
 	});
 });
