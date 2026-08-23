@@ -88,6 +88,17 @@ function strictTypeErrors(source: string, exampleName = "example"): string[] {
 	}
 }
 
+function containsCombinedDisposalExample(markdown: string): boolean {
+	const codeBlocks = markdown.matchAll(
+		/```(?:ts|typescript)\s*\n([\s\S]*?)```/g,
+	);
+
+	return [...codeBlocks].some((codeBlock) => {
+		const code = codeBlock[1] ?? "";
+		return /\.dispose\(\)/.test(code) && /\.disposeAsync\(\)/.test(code);
+	});
+}
+
 describe("published TypeScript examples", () => {
 	it("keeps Quick Start dependency keys aligned with constructor parameters", () => {
 		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
@@ -120,6 +131,30 @@ describe("published TypeScript examples", () => {
 		);
 	});
 
+	it("detects combined disposal calls without semicolons", () => {
+		const example = [
+			"```typescript",
+			"container.dispose()",
+			"await container.disposeAsync()",
+			"```",
+		].join("\n");
+
+		expect(containsCombinedDisposalExample(example)).toBe(true);
+	});
+
+	it("allows separate synchronous and asynchronous disposal examples", () => {
+		const alternatives = [
+			"```typescript",
+			"container.dispose();",
+			"```",
+			"```typescript",
+			"await container.disposeAsync();",
+			"```",
+		].join("\n");
+
+		expect(containsCombinedDisposalExample(alternatives)).toBe(false);
+	});
+
 	it("presents synchronous and asynchronous disposal as alternatives", () => {
 		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
 		const disposal = readme.slice(
@@ -128,7 +163,7 @@ describe("published TypeScript examples", () => {
 		);
 
 		expect(disposal).toContain("Choose one disposal API for each container.");
-		expect(disposal).not.toMatch(/\.dispose\(\);[\s\S]*?\.disposeAsync\(\)/);
+		expect(containsCombinedDisposalExample(disposal)).toBe(false);
 	});
 
 	it("lists singleton borrowing in the formal builder API", () => {
