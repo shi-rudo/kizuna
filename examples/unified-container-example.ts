@@ -1,12 +1,12 @@
 /**
  * Unified ContainerBuilder Example
  * 
- * Demonstrates the ultimate type-safe dependency injection container that supports:
+ * Demonstrates the unified dependency injection container with:
  * - Constructor-based registration
  * - Interface-based registration  
  * - Factory-based registration
  * - All service lifecycles (singleton, scoped, transient)
- * - Full type safety with IDE autocompletion
+ * - Registry type inference for fixed service keys
  */
 import { ContainerBuilder, interfaceToken } from '../src/index';
 
@@ -312,13 +312,13 @@ userService.getUser(123).then(() => {
     
     console.log('\n🎉 UNIFIED CONTAINER BENEFITS:');
     console.log('✅ One API for all registration patterns');
-    console.log('✅ Full type safety with IDE autocompletion');  
+    console.log('✅ Registry type inference for fixed service keys');
     console.log('✅ Constructor, interface, and factory registration');
     console.log('✅ All service lifecycles supported');
     console.log('✅ Type-safe factory functions with provider access');
     console.log('✅ Compile-time errors for invalid registrations');
     console.log('✅ Zero runtime configuration needed');
-    console.log('✅ Perfect for any TypeScript project!');
+    console.log('✅ TypeScript checks for registered keys');
 });
 
 export { container };

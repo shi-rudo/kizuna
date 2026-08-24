@@ -1,7 +1,7 @@
 {
 	"name": "@shirudo/kizuna",
 	"version": "1.0.0-rc.9",
-	"description": "A powerful and flexible dependency injection library for TypeScript and JavaScript.",
+	"description": "A dependency injection library with typed TypeScript APIs and JavaScript runtime support.",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/shi-rudo/kizuna.git"

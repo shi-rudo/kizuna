@@ -1,6 +1,6 @@
 # @shirudo/kizuna -- Skill Spec
 
-A lightweight, zero-dependency, type-safe dependency injection container for TypeScript and JavaScript. Provides a fluent `ContainerBuilder` API with constructor, interface, and factory registration patterns across singleton, scoped, and transient lifecycles, plus multi-registration for plugin/middleware patterns.
+A dependency injection container with typed TypeScript APIs and JavaScript runtime support. The package has no runtime dependency entries. Its `ContainerBuilder` supports constructor, interface, and factory registrations across singleton, scoped, and transient lifecycles. It also supports multi-registration for plugin and middleware patterns.
 
 ## Domains
 

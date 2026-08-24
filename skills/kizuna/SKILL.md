@@ -156,6 +156,10 @@ Borrowing fits an application that uses separate containers inside one process.
 A shared root container owns long-lived infrastructure. A domain container
 imports only the instances that its services need.
 
+Kizuna does not enforce domain boundaries. Separate registries restrict
+resolution to registered keys. Application code controls imports,
+cross-domain calls, and data ownership.
+
 Typical shared services include loggers, metrics collectors, configuration
 readers, and connection pools. Borrowing prevents duplicate resources and keeps
 the domain registry small.

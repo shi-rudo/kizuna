@@ -3,7 +3,9 @@
  * 
  * This example demonstrates how to use separate containers for different
  * business domains or bounded contexts in a larger application using the
- * unified ContainerBuilder with full type safety.
+ * unified ContainerBuilder with registry type inference.
+ * Kizuna does not enforce domain boundaries. Application code defines each
+ * boundary and controls all cross-domain calls.
  * 
  * Benefits:
  * - Separate registries for each domain
@@ -385,7 +387,7 @@ class PaymentService {
 // ========================================
 
 /**
- * Creates the shared infrastructure container with full type safety.
+ * Creates the shared infrastructure container with inferred registry types.
  * This container holds services that are used across multiple domains.
  */
 function createSharedContainer() {
@@ -492,8 +494,8 @@ type OrderDomainScope = ReturnType<OrderDomainContainer['startScope']>;
 // ========================================
 
 /**
- * Main application class that manages multiple domain containers with full type safety.
- * This demonstrates how to orchestrate different domains while maintaining separation.
+ * Main application class that manages multiple domain containers.
+ * Application code maintains the separation between these containers.
  */
 class ECommerceApplication {
   private sharedContainer!: SharedContainer;
@@ -528,7 +530,7 @@ class ECommerceApplication {
   }
 
   /**
-   * Domain-specific service accessors with full type safety.
+   * Domain-specific service accessors with inferred return types.
    * These methods provide access to services without exposing the domain containers.
    */
   
@@ -806,13 +808,13 @@ async function main(): Promise<void> {
     await demonstrateTestingWithTypeSafety();
 
     console.log('\n🎉 TYPE-SAFE MULTI-CONTAINER BENEFITS:');
-    console.log('✅ Full type safety across all domains');
+    console.log('✅ Registry type inference in each domain');
     console.log('✅ Application code defines each domain boundary');
     console.log('✅ Shared infrastructure with singleton management');
-    console.log('✅ IDE autocompletion for all service access');
-    console.log('✅ Compile-time error detection');
-    console.log('✅ Easy testing with type-safe mocks');
-    console.log('✅ Independent domain evolution');
+    console.log('✅ Typed keys for service access');
+    console.log('✅ Compile-time checks for registered keys');
+    console.log('✅ Test containers without unsafe casts');
+    console.log('✅ Application-owned domain boundaries');
 
   } catch (error) {
     console.error('Application error:', error);

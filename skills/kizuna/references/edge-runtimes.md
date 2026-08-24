@@ -1,6 +1,14 @@
 # Edge Runtimes — Cloudflare Workers, Vercel Edge
 
-Kizuna is built for edge runtimes: ~10 KB gzipped, zero Node-API dependencies (only `process.env` access is guarded behind a `typeof process` check), no module-level mutable state that could leak across isolate-reused requests. A CI smoke suite (`tests/edge-compat.test.ts`) boots the built bundle inside workerd via miniflare to guard against regressions.
+The automated edge suite runs the built ESM bundle in workerd through
+Miniflare. It does not enable `nodejs_compat`.
+
+CI does not deploy Kizuna to Vercel Edge. It also does not run a browser, Deno,
+or Bun runtime test. Run Kizuna in each untested target runtime.
+
+The repository does not enforce a compressed-size budget. Read the
+[feature evidence matrix](https://github.com/shi-rudo/kizuna/blob/main/docs/feature-evidence.md)
+for all tested runtime limits.
 
 ## Cloudflare Workers pattern
 
@@ -33,6 +41,8 @@ export default {
 
 ## Vercel Edge Functions pattern
 
+This pattern is integration guidance. CI does not deploy it to Vercel Edge.
+
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
 
@@ -56,7 +66,7 @@ export default async function handler(req: Request): Promise<Response> {
 }
 ```
 
-## Isolate reuse: don't put request state in singletons
+## Isolate reuse: do not put request state in singletons
 
 Edge runtimes reuse the same isolate across requests. A `Singleton` lives for the lifetime of the isolate — across users. If a singleton accidentally captures request-specific state (auth tokens, user IDs, tenant data), that state leaks to the next request served by the same isolate.
 
@@ -66,7 +76,7 @@ This is not a Kizuna bug — it's the definition of `Singleton`. But the failure
 
 | Use Singleton for | Use Scoped for | Use Transient for |
 | --- | --- | --- |
-| Stateless services | Anything touching the current request | Lightweight per-call helpers |
+| Stateless services | Anything touching the current request | Per-call helpers |
 | Configuration | `RequestContext`, auth state | UUID generators |
 | Infrastructure clients with their own pooling (DB clients, KV bindings, loggers) | Per-request DB transactions | Timestamps |
 

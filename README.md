@@ -1,21 +1,26 @@
 # Kizuna 絆
 
 > **Release Candidate**
-> Kizuna is approaching a stable 1.0 release. The API surface is finalized and production use is encouraged. Please report any issues or feedback via GitHub.
+> Kizuna is a pre-1.0 release candidate. Each pull request runs the documented
+> quality gates. These gates do not certify an application for production use.
 
-A lightweight, type-safe dependency injection container for TypeScript and JavaScript applications. Kizuna provides a unified, intuitive API for managing service lifecycles with comprehensive type safety and IDE autocompletion.
+Kizuna is a dependency injection container for TypeScript and JavaScript. Its
+builder infers service keys and values across the registration chain.
+
+[Feature claims and evidence](https://github.com/shi-rudo/kizuna/blob/main/docs/feature-evidence.md)
+lists the automated evidence and the exact limit for each retained claim.
 
 ## ✨ Features
 
-- **🎯 Comprehensive Type Safety**: Full TypeScript support with automatic type inference
-- **🚀 Unified API**: Single API supporting all registration patterns with a focus on developer experience
-- **🔄 Multiple Lifecycles**: Singleton, Scoped, and Transient service management
-- **🏭 Flexible Registration**: Constructor, interface, and factory-based service registration
-- **🛡️ Constructor Dependency Checks**: Compile-time checks for dependency count, type, and position
-- **🔎 Development Diagnostics**: Optional comparison of dependency keys and constructor parameter names
-- **📝 Enhanced IDE Support**: Full autocompletion and compile-time validation
-- **⚡ Zero Dependencies**: Lightweight with no external dependencies
-- **🌍 Cross-Platform**: Works in Node.js, browsers, and edge environments
+- **🎯 Registry Type Inference**: The builder infers registered keys and service values
+- **🚀 Unified API**: One builder supports constructor, interface, and factory registrations
+- **🔄 Multiple Lifecycles**: Singleton, scoped, and transient registrations
+- **📦 Multi-Registration**: Multiple implementations can share one key
+- **🛡️ Constructor Dependency Checks**: TypeScript checks dependency count, type, and position
+- **🔎 Development Diagnostics**: Development validation can compare keys with parameter names
+- **🧹 Owned-Value Cleanup**: Synchronous and asynchronous cleanup with dependency-aware order
+- **⚡ No Runtime Dependencies**: The package has no `dependencies` entries
+- **🌍 Tested Runtime Coverage**: CI covers listed Node.js versions, a Vite build, and workerd
 
 ## 🚀 Quick Start
 
@@ -47,21 +52,22 @@ class UserService {
   }
 }
 
-// 🎯 Register services with full type safety
+// Register services with inferred registry types
 const container = new ContainerBuilder()
   .registerSingleton('logger', Logger)                      // Type: Logger ✨
   .registerSingleton('db', DatabaseService, 'logger')       // Typed dependency key
   .registerScoped('userService', UserService, 'db', 'logger')
   .build();
 
-// ✅ Get services with enhanced IDE autocompletion
-const userService = container.get('userService'); // Type: UserService (auto-inferred!)
-const user = userService.getUser('123');          // Full IntelliSense support
+// Get services with key and value inference
+const userService = container.get('userService'); // Type: UserService
+const user = userService.getUser('123');
 ```
 
 ## 🎨 The Unified API
 
-Kizuna provides a single, comprehensive API that combines type safety and flexibility. All registration patterns work together with full type inference.
+Kizuna provides one builder API for all registration patterns. Registry
+inference continues across the builder chain.
 
 ### 🏗️ **Constructor Registration** (Most Common)
 
@@ -171,7 +177,7 @@ const container = new ContainerBuilder()
   // Factory returning functions
   .registerSingletonFactory('Validator', () => ({
     email: (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-    required: (value: any) => value != null && value !== ''
+    required: (value: unknown) => value != null && value !== ''
   }))
   
   .build();
@@ -272,9 +278,9 @@ const validators = container.getAll('validators'); // New instances each time
 - `getAll()` on a single-registration key wraps the result in a single-element array
 - Registration order is preserved in the returned array
 
-## 🎯 Comprehensive Type Safety
+## 🎯 Registry Type Inference
 
-Kizuna provides compile-time type checking and IDE integration:
+Kizuna provides compile-time checks for registered keys and service values.
 
 ### ✅ **Compile-Time Validation**
 
@@ -385,7 +391,9 @@ const container = new ContainerBuilder()
   .registerScoped('OrderRepository', OrderRepository, 'Connection')
   .build();
 
-async function withTransaction<T>(work: (scope: TypeSafeServiceLocator<any>) => Promise<T>): Promise<T> {
+type TransactionScope = ReturnType<typeof container.startScope>;
+
+async function withTransaction<T>(work: (scope: TransactionScope) => Promise<T>): Promise<T> {
   const transactionScope = container.startScope();
   const connection = transactionScope.get('Connection');
 
@@ -529,6 +537,10 @@ One root container can own shared infrastructure, such as a logger, metrics
 collector, or connection pool. A domain container can import only the instances
 that its services need.
 
+Kizuna does not enforce domain boundaries. Separate registries restrict
+resolution to registered keys. Application code still controls imports,
+cross-domain calls, and data ownership.
+
 This pattern prevents duplicate resources and keeps each domain registry small.
 It also creates a lifetime dependency. The shared container must outlive every
 borrower.
@@ -589,24 +601,78 @@ dependency. The source container still controls cleanup of the value.
 ### 🧪 **Testing with Type-Safe Mocks**
 
 ```typescript
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ContainerBuilder } from '@shirudo/kizuna';
+
+interface User {
+  id: string;
+  name: string;
+}
+
+interface UserDatabase {
+  createUser(name: string): User;
+}
+
+interface UserLogger {
+  log(message: string): void;
+}
+
+class UserService {
+  constructor(
+    private database: UserDatabase,
+    private logger: UserLogger,
+  ) {}
+
+  createUser(input: { name: string }): User {
+    this.logger.log(`Creating ${input.name}`);
+    return this.database.createUser(input.name);
+  }
+}
+
+class MockDatabase implements UserDatabase {
+  readonly createdNames: string[] = [];
+
+  createUser(name: string): User {
+    this.createdNames.push(name);
+    return { id: 'test-1', name };
+  }
+}
+
+class MockLogger implements UserLogger {
+  readonly messages: string[] = [];
+
+  log(message: string): void {
+    this.messages.push(message);
+  }
+}
+
+function createTestContainer() {
+  return new ContainerBuilder()
+    .registerSingleton('Logger', MockLogger)
+    .registerSingleton('Database', MockDatabase)
+    .registerScoped('UserService', UserService, 'Database', 'Logger')
+    .build();
+}
+
+type TestContainer = ReturnType<typeof createTestContainer>;
+
 describe('UserService', () => {
-  let testContainer: TypeSafeServiceLocator<any>;
-  
+  let testContainer: TestContainer;
+
   beforeEach(() => {
-    testContainer = new ContainerBuilder()
-      .registerSingletonFactory('Logger', () => ({
-        log: jest.fn(),
-        error: jest.fn()
-      } as any))
-      .registerSingletonFactory('Database', () => mockDatabase)
-      .registerScoped('UserService', UserService, 'Database', 'Logger')
-      .build();
+    testContainer = createTestContainer();
   });
-  
-  it('should create user with mocked dependencies', async () => {
-    const userService = testContainer.get('UserService'); // Type: UserService ✨
-    const user = await userService.createUser({ name: 'Test User' });
-    expect(user.id).toBeDefined();
+
+  afterEach(() => {
+    testContainer.dispose();
+  });
+
+  it('creates a user with typed test doubles', () => {
+    const userService = testContainer.get('UserService');
+    const user = userService.createUser({ name: 'Test User' });
+
+    expect(user).toEqual({ id: 'test-1', name: 'Test User' });
+    expect(testContainer.get('Database').createdNames).toEqual(['Test User']);
   });
 });
 ```
@@ -643,7 +709,7 @@ const container = new ContainerBuilder()
 
 ## 📚 Examples
 
-Check out comprehensive examples in the [`examples/`](./examples) directory:
+Read the examples in the [`examples/`](./examples) directory:
 
 - **[`unified-container-example.ts`](./examples/unified-container-example.ts)** - Complete unified API demonstration
 - **[`multiple-containers-domain-separation.ts`](./examples/multiple-containers-domain-separation.ts)** - E-commerce app with domain separation
@@ -807,18 +873,29 @@ transient Promise factory.
 
 ## 🌍 Runtime Support
 
-Kizuna works across different JavaScript environments:
+The CI workflow builds and tests Kizuna on these Node.js versions:
 
-- **Node.js**: Version 18.0.0 and above
-- **Browsers**: Modern browsers supporting ES2020+
-- **Edge Environments**: Cloudflare Workers, Vercel Edge Functions, etc.
-- **Other Runtimes**: Deno, Bun, and other JavaScript runtimes
+- `20.19.x`
+- `22.12.x`
+- `24.x`
 
-### 🌐 Edge Runtimes (Workers, Vercel Edge)
+The package test installs the packed tarball in a Vite React TypeScript project.
+It checks the ESM, CommonJS, NodeNext, and consumer-build paths.
 
-Kizuna is built for edge runtimes: **~10 KB gzipped**, zero Node-API dependencies (only `process.env` access is guarded behind a `typeof process` check), no module-level mutable state that could leak across isolate-reused requests.
+The edge test runs the built ESM bundle in workerd through Miniflare. It does
+not enable `nodejs_compat`.
 
-**Recommended Cloudflare Workers pattern:**
+CI does not run Kizuna in a browser, Vercel Edge, Deno, Bun, or Node.js 18.
+The Vite gate is a consumer build, not a browser-runtime test.
+
+The package build target is `esnext`. A consumer must transform this output for
+an older JavaScript target.
+
+Read the
+[feature evidence matrix](https://github.com/shi-rudo/kizuna/blob/main/docs/feature-evidence.md)
+for the complete test boundary.
+
+### 🌐 Cloudflare Workers pattern
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -847,7 +924,12 @@ export default {
 };
 ```
 
-**Vercel Edge Function pattern:**
+The workerd test covers this container and scope pattern.
+
+### Vercel Edge integration guidance
+
+CI does not deploy this pattern to Vercel Edge. Run this pattern in the target
+application before production use.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -866,24 +948,32 @@ export default async function handler(req: Request): Promise<Response> {
 }
 ```
 
-#### ⚠️ Isolate reuse: don't put request state in singletons
+#### ⚠️ Isolate reuse: do not put request state in singletons
 
-Edge runtimes reuse the same isolate across requests. A `Singleton` lives for the lifetime of the isolate — **across users**. If a singleton accidentally captures request-specific state (auth tokens, user IDs, tenant data), that state leaks to the next request served by the same isolate.
+An edge runtime can reuse one isolate across requests. A `Singleton` lasts for
+the isolate lifetime and can serve multiple users.
 
-This is not a Kizuna bug — it's the definition of `Singleton`. But the failure mode is more dangerous on the edge than on a per-process server, because isolate-sharing is invisible by default.
+If a singleton stores request data, a later request can read that data. Use a
+scoped registration for request data.
 
 **Rule of thumb:**
 - `Singleton`: stateless services, configuration, infrastructure clients with their own pooling (DB clients, KV bindings, loggers)
 - `Scoped`: anything touching the current request (`RequestContext`, per-request DB transactions, auth state)
-- `Transient`: lightweight per-call helpers (UUID generators, timestamps)
+- `Transient`: per-call helpers (UUID generators, timestamps)
 
 #### Strict parameter validation under minification
 
-`strictParameterValidation` inspects `constructor.toString()` to match dependency names to parameter names. Edge bundlers mangle parameter names during minification, which would produce false warnings — so Kizuna **auto-disables this check when `NODE_ENV === 'production'`**. No opt-out required for edge deploys; the check still runs in development to catch real ordering bugs early.
+`strictParameterValidation` reads `constructor.toString()` and compares dependency
+keys with parameter names. A bundler can change these names during minification.
+
+Kizuna disables this diagnostic when `NODE_ENV` is `"production"`. It also
+disables the diagnostic when `process` is unavailable. Type-based dependency
+checks remain active during compilation.
 
 ## ⚡ Concurrency Considerations
 
-**Important**: Kizuna is optimized for JavaScript's single-threaded model and is **not thread-safe**. For concurrent environments:
+Kizuna does not provide thread-safe lifecycle implementations. The application
+owns concurrency and shared-state rules.
 
 ### Safe Patterns ✅
 ```typescript
@@ -900,7 +990,7 @@ app.use((req, res, next) => {
 
 ### Unsafe Patterns ❌
 ```typescript
-// DON'T share containers across threads
+// Do not share containers across threads
 const sharedContainer = builder.build();
 worker1.postMessage({ container: sharedContainer }); // ❌ Race conditions
 worker2.postMessage({ container: sharedContainer }); // ❌ Unsafe
@@ -910,7 +1000,8 @@ worker2.postMessage({ container: sharedContainer }); // ❌ Unsafe
 
 ## 📝 TypeScript
 
-Kizuna is built with TypeScript and provides comprehensive type safety. Ensure your `tsconfig.json` includes:
+Kizuna uses TypeScript registry inference. TypeScript projects must enable
+`strict` mode for the documented type checks.
 
 ```json
 {
