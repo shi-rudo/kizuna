@@ -82,11 +82,13 @@ This is not a Kizuna bug — it's the definition of `Singleton`. But the failure
 
 If you find yourself mutating a singleton after first construction, it should probably be Scoped instead.
 
-## Strict parameter validation under minification
+## Deterministic graph validation
 
-`strictParameterValidation` inspects `constructor.toString()` to match dependency names to parameter names. Edge bundlers (esbuild, webpack) mangle parameter names during minification, which would produce false warnings.
+Kizuna validates declared dependency keys. It does not inspect constructor
+source code, parameter names, or runtime environment variables.
 
-Kizuna **auto-disables this check when `NODE_ENV === "production"`** (or when `process` is unavailable, which is the case in workerd). No opt-out required for edge deploys; the check still runs in development to catch real ordering bugs early.
+Minification does not change validation results. Only declared factory keys add
+graph edges.
 
 ## What kizuna does NOT do for you
 

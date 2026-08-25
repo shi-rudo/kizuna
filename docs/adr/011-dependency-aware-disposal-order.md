@@ -28,7 +28,9 @@ Sync disposal keeps registration order within each layer. The provider keeps one
 
 Async order between independent branches depends on completion timing. If cleanup order is required, applications must declare a dependency.
 
-Factory registrations do not declare dependency keys. Service lookups inside a factory do not add edges to the disposal graph.
+Factory registrations can declare dependency keys after the factory. These keys add edges to the disposal graph.
+
+An undeclared locator lookup does not add an edge. Applications must declare fixed lookups that control cleanup order.
 
 ## Consequences
 
@@ -37,4 +39,4 @@ Factory registrations do not declare dependency keys. Service lookups inside a f
 - Multi-registration dependencies use the same order as single registrations.
 - A cycle cannot have a valid internal disposal order. Services in the cycle start in registration order.
 - The graph plan takes `O((V + E) log V)` time and `O(V + E)` memory.
-- If factory dependency order is important, the application must coordinate cleanup.
+- Declared factory dependencies use the same cleanup order as constructor dependencies.

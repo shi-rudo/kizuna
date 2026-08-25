@@ -27,6 +27,10 @@ import type {
 } from "./interface-token.js";
 import type { LiteralServiceKey } from "./literal-service-key.js";
 import { ServiceProvider } from "./service-provider.js";
+import {
+    type ContainerBuildOptions,
+    ContainerValidationError,
+} from "./validation.js";
 
 type ServiceConstructor = new (...args: any[]) => any;
 
@@ -92,6 +96,8 @@ type DependencyKeys<
 > = {
     [I in keyof TParameters]: MatchingDependencyKey<TRegistry, TParameters[I]>;
 };
+
+type FactoryDependencyKey<TRegistry> = Extract<keyof TRegistry, string>;
 
 /**
  * ContainerBuilder provides a unified, fully type-safe API for dependency injection.
@@ -412,14 +418,16 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @template T - The service type (inferred from factory return)
      * @param key - The string key used to identify the service
      * @param factory - Factory function that creates the service with type-safe provider access
+     * @param dependencies - Existing keys that the factory resolves through its provider
      * @returns A new ContainerBuilder with the updated registry type
      */
     registerSingletonFactory<K extends string, T>(
         key: LiteralServiceKey<K>,
-        factory: Factory<TRegistry, T>
+        factory: Factory<TRegistry, T>,
+        ...dependencies: FactoryDependencyKey<TRegistry>[]
     ): ContainerBuilder<TRegistry & Record<K, ObservedFactoryValue<T>>> {
         const configurator = (registrar: TypeSafeRegistrar<TRegistry, T>) => {
-            registrar.useFactory(factory);
+            registrar.useFactory(factory, ...dependencies);
         };
         return this.registerTypeSafe<K, T, ObservedFactoryValue<T>>(
             key,
@@ -435,14 +443,16 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @template T - The service type (inferred from factory return)
      * @param key - The string key used to identify the service
      * @param factory - Factory function that creates the service with type-safe provider access
+     * @param dependencies - Existing keys that the factory resolves through its provider
      * @returns A new ContainerBuilder with the updated registry type
      */
     registerScopedFactory<K extends string, T>(
         key: LiteralServiceKey<K>,
-        factory: Factory<TRegistry, T>
+        factory: Factory<TRegistry, T>,
+        ...dependencies: FactoryDependencyKey<TRegistry>[]
     ): ContainerBuilder<TRegistry & Record<K, ObservedFactoryValue<T>>> {
         const configurator = (registrar: TypeSafeRegistrar<TRegistry, T>) => {
-            registrar.useFactory(factory);
+            registrar.useFactory(factory, ...dependencies);
         };
         return this.registerTypeSafe<K, T, ObservedFactoryValue<T>>(
             key,
@@ -458,14 +468,16 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @template T - The service type (inferred from factory return)
      * @param key - The string key used to identify the service
      * @param factory - Factory function that creates the service with type-safe provider access
+     * @param dependencies - Existing keys that the factory resolves through its provider
      * @returns A new ContainerBuilder with the updated registry type
      */
     registerTransientFactory<K extends string, T>(
         key: LiteralServiceKey<K>,
-        factory: Factory<TRegistry, T>
+        factory: Factory<TRegistry, T>,
+        ...dependencies: FactoryDependencyKey<TRegistry>[]
     ): ContainerBuilder<TRegistry & Record<K, T>> {
         const configurator = (registrar: TypeSafeRegistrar<TRegistry, T>) => {
-            registrar.useFactory(factory);
+            registrar.useFactory(factory, ...dependencies);
         };
         return this.registerTypeSafe(key, configurator, new TransientLifecycle());
     }
@@ -561,15 +573,18 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @template T - The service type (inferred from factory return)
      * @param key - The shared key for this group of services
      * @param factory - Factory function that creates the service with type-safe provider access
+     * @param dependencies - Existing keys that the factory resolves through its provider
      * @returns A new ContainerBuilder with the updated registry type
      */
     addSingletonFactory<K extends string, T>(
         key: LiteralServiceKey<K>,
-        factory: Factory<TRegistry, T>
+        factory: Factory<TRegistry, T>,
+        ...dependencies: FactoryDependencyKey<TRegistry>[]
     ): ContainerBuilder<AddToRegistry<TRegistry, K, ObservedFactoryValue<T>>> {
         return this.addFactoryTypeSafe<K, T, ObservedFactoryValue<T>>(
             key,
             factory,
+            dependencies,
             new SingletonLifecycle(),
         );
     }
@@ -583,15 +598,18 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @template T - The service type (inferred from factory return)
      * @param key - The shared key for this group of services
      * @param factory - Factory function that creates the service with type-safe provider access
+     * @param dependencies - Existing keys that the factory resolves through its provider
      * @returns A new ContainerBuilder with the updated registry type
      */
     addScopedFactory<K extends string, T>(
         key: LiteralServiceKey<K>,
-        factory: Factory<TRegistry, T>
+        factory: Factory<TRegistry, T>,
+        ...dependencies: FactoryDependencyKey<TRegistry>[]
     ): ContainerBuilder<AddToRegistry<TRegistry, K, ObservedFactoryValue<T>>> {
         return this.addFactoryTypeSafe<K, T, ObservedFactoryValue<T>>(
             key,
             factory,
+            dependencies,
             new ScopedLifecycle(),
         );
     }
@@ -605,13 +623,20 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * @template T - The service type (inferred from factory return)
      * @param key - The shared key for this group of services
      * @param factory - Factory function that creates the service with type-safe provider access
+     * @param dependencies - Existing keys that the factory resolves through its provider
      * @returns A new ContainerBuilder with the updated registry type
      */
     addTransientFactory<K extends string, T>(
         key: LiteralServiceKey<K>,
-        factory: Factory<TRegistry, T>
+        factory: Factory<TRegistry, T>,
+        ...dependencies: FactoryDependencyKey<TRegistry>[]
     ): ContainerBuilder<AddToRegistry<TRegistry, K, T>> {
-        return this.addFactoryTypeSafe<K, T>(key, factory, new TransientLifecycle());
+        return this.addFactoryTypeSafe<K, T>(
+            key,
+            factory,
+            dependencies,
+            new TransientLifecycle(),
+        );
     }
 
     // =================
@@ -621,7 +646,9 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /**
      * Builds the fully type-safe service container.
      * 
+     * @param options - Selects eager or deferred graph validation
      * @returns The configured root container with complete type inference
+     * @throws {ContainerValidationError} If eager validation finds an invalid graph
      * @throws {Error} If the builder has already been built
      * 
      * @example
@@ -635,8 +662,16 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      * const config = container.get('Config'); // Type: { env: string }
      * ```
      */
-    build(): RootServiceContainer<TRegistry> {
+    build(options: ContainerBuildOptions = {}): RootServiceContainer<TRegistry> {
         this.ensureNotBuilt();
+
+        if (options.validation !== "deferred") {
+            const issues = this.validate();
+            if (issues.length > 0) {
+                throw new ContainerValidationError(issues);
+            }
+        }
+
         this.markAsBuilt();
 
         if (this.registrations.size === 0 && this.multiRegistrations.size === 0) {
@@ -705,12 +740,13 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     private addFactoryTypeSafe<K extends string, T, TRegistered = T>(
         key: K,
         factory: Factory<TRegistry, T>,
+        dependencies: string[],
         lifecycle: ConfigurableServiceLifecycle
     ): ContainerBuilder<AddToRegistry<TRegistry, K, TRegistered>> {
         this.ensureNotBuilt();
 
         const registrar = new TypeSafeRegistrarImpl<TRegistry, T>(key);
-        registrar.useFactory(factory);
+        registrar.useFactory(factory, ...dependencies);
         const serviceWrapper = registrar.build(lifecycle);
         this.addMultiService(key, serviceWrapper);
 

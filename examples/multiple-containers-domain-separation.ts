@@ -416,7 +416,7 @@ function createSharedContainer() {
           detailedLogging: config.getEnvironment() === 'development'
         }
       };
-    })
+    }, Config, 'Logger')
     
     .build();
 }
@@ -768,7 +768,7 @@ async function demonstrateTestingWithTypeSafety(): Promise<void> {
           detailedLogging: true
         }
       };
-    })
+    }, Config, 'Logger')
     .build();
 
   const testUserContainer = createUserDomainContainer(testSharedContainer);

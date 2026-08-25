@@ -8,7 +8,7 @@ description: >
   addTransientFactory, borrowSingletonFrom, build(), validate(), get(), getAll(), startScope(),
   dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose,
   getRegisteredServiceNames(), TypeSafeServiceLocator,
-  disableStrictParameterValidation, CircularDependencyError.
+  ContainerValidationError, CircularDependencyError.
   Activate when registering services, choosing lifecycles, managing request
   scopes, registering multiple implementations under one key, debugging
   validation errors, testing with mock containers, deploying to edge
@@ -52,17 +52,10 @@ class UserRepository {
   findById(id: string) { this.logger.log(`Finding user ${id}`); }
 }
 
-const builder = new ContainerBuilder()
+const container = new ContainerBuilder()
   .registerSingleton('logger', Logger)
-  .registerScoped('userRepository', UserRepository, 'logger');
-
-// Always validate before building
-const issues = builder.validate();
-if (issues.length > 0) {
-  throw new Error(`Container errors:\n${issues.join('\n')}`);
-}
-
-const container = builder.build();
+  .registerScoped('userRepository', UserRepository, 'logger')
+  .build(); // Eager graph validation runs here.
 
 // Resolve services — return types are fully inferred
 const repo = container.get('userRepository'); // Type: UserRepository
@@ -111,7 +104,7 @@ const container = new ContainerBuilder()
   .registerSingletonFactory('database', (provider) => {
     const config = provider.get('config'); // Type: { dbUrl: string; port: number }
     return new DatabaseConnection(config.dbUrl);
-  })
+  }, 'config')
   .build();
 ```
 
@@ -225,22 +218,34 @@ app.get('/users/:id', (req, res) => {
 });
 ```
 
-### Validate before building
+### Build validation
 
-`build()` does NOT validate. Call `validate()` explicitly to catch missing dependencies, circular dependencies, captive dependencies (singleton depending on scoped), and parameter name mismatches at startup.
+`build()` rejects missing, circular, and captive dependencies by default.
+`validate()` returns the same immutable issue list without building a provider.
 
 ```typescript
-import { ContainerBuilder } from '@shirudo/kizuna';
+import {
+  ContainerBuilder,
+  ContainerValidationError,
+} from '@shirudo/kizuna';
 
 const builder = new ContainerBuilder()
   .registerSingleton('userService', UserService, 'database', 'logger');
 
 const issues = builder.validate();
-// [
-//   "Service 'userService' depends on unregistered service 'database'",
-//   "Service 'userService' depends on unregistered service 'logger'"
-// ]
+// Each issue has a stable code, message, service key, and path.
+
+try {
+  const container = builder.build();
+} catch (error) {
+  if (error instanceof ContainerValidationError) {
+    console.error(error.issues);
+  }
+}
 ```
+
+Use `build({ validation: 'deferred' })` only for a dynamic graph that must fail
+during resolution.
 
 ### Disposal
 
@@ -290,9 +295,18 @@ in parallel. Their relative completion order is not defined.
 For example, Kizuna cleans `UserService`, `UserRepository`, and `DatabasePool`
 in that order when each service depends on the next service.
 
-Factory lookups do not declare dependency keys. Therefore, these lookups do not
-define cleanup order. When cleanup order is necessary, use a constructor
-registration with explicit dependency keys.
+Factory methods accept dependency keys after the factory. These keys define
+validation edges and cleanup order.
+
+```typescript
+.registerSingletonFactory(
+  'userRepository',
+  (provider) => new UserRepository(provider.get('database')),
+  'database',
+)
+```
+
+An undeclared locator lookup stays invisible to graph validation.
 
 Both APIs attempt all cleanup operations. They report all failures in one
 `DisposalError`. The `errors` property contains the original errors. The
@@ -368,32 +382,30 @@ Every registration method (including `add*`) requires a string key as the first 
 
 Source: container-builder.ts method signatures
 
-### CRITICAL Assuming build() validates
+### CRITICAL Deferring validation without a dynamic graph
 
 Wrong:
 
 ```typescript
 const container = new ContainerBuilder()
-  .registerSingleton('userService', UserService, 'database')
-  .build();
-// 'database' is not registered — no error at build time
-// Explodes when container.get('userService') is called
+  .registerSingleton('userService', UserService, 'database' as never)
+  .build({ validation: 'deferred' });
 ```
 
 Correct:
 
 ```typescript
-const builder = new ContainerBuilder()
-  .registerSingleton('userService', UserService, 'database');
-const issues = builder.validate();
-if (issues.length > 0) throw new Error(issues.join('\n'));
-const container = builder.build();
+const container = new ContainerBuilder()
+  .registerSingleton('database', Database)
+  .registerSingleton('userService', UserService, 'database')
+  .build();
 ```
 
-`build()` creates the service locator without checking for missing dependencies,
-circular dependencies, or parameter mismatches. Errors occur during resolution.
-The first resolution that touches a cycle throws `CircularDependencyError`. Its
-message and `chain` property show the full path.
+`build()` validates the graph by default. It throws `ContainerValidationError`
+for missing, circular, and captive dependencies.
+
+An undeclared factory cycle stays dynamic. Its first resolution throws
+`CircularDependencyError` with the full path.
 
 Source: container-builder.ts, service-provider.ts
 
@@ -417,7 +429,8 @@ new ContainerBuilder()
   .build();
 ```
 
-A singleton captures the first scope's instance and holds it forever — after that scope is disposed, every consumer sees the disposed instance. `validate()` reports this as a captive dependency (`Service 'userService' is a singleton but depends on scoped service 'requestContext' (captive dependency): ...`) — one more reason to always run it before `build()`.
+A singleton can retain the first scoped instance after its scope ends. Eager
+build validation rejects this declared captive dependency.
 
 Source: base-container-builder.ts validate()
 
@@ -551,34 +564,34 @@ Kizuna does not use decorators. Services are plain classes. The `@Injectable` an
 
 Source: package exports — no decorator exports
 
-### HIGH Parameter name does not match dependency key
+### HIGH Factory dependency is not declared
 
 Wrong:
 
 ```typescript
-class UserService {
-  constructor(private db: DatabaseConnection) {}
-}
-
 new ContainerBuilder()
-  .registerSingleton('DatabaseConnection', DatabaseConnection)
-  .registerSingleton('UserService', UserService, 'DatabaseConnection')
-  // validate() warns: param 0 is 'db' but 'DatabaseConnection' provided
+  .registerSingleton('database', DatabaseConnection)
+  .registerSingletonFactory('userService', (provider) =>
+    new UserService(provider.get('database')),
+  )
 ```
 
 Correct:
 
 ```typescript
 new ContainerBuilder()
-  .registerSingleton('db', DatabaseConnection)
-  .registerSingleton('UserService', UserService, 'db')
+  .registerSingleton('database', DatabaseConnection)
+  .registerSingletonFactory(
+    'userService',
+    (provider) => new UserService(provider.get('database')),
+    'database',
+  )
 ```
 
-Strict parameter validation (enabled by default in development) checks that dependency keys match constructor parameter names positionally. Pick one naming convention and stick with it.
+The final key adds the factory lookup to graph validation and cleanup order.
+Kizuna does not inspect the factory body.
 
-The check is **auto-disabled when `NODE_ENV === "production"`** (or when `process` is unavailable, e.g. in Cloudflare Workers / Vercel Edge) because bundler minification mangles parameter names into `a`, `b`, `c` — running the check there would produce false positives. No opt-out needed for production builds. Call `.disableStrictParameterValidation()` only if you also want to skip the check in development.
-
-Source: `BaseContainerBuilder.validate()` in base-container-builder.ts
+Source: factory registration methods in `container-builder.ts`
 
 ### HIGH Importing internal factory types
 
@@ -598,7 +611,7 @@ Correct:
 .registerSingletonFactory('userService', (provider) => {
   const db = provider.get('database'); // Type-safe!
   return new UserService(db);
-})
+}, 'database')
 ```
 
 The package root does not export `Factory`. Let TypeScript infer the type from
@@ -666,7 +679,7 @@ Source: service-provider.ts:40-62
 
 - [Registration patterns — constructor vs interface vs factory](references/registration-patterns.md)
 - [Lifecycle guide — singleton, scoped, transient, captive dependency](references/lifecycle-guide.md)
-- [Validation errors — validate() contract, debugging, parameter names](references/validation-errors.md)
+- [Validation errors — build contract, issue codes, and debugging](references/validation-errors.md)
 - [Scoping and middleware — Express, Hono, Fastify patterns](references/scoping-and-middleware.md)
 - [Testing — test containers, stubs, scope isolation](references/testing.md)
 - [Next.js integration — scoping without middleware](references/nextjs.md)

@@ -134,7 +134,7 @@ const container = new ContainerBuilder()
                 analytics: false
             }
         };
-    })
+    }, 'Logger')
     
     .registerScopedFactory('RequestContext', (provider) => {
         const logger = provider.get('Logger');
@@ -146,7 +146,7 @@ const container = new ContainerBuilder()
             startTime: Date.now(),
             userAgent: 'example-client'
         };
-    })
+    }, 'Logger')
     
     .registerTransientFactory('Timestamp', () => {
         return new Date().toISOString();
@@ -227,7 +227,7 @@ const container = new ContainerBuilder()
                     cacheTimeout: 300
                 };
         }
-    })
+    }, 'AppConfig')
     
     // Factory returning a primitive value
     .registerSingletonFactory('MaxRetryAttempts', () => 3)

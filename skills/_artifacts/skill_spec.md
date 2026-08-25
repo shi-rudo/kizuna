@@ -21,12 +21,12 @@ A dependency injection container with typed TypeScript APIs and JavaScript runti
 | # | Mistake | Priority | Source | Cross-skill? |
 | --- | --- | --- | --- | --- |
 | 1 | Omitting mandatory string key in registration | CRITICAL | maintainer interview; container-builder.ts | -- |
-| 2 | Assuming build() validates the container | CRITICAL | maintainer interview; container-builder.ts:273-283 | -- |
+| 2 | Using deferred validation without a dynamic graph | CRITICAL | container-builder.ts | -- |
 | 3 | Captive dependency -- singleton captures scoped service | CRITICAL | maintainer interview | -- |
 | 4 | Using factory registration when constructor registration suffices | HIGH | maintainer interview | -- |
 | 5 | Using registerSingletonInterface when registerSingleton works | HIGH | maintainer interview | -- |
 | 6 | Adding decorators that do not exist | HIGH | maintainer interview | -- |
-| 7 | Parameter name vs registration name mismatch | HIGH | maintainer interview; base-container-builder.ts:171-193 | -- |
+| 7 | Factory dependency key is not declared | HIGH | container-builder.ts | -- |
 | 8 | Believing null factory return breaks caching (myth — code uses _initialized flag) | MEDIUM | singleton.ts:54,132; scoped.ts:68,150 | -- |
 | 9 | Using non-existent APIs from examples and docs | HIGH | examples/unified-container-example.ts; concurrency-patterns.md | -- |
 | 10 | Importing internal factory helper types | MEDIUM | container-builder.ts | -- |
@@ -40,10 +40,10 @@ A dependency injection container with typed TypeScript APIs and JavaScript runti
 
 | Tension | Skills | Agent implication |
 | --- | --- | --- |
-| Parameter naming convention vs class naming convention | kizuna | Agent defaults to class-name keys, hits validation warnings, then either disables strict validation or creates naming inconsistency |
-| Getting-started simplicity vs production safety | kizuna | Agent generating production code skips validate() because the quickstart doesn't use it |
+| Eager validation vs dynamic graphs | kizuna | Agent selects deferred validation without a graph that requires it |
+| Getting-started simplicity vs production safety | kizuna | Agent can rely on eager build validation and call validate() for structured diagnostics |
 | Type safety ergonomics vs API surface size | kizuna | Agent picks registerSingletonInterface based on name similarity rather than understanding it only affects the resolved type |
-| Factory flexibility vs hidden dependency graph | kizuna | Agent defaults to factories, silently breaking the validation safety net |
+| Factory flexibility vs hidden dependency graph | kizuna | Agent omits trailing dependency keys for fixed factory lookups |
 
 ## Cross-References
 
@@ -72,7 +72,7 @@ No cross-references (single skill).
 - **Reference files:**
   - `references/registration-patterns.md` -- constructor vs interface vs factory, when to use which
   - `references/lifecycle-guide.md` -- singleton/scoped/transient, captive dependency, disposal
-  - `references/validation-errors.md` -- validate() contract, error types, parameter name tension
+  - `references/validation-errors.md` -- build contract, issue codes, factory edges
   - `references/scoping-and-middleware.md` -- Express/Hono/Fastify patterns, scope lifecycle
   - `references/testing.md` -- test containers, stubs, scope isolation
   - `references/nextjs.md` -- scoping without middleware in Next.js

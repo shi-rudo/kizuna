@@ -26,6 +26,9 @@ import type { TypeSafeServiceLocator } from "./interfaces.js";
  * @param serviceProvider - The typed service locator for resolving dependencies
  * @returns An instance of type T
  *
+ * Registration methods accept optional dependency keys after this function.
+ * These keys add validation and disposal edges without changing this argument.
+ *
  * @internal This helper supports the builder implementation. It is not part of
  * the package-root API. Consumers should let registration methods infer it.
  */
@@ -96,6 +99,7 @@ export interface TypeSafeRegistrar<TRegistry extends ServiceRegistry, T> {
 	/**
 	 * Use a factory function to create the service.
 	 * @param factory - Factory function that creates the service
+	 * @param dependencies - Keys that the factory resolves through its locator
 	 */
-	useFactory(factory: Factory<TRegistry, T>): void;
+	useFactory(factory: Factory<TRegistry, T>, ...dependencies: string[]): void;
 }

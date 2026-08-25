@@ -22,7 +22,7 @@ skills:
       addScoped, addTransient, addSingletonFactory, addScopedFactory,
       addTransientFactory, build(), validate(), get(), getAll(), startScope(),
       dispose(), getRegisteredServiceNames(), TypeSafeServiceLocator,
-      disableStrictParameterValidation. Activate when
+      ContainerValidationError. Activate when
       registering services, choosing lifecycles, managing request scopes,
       registering multiple implementations under one key, debugging validation
       errors, testing with mock containers, or integrating with web frameworks.

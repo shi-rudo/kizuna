@@ -40,7 +40,7 @@ const container = new ContainerBuilder()
     const config = provider.get('Config');
     const logger = provider.get('Logger');
     return new DatabaseService(config.connectionString, logger);
-  })
+  }, 'Config', 'Logger')
   .build();
 ```
 
@@ -65,8 +65,11 @@ ADR-001 defines the full Promise-value contract.
 Factories keep full registry inference without casts to an unrestricted
 locator. Consumers do not need to import a factory helper type.
 
-Factories can hide dependencies because they resolve services in their body.
-Constructor registration is better when the dependency list is fixed.
+Factory methods accept dependency keys after the factory. These keys define
+validation edges and cleanup order. TypeScript rejects unknown keys.
+
+An undeclared locator lookup stays invisible to the graph. Declare each fixed
+lookup that affects a lifetime rule or cleanup order.
 
 The package does not promise custom lifecycle strategies or asynchronous
 service resolution.

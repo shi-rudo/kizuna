@@ -62,9 +62,6 @@ const builder = new ContainerBuilder()
   .addSingletonFactory('middleware', () => ({ name: 'auth', run: () => {} }))
   .addSingletonFactory('middleware', () => ({ name: 'cors', run: () => {} }));
 
-const issues = builder.validate();
-if (issues.length > 0) throw new Error(issues.join('\n'));
-
 export const container = builder.build();
 ```
 

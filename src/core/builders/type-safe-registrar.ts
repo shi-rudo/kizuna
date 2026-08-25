@@ -33,13 +33,9 @@ export class TypeSafeRegistrarImpl<TRegistry extends ServiceRegistry, T>
         this.factory = (...args: any[]) => new constructorType(...args);
     }
 
-    useFactory(factory: Factory<TRegistry, T>): void {
+    useFactory(factory: Factory<TRegistry, T>, ...dependencies: string[]): void {
         this.factory = factory;
-        this.dependencies = [];
-    }
-
-    getConstructor(): (new (...args: any[]) => T) | undefined {
-        return this.constructorFn;
+        this.dependencies = dependencies;
     }
 
     build(lifecycleManager: ConfigurableServiceLifecycle): ServiceWrapper {

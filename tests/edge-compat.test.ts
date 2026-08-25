@@ -8,7 +8,7 @@
  * Guards against regressions of:
  *   - accidental Node-API usage (e.g. ungated process.X, Buffer, fs)
  *   - broken Symbol.dispose / Symbol.asyncDispose semantics under workerd V8
- *   - strictParameterValidation no longer auto-skipping when process is undefined
+ *   - deterministic graph validation when process is undefined
  *
  * Deliberately runs without `nodejs_compat` so that any Node-API access in the
  * library would fail module-load — exactly what we want to catch.
@@ -82,23 +82,27 @@ describe('Workers compatibility (workerd via miniflare)', () => {
         expect(await res.text()).toMatch(/^[0-9a-f-]{36}$/);
     });
 
-    it('auto-skips strict parameter validation when process is undefined', async () => {
+    it('returns structured validation issues when process is undefined', async () => {
         const res = await mf.dispatchFetch('http://localhost/validate');
         const body = (await res.json()) as {
-            issues: string[];
-            paramIssues: string[];
+            issues: Array<{
+                code: string;
+                dependencyKey?: string;
+                path: string[];
+                serviceKey: string;
+            }>;
             processIsUndefined: boolean;
         };
 
-        // Sanity-check the precondition we are actually testing — without
-        // nodejs_compat, workerd has no `process` global, which is what makes
-        // isDevelopment() return false.
         expect(body.processIsUndefined).toBe(true);
-
-        // UserService(logger) registered with 'DefinitelyWrongName' would
-        // normally trip the strict param check ("param 0 is named 'logger' but
-        // dependency 'DefinitelyWrongName' is provided"). It must auto-skip here.
-        expect(body.paramIssues).toEqual([]);
+        expect(body.issues).toEqual([
+            expect.objectContaining({
+                code: 'MISSING_DEPENDENCY',
+                dependencyKey: 'Logger',
+                path: ['UserService', 'Logger'],
+                serviceKey: 'UserService',
+            }),
+        ]);
     });
 
     it('awaits service-owned async dispose via disposeAsync()', async () => {

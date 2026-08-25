@@ -41,11 +41,12 @@ export class ServiceWrapper {
             throw new Error(`Cannot resolve disposed service '${this._name}'`);
         }
 
-        if (this._dependencies.length === 0) {
-            if (this.isConstructorBased()) {
-                return this._lifecycle.getInstance();
-            }
+        if (!this.isConstructorBased()) {
             return this._lifecycle.getInstance(serviceProvider);
+        }
+
+        if (this._dependencies.length === 0) {
+            return this._lifecycle.getInstance();
         }
 
         return this._lifecycle.getInstance(
@@ -118,14 +119,6 @@ export class ServiceWrapper {
      */
     isDisposed(): boolean {
         return this._lifecycle === null;
-    }
-
-    /**
-     * Gets the constructor function if this is a constructor-based registration.
-     * @returns The constructor function or undefined
-     */
-    getConstructor(): (new (...args: any[]) => any) | undefined {
-        return this._constructorFn;
     }
 
     /**

@@ -18,8 +18,7 @@ class RequestContext {
     }
 }
 
-// Class with named constructor params for the /validate route — strict
-// validation would otherwise complain that param 'logger' got 'DefinitelyWrongName'.
+// The /validate route uses this class to validate a missing graph edge.
 class UserService {
     constructor(logger) {
         this.logger = logger;
@@ -40,7 +39,7 @@ const container = new ContainerBuilder()
     .build();
 
 export default {
-    async fetch(req, env, ctx) {
+    async fetch(req, _env, ctx) {
         const url = new URL(req.url);
 
         if (url.pathname === "/scope-id") {
@@ -63,17 +62,14 @@ export default {
         }
 
         if (url.pathname === "/validate") {
-            // Without `nodejs_compat`, workerd has no `process` global.
-            // isDevelopment() should therefore return false → strict param check
-            // must auto-skip. UserService(logger) registered with 'DefinitelyWrongName'
-            // would otherwise produce a parameter-name-mismatch issue.
-            const b = new ContainerBuilder()
-                .registerSingleton("Logger", Logger)
-                .registerSingleton("UserService", UserService, "DefinitelyWrongName");
+            const b = new ContainerBuilder().registerSingleton(
+                "UserService",
+                UserService,
+                "Logger",
+            );
             const issues = b.validate();
             return Response.json({
                 issues,
-                paramIssues: issues.filter(i => i.includes("parameter") && i.includes("named")),
                 processIsUndefined: typeof process === "undefined",
             });
         }

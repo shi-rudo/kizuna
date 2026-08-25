@@ -14,3 +14,9 @@ export type {
 	DisposalFailure,
 	DisposalOperation,
 } from "./api/service-provider.js";
+export { ContainerValidationError } from "./api/validation.js";
+export type {
+	ContainerBuildOptions,
+	ValidationIssue,
+	ValidationIssueCode,
+} from "./api/validation.js";

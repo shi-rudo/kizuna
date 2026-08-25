@@ -38,7 +38,7 @@ skills:
       - 'startScope()'
       - 'dispose()'
       - 'getRegisteredServiceNames()'
-      - 'disableStrictParameterValidation()'
+      - 'ContainerValidationError'
     tasks:
       - 'Install and scaffold the container'
       - 'Register a service with constructor dependencies'
@@ -50,8 +50,8 @@ skills:
       - 'Choose the right registration pattern (constructor/interface/factory/multi)'
       - 'Wire up dependencies between services'
       - 'Set up per-request scoping in Express/Hono/Fastify'
-      - 'Validate the container before building'
-      - 'Debug missing dependency / circular dependency / parameter mismatch errors'
+      - 'Inspect structured build validation errors'
+      - 'Debug missing, circular, and captive dependency errors'
       - 'Create a test container with stubs or mocks'
       - 'Override a single registration for testing'
       - 'Swap an implementation without touching consumers'
@@ -102,37 +102,29 @@ skills:
         status: 'active'
         version_context: 'All versions — Kizuna has always required string keys'
 
-      - mistake: 'Assuming build() validates the container'
+      - mistake: 'Using deferred validation without a dynamic graph'
         mechanism: >
-          build() does NOT call validate(). It creates a service locator without
-          checking for missing dependencies, circular dependencies, or parameter
-          mismatches. Errors surface at resolution time, not build time. The
-          validate() method exists but must be called explicitly.
+          build() validates the dependency graph by default. The deferred mode
+          disables this fail-fast contract and leaves errors to resolution.
         wrong_pattern: |
           const container = new ContainerBuilder()
             .registerSingleton('UserService', UserService, 'Database')
-            // 'Database' never registered — no error here
-            .build();
-          // Explodes at runtime when container.get('UserService') is called
+            .build({ validation: 'deferred' });
         correct_pattern: |
-          const builder = new ContainerBuilder()
-            .registerSingleton('UserService', UserService, 'Database');
-          const issues = builder.validate();
-          if (issues.length > 0) {
-            throw new Error(`Container validation failed:\n${issues.join('\n')}`);
-          }
-          const container = builder.build();
-        source: 'maintainer interview; container-builder.ts:273-283'
+          const container = new ContainerBuilder()
+            .registerSingleton('Database', Database)
+            .registerSingleton('UserService', UserService, 'Database')
+            .build();
+        source: 'container-builder.ts build()'
         priority: 'CRITICAL'
         status: 'active'
-        version_context: 'All versions'
+        version_context: 'Structured validation release'
 
       - mistake: 'Captive dependency — singleton captures scoped service'
         mechanism: >
-          validate() does not check for lifecycle mismatches. A singleton that
-          depends on a scoped service captures the first scope instance and holds
-          it forever. Subsequent requests see stale state from the first request.
-          This passes validation with zero warnings.
+          A singleton that reaches a scoped service can retain request state.
+          Eager build validation rejects the declared graph. Deferred validation
+          and undeclared factory lookups bypass this protection.
         wrong_pattern: |
           new ContainerBuilder()
             .registerScoped('requestContext', RequestContext)
@@ -148,14 +140,14 @@ skills:
         source: 'maintainer interview'
         priority: 'CRITICAL'
         status: 'active'
-        version_context: 'All versions — validation does not check lifecycle mismatches'
+        version_context: 'All versions — eager validation now rejects declared captive paths'
 
       - mistake: 'Using factory registration when constructor registration suffices'
         mechanism: >
           Agents default to factories because they look like the safe general-purpose
           pattern. The factory manually resolves dependencies via provider.get(),
-          duplicating what Kizuna does automatically with constructor registration.
-          The result is verbose code that hides the dependency graph from validation.
+          duplicating constructor injection. A factory also requires explicit
+          dependency keys for graph validation and cleanup order.
         wrong_pattern: |
           .registerSingletonFactory('UserService', (provider) => {
             const db = provider.get('Database');
@@ -221,36 +213,24 @@ skills:
         status: 'active'
         version_context: 'All versions — Kizuna has never used decorators'
 
-      - mistake: 'Parameter name vs registration name mismatch'
+      - mistake: 'Factory dependency key is not declared'
         mechanism: >
-          Strict parameter validation (enabled by default) checks that dependency
-          string keys match constructor parameter names positionally. If a class has
-          constructor(private db: DatabaseConnection) and you register the dependency
-          as 'DatabaseConnection', validation warns because the param name is 'db'
-          not 'DatabaseConnection'. This creates a tension between naming conventions.
+          Kizuna does not inspect a factory body. A locator lookup needs a trailing
+          dependency key to join graph validation and cleanup order.
         wrong_pattern: |
-          class UserService {
-            constructor(private db: DatabaseConnection) {}
-          }
-          // Validation warns: param 0 is 'db' but 'DatabaseConnection' is provided
-          .registerSingleton('DatabaseConnection', DatabaseConnection)
-          .registerSingleton('UserService', UserService, 'DatabaseConnection')
+          .registerSingletonFactory('UserService', (provider) =>
+            new UserService(provider.get('Database'))
+          )
         correct_pattern: |
-          // Option A: Name registrations to match param names
-          .registerSingleton('db', DatabaseConnection)
-          .registerSingleton('UserService', UserService, 'db')
-
-          // Option B: Use consistent naming from the start
-          // Register as 'database' and name the constructor param 'database'
-          class UserService {
-            constructor(private database: DatabaseConnection) {}
-          }
-          .registerSingleton('database', DatabaseConnection)
-          .registerSingleton('UserService', UserService, 'database')
-        source: 'maintainer interview; base-container-builder.ts:171-193'
+          .registerSingletonFactory(
+            'UserService',
+            (provider) => new UserService(provider.get('Database')),
+            'Database'
+          )
+        source: 'container-builder.ts factory registration methods'
         priority: 'HIGH'
         status: 'active'
-        version_context: 'All versions — strict parameter validation enabled by default'
+        version_context: 'Structured validation release'
 
       - mistake: 'Believing null factory return breaks caching (outdated myth)'
         mechanism: >
@@ -443,30 +423,23 @@ skills:
         skill: null
 
 tensions:
-  - name: 'Parameter naming convention vs class naming convention'
+  - name: 'Eager validation vs dynamic graphs'
     skills: ['kizuna']
     description: >
-      Strict parameter validation wants dependency keys to match constructor
-      parameter names (e.g., 'db'). But conventional naming wants keys to match
-      class names (e.g., 'DatabaseConnection'). Both are valid; mixing them
-      produces inconsistent registries.
+      Eager validation rejects invalid declared graphs during build. A dynamic
+      application can defer validation until resolution.
     implication: >
-      An agent defaults to class-name-based keys, hits validation warnings,
-      then either disables strict validation (losing safety) or starts renaming
-      everything (creating inconsistency). The correct move is to pick one
-      convention upfront and stick with it.
+      Use deferred validation only when the application cannot declare its graph
+      before build.
 
   - name: 'Getting-started simplicity vs production safety'
     skills: ['kizuna']
     description: >
-      build() works without calling validate(). This makes the getting-started
-      experience frictionless but means production containers can have undetected
-      missing dependencies, circular deps, and parameter mismatches.
+      build() validates by default. validate() exposes the same structured errors
+      before provider creation.
     implication: >
-      An agent generating a quickstart example correctly skips validate() for
-      simplicity. An agent generating production code that also skips validate()
-      creates a time bomb. The agent must judge context (prototype vs production)
-      to decide whether to include validation.
+      Quickstart code can call build() directly. Debugging code can call validate()
+      first to inspect all errors.
 
   - name: 'Type safety ergonomics vs API surface size'
     skills: ['kizuna']
@@ -483,13 +456,11 @@ tensions:
   - name: 'Factory flexibility vs hidden dependency graph'
     skills: ['kizuna']
     description: >
-      Factory registration gives maximum flexibility (conditional logic, async init)
-      but hides dependencies from validate(). Constructor registration declares
-      dependencies explicitly but cannot handle complex initialization.
+      Factory registration supports conditional logic and custom initialization.
+      Trailing dependency keys declare its fixed locator lookups.
     implication: >
-      An agent that defaults to factories (because they look general-purpose)
-      silently breaks the validation safety net. Dependencies resolved inside
-      factories are invisible to validate() — missing deps only surface at runtime.
+      Declare each fixed lookup that affects validation or cleanup order.
+      Undeclared dynamic lookups remain invisible.
 
 cross_references: []
 

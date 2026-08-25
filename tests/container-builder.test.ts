@@ -429,7 +429,7 @@ describe('ContainerBuilder - Unified API', () => {
         it('should handle missing dependencies gracefully during resolution', () => {
             const container = builder
                 .registerSingleton('ServiceWithMissingDep', ServiceWithDependency, 'NonExistentService')
-                .build();
+                .build({ validation: 'deferred' });
 
             expect(() => container.get('ServiceWithMissingDep')).toThrow();
         });
