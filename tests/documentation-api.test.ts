@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+	existsSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
@@ -471,5 +472,161 @@ ${example}
 		expect(adr).not.toContain("99%");
 		expect(adr).not.toContain("ASP.NET Core");
 		expect(adr).not.toContain("Spring Framework");
+	});
+});
+
+describe("published feature evidence", () => {
+	it("keeps type-safe mock examples free of unsafe type escapes", () => {
+		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
+		const heading = "### 🧪 **Testing with Type-Safe Mocks**";
+		const sectionStart = readme.indexOf(heading);
+		const sectionEnd = readme.indexOf("\n### ", sectionStart + heading.length);
+		const section = readme.slice(sectionStart, sectionEnd);
+		const example = codeBlockAfter(readme, heading).replace(
+			"from '@shirudo/kizuna'",
+			'from "../src"',
+		);
+		const domainExample = readFileSync(
+			join(
+				repositoryRoot,
+				"examples",
+				"multiple-containers-domain-separation.ts",
+			),
+			"utf8",
+		);
+		const domainTestingStart = domainExample.indexOf(
+			"Example: Testing with type-safe mocks",
+		);
+		const domainTestingEnd = domainExample.indexOf(
+			"// MAIN EXECUTION",
+			domainTestingStart,
+		);
+		const testingGuide = readFileSync(
+			join(repositoryRoot, "skills", "kizuna", "references", "testing.md"),
+			"utf8",
+		);
+
+		expect(section).not.toMatch(/\bany\b/);
+		expect(
+			domainExample.slice(domainTestingStart, domainTestingEnd),
+		).not.toMatch(/\bany\b/);
+		expect(testingGuide).not.toMatch(/\bany\b/);
+		expect(strictTypeErrors(example, "type-safe-mocks")).toEqual([]);
+	});
+
+	it("maps each retained feature claim to evidence and an exact limit", () => {
+		const evidencePath = join(repositoryRoot, "docs", "feature-evidence.md");
+
+		expect(existsSync(evidencePath)).toBe(true);
+		if (!existsSync(evidencePath)) {
+			return;
+		}
+
+		const evidence = readFileSync(evidencePath, "utf8");
+		const rows = evidence
+			.split("\n")
+			.filter((line) => /^\| .+ \|$/.test(line))
+			.slice(2);
+
+		expect(rows.length).toBeGreaterThanOrEqual(12);
+		for (const row of rows) {
+			const cells = row
+				.split("|")
+				.slice(1, -1)
+				.map((cell) => cell.trim());
+			expect(cells).toHaveLength(3);
+			expect(cells[1]).toMatch(/\[[^\]]+\]\([^)]+\)/);
+			expect(cells[2]?.length).toBeGreaterThan(0);
+		}
+
+		for (const match of evidence.matchAll(
+			/\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/g,
+		)) {
+			const target = match[1];
+			if (target && !/^[a-z]+:/i.test(target)) {
+				expect(existsSync(join(repositoryRoot, "docs", target))).toBe(true);
+			}
+		}
+
+		const packageJson = JSON.parse(
+			readFileSync(join(repositoryRoot, "package.json"), "utf8"),
+		) as { dependencies?: Record<string, string> };
+		expect(packageJson.dependencies ?? {}).toEqual({});
+	});
+
+	it("states the domain-container enforcement boundary", () => {
+		const readme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+		);
+		const exampleReadme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "examples", "README.md"), "utf8"),
+		);
+		const exampleSource = normalizedMarkdown(
+			readFileSync(
+				join(
+					repositoryRoot,
+					"examples",
+					"multiple-containers-domain-separation.ts",
+				),
+				"utf8",
+			),
+		);
+		const skill = normalizedMarkdown(
+			readFileSync(
+				join(repositoryRoot, "skills", "kizuna", "SKILL.md"),
+				"utf8",
+			),
+		);
+
+		expect(readme).toContain("Kizuna does not enforce domain boundaries.");
+		expect(exampleReadme).toContain(
+			"Kizuna does not enforce domain boundaries.",
+		);
+		expect(exampleSource).toContain(
+			"Kizuna does not enforce domain boundaries.",
+		);
+		expect(skill).toContain("Kizuna does not enforce domain boundaries.");
+	});
+
+	it("limits release-candidate claims to completed quality gates", () => {
+		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
+		const evidence = existsSync(
+			join(repositoryRoot, "docs", "feature-evidence.md"),
+		)
+			? readFileSync(
+					join(repositoryRoot, "docs", "feature-evidence.md"),
+					"utf8",
+				)
+			: "";
+		const ci = readFileSync(
+			join(repositoryRoot, ".github", "workflows", "ci.yml"),
+			"utf8",
+		);
+		const e2e = readFileSync(
+			join(repositoryRoot, ".github", "workflows", "e2e.yml"),
+			"utf8",
+		);
+
+		expect(readme).not.toContain("production use is encouraged");
+		expect(readme).not.toContain("The API surface is finalized");
+		expect(readme).toContain("[Feature claims and evidence]");
+		for (const version of ["20.19.x", "22.12.x", "24.x"]) {
+			expect(ci).toContain(version);
+			expect(evidence).toContain(`\`${version}\``);
+		}
+		for (const command of [
+			"pnpm build",
+			"pnpm test",
+			"pnpm test:types",
+			"pnpm test:examples",
+		]) {
+			expect(ci).toContain(command);
+			expect(evidence).toContain(`\`${command}\``);
+		}
+		expect(e2e).toContain("pnpm pack --json");
+		expect(e2e).toContain("pnpm run build");
+		expect(evidence).toContain(
+			"These quality gates do not certify an application for production use.",
+		);
 	});
 });
