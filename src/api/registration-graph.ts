@@ -1,4 +1,5 @@
 import type { ServiceWrapper } from "../core/services/service-wrapper.js";
+import { findStronglyConnectedComponents } from "../core/services/strongly-connected-components.js";
 import { createValidationIssue, type ValidationIssue } from "./validation.js";
 
 interface RegistrationNode {
@@ -11,6 +12,8 @@ interface RegistrationNode {
 interface RegistrationGraph {
 	readonly nodes: readonly RegistrationNode[];
 	readonly nodesByKey: ReadonlyMap<string, readonly RegistrationNode[]>;
+	readonly edges: readonly (readonly number[])[];
+	readonly reverseEdges: readonly (readonly number[])[];
 }
 
 const buildRegistrationGraph = (
@@ -49,7 +52,23 @@ const buildRegistrationGraph = (
 		});
 	});
 
-	return { nodes, nodesByKey };
+	const edges: number[][] = nodes.map(() => []);
+	const reverseEdges: number[][] = nodes.map(() => []);
+	for (const node of nodes) {
+		const targetIds = new Set<number>();
+		for (const dependencyKey of node.resolver.getDependencies()) {
+			for (const target of nodesByKey.get(dependencyKey) ?? []) {
+				if (targetIds.has(target.id)) {
+					continue;
+				}
+				targetIds.add(target.id);
+				edges[node.id].push(target.id);
+				reverseEdges[target.id].push(node.id);
+			}
+		}
+	}
+
+	return { edges, nodes, nodesByKey, reverseEdges };
 };
 
 const nodeLabel = (node: RegistrationNode): string =>
@@ -122,183 +141,146 @@ const detectCaptiveDependencies = (
 			continue;
 		}
 
-		const reportedTargets = new Set<number>();
-		const visit = (
-			node: RegistrationNode,
-			path: readonly string[],
-			visiting: ReadonlySet<number>,
-		): void => {
-			const currentPath = [...path, node.key];
-			if (node.resolver.getLifetime() === "scoped") {
-				if (reportedTargets.has(node.id)) {
-					return;
-				}
-				reportedTargets.add(node.id);
-				issues.push(
-					createValidationIssue({
-						code: "CAPTIVE_DEPENDENCY",
-						dependencyKey: node.key,
-						...(node.registrationIndex === undefined
-							? {}
-							: {
-									dependencyRegistrationIndex: node.registrationIndex,
-								}),
-						message:
-							`${nodeLabel(root)} is a singleton but depends on scoped service '${node.key}' ` +
-							`(captive dependency) via ${currentPath.join(" -> ")}: ` +
-							`the scoped instance would be captured beyond its scope's lifetime`,
-						path: currentPath,
-						...issueLocation(root),
-					}),
-				);
-				return;
-			}
+		const visited = new Uint8Array(graph.nodes.length);
+		const predecessors = new Int32Array(graph.nodes.length);
+		predecessors.fill(-1);
+		visited[root.id] = 1;
+		const stack: number[] = [];
 
-			if (visiting.has(node.id)) {
-				return;
-			}
-
-			const nextVisiting = new Set(visiting);
-			nextVisiting.add(node.id);
-			for (const dependencyKey of node.resolver.getDependencies()) {
-				for (const target of graph.nodesByKey.get(dependencyKey) ?? []) {
-					visit(target, currentPath, nextVisiting);
+		const addTargets = (nodeId: number): void => {
+			const targets = graph.edges[nodeId];
+			for (let index = targets.length - 1; index >= 0; index--) {
+				const targetId = targets[index];
+				if (visited[targetId] === 1) {
+					continue;
 				}
+				visited[targetId] = 1;
+				predecessors[targetId] = nodeId;
+				stack.push(targetId);
 			}
 		};
 
-		for (const dependencyKey of root.resolver.getDependencies()) {
-			for (const target of graph.nodesByKey.get(dependencyKey) ?? []) {
-				visit(target, [root.key], new Set([root.id]));
+		addTargets(root.id);
+		while (stack.length > 0) {
+			const nodeId = stack.pop();
+			if (nodeId === undefined) {
+				continue;
 			}
+			const node = graph.nodes[nodeId];
+			if (node.resolver.getLifetime() !== "scoped") {
+				addTargets(nodeId);
+				continue;
+			}
+
+			const pathIds = [nodeId];
+			let predecessor = predecessors[nodeId];
+			while (predecessor !== -1) {
+				pathIds.push(predecessor);
+				predecessor = predecessors[predecessor];
+			}
+			pathIds.reverse();
+			const path = pathIds.map((id) => graph.nodes[id].key);
+
+			issues.push(
+				createValidationIssue({
+					code: "CAPTIVE_DEPENDENCY",
+					dependencyKey: node.key,
+					...(node.registrationIndex === undefined
+						? {}
+						: {
+								dependencyRegistrationIndex: node.registrationIndex,
+							}),
+					message:
+						`${nodeLabel(root)} is a singleton but depends on scoped service '${node.key}' ` +
+						`(captive dependency) via ${path.join(" -> ")}: ` +
+						`the scoped instance would be captured beyond its scope's lifetime`,
+					path,
+					...issueLocation(root),
+				}),
+			);
 		}
 	}
 
 	return issues;
 };
 
+const lowestNodeId = (component: readonly number[]): number => {
+	let lowest = component[0];
+	for (let index = 1; index < component.length; index++) {
+		if (component[index] < lowest) {
+			lowest = component[index];
+		}
+	}
+	return lowest;
+};
+
+const isCyclicComponent = (
+	graph: RegistrationGraph,
+	component: readonly number[],
+): boolean => {
+	if (component.length > 1) {
+		return true;
+	}
+	const onlyNodeId = component[0];
+	return graph.edges[onlyNodeId]?.includes(onlyNodeId) ?? false;
+};
+
+const findCyclePath = (
+	graph: RegistrationGraph,
+	component: readonly number[],
+): readonly number[] | undefined => {
+	const rootId = lowestNodeId(component);
+	const memberIds = new Set(component);
+	const visited = new Uint8Array(graph.nodes.length);
+	visited[rootId] = 1;
+	const stack: Array<{ nodeId: number; nextEdge: number }> = [
+		{ nodeId: rootId, nextEdge: 0 },
+	];
+
+	while (stack.length > 0) {
+		const frame = stack[stack.length - 1];
+		const targets = graph.edges[frame.nodeId];
+		if (frame.nextEdge >= targets.length) {
+			stack.pop();
+			continue;
+		}
+
+		const targetId = targets[frame.nextEdge];
+		frame.nextEdge++;
+		if (!memberIds.has(targetId)) {
+			continue;
+		}
+		if (targetId === rootId) {
+			return [...stack.map(({ nodeId }) => nodeId), rootId];
+		}
+		if (visited[targetId] === 1) {
+			continue;
+		}
+		visited[targetId] = 1;
+		stack.push({ nodeId: targetId, nextEdge: 0 });
+	}
+
+	return undefined;
+};
+
 const detectCircularDependencies = (
 	graph: RegistrationGraph,
 ): ValidationIssue[] => {
-	const targetsOf = (node: RegistrationNode): RegistrationNode[] => {
-		const targets: RegistrationNode[] = [];
-		for (const dependencyKey of node.resolver.getDependencies()) {
-			targets.push(...(graph.nodesByKey.get(dependencyKey) ?? []));
-		}
-		return targets;
-	};
-
-	let nextIndex = 0;
-	const indices = new Map<number, number>();
-	const lowLinks = new Map<number, number>();
-	const stack: RegistrationNode[] = [];
-	const onStack = new Set<number>();
-	const components: RegistrationNode[][] = [];
-
-	const connect = (node: RegistrationNode): void => {
-		const nodeIndex = nextIndex;
-		nextIndex += 1;
-		indices.set(node.id, nodeIndex);
-		lowLinks.set(node.id, nodeIndex);
-		stack.push(node);
-		onStack.add(node.id);
-
-		for (const target of targetsOf(node)) {
-			if (!indices.has(target.id)) {
-				connect(target);
-				lowLinks.set(
-					node.id,
-					Math.min(
-						lowLinks.get(node.id) ?? nodeIndex,
-						lowLinks.get(target.id) ?? nodeIndex,
-					),
-				);
-			} else if (onStack.has(target.id)) {
-				lowLinks.set(
-					node.id,
-					Math.min(
-						lowLinks.get(node.id) ?? nodeIndex,
-						indices.get(target.id) ?? nodeIndex,
-					),
-				);
-			}
-		}
-
-		if (lowLinks.get(node.id) !== indices.get(node.id)) {
-			return;
-		}
-
-		const component: RegistrationNode[] = [];
-		let member: RegistrationNode | undefined;
-		do {
-			member = stack.pop();
-			if (!member) {
-				break;
-			}
-			onStack.delete(member.id);
-			component.push(member);
-		} while (member.id !== node.id);
-		components.push(component);
-	};
-
-	for (const node of graph.nodes) {
-		if (!indices.has(node.id)) {
-			connect(node);
-		}
-	}
-
-	const cyclicComponents = components
-		.filter((component) => {
-			if (component.length > 1) {
-				return true;
-			}
-			const onlyNode = component[0];
-			return onlyNode
-				? targetsOf(onlyNode).some((target) => target.id === onlyNode.id)
-				: false;
-		})
-		.sort(
-			(left, right) =>
-				Math.min(...left.map((node) => node.id)) -
-				Math.min(...right.map((node) => node.id)),
-		);
+	const cyclicComponents = findStronglyConnectedComponents(
+		graph.edges,
+		graph.reverseEdges,
+	)
+		.filter((component) => isCyclicComponent(graph, component))
+		.sort((left, right) => lowestNodeId(left) - lowestNodeId(right));
 
 	return cyclicComponents.flatMap((component) => {
-		const root = component.reduce((lowest, node) =>
-			node.id < lowest.id ? node : lowest,
-		);
-		const memberIds = new Set(component.map((node) => node.id));
-
-		const findCycle = (
-			node: RegistrationNode,
-			path: readonly RegistrationNode[],
-			visiting: ReadonlySet<number>,
-		): readonly RegistrationNode[] | undefined => {
-			for (const target of targetsOf(node)) {
-				if (!memberIds.has(target.id)) {
-					continue;
-				}
-				if (target.id === root.id) {
-					return [...path, target];
-				}
-				if (visiting.has(target.id)) {
-					continue;
-				}
-				const nextVisiting = new Set(visiting);
-				nextVisiting.add(target.id);
-				const cycle = findCycle(target, [...path, target], nextVisiting);
-				if (cycle) {
-					return cycle;
-				}
-			}
-			return undefined;
-		};
-
-		const cycle = findCycle(root, [root], new Set([root.id]));
-		if (!cycle) {
+		const rootId = lowestNodeId(component);
+		const root = graph.nodes[rootId];
+		const cycleIds = findCyclePath(graph, component);
+		if (!cycleIds) {
 			return [];
 		}
-		const keyPath = cycle.map((node) => node.key);
+		const keyPath = cycleIds.map((nodeId) => graph.nodes[nodeId].key);
 		return [
 			createValidationIssue({
 				code: "CIRCULAR_DEPENDENCY",

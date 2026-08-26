@@ -133,7 +133,7 @@ type FactoryDependencyKey<TRegistry> = Extract<keyof TRegistry, string>;
  *   .registerSingletonFactory('Config', (provider) => {
  *     const logger = provider.get('Logger'); // Type: ConsoleLogger
  *     return { env: 'production', debug: false };
- *   })
+ *   }, 'Logger')
  *   .registerScopedFactory('RequestId', () => crypto.randomUUID())
  *   
  *   .build();

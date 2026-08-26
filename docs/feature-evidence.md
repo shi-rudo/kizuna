@@ -39,8 +39,8 @@ The [CI workflow](../.github/workflows/ci.yml) runs these commands on Node.js
 The [package E2E workflow](../.github/workflows/e2e.yml) creates the package
 tarball. It installs that tarball in a Vite React TypeScript project.
 
-The package gate checks runtime exports, ESM and CommonJS interoperability,
-NodeNext declarations, and the Vite consumer build.
+The package gate checks runtime exports, structured validation errors, ESM and
+CommonJS interoperability, NodeNext declarations, and the Vite consumer build.
 
 The runtime suite includes the [workerd compatibility tests](../tests/edge-compat.test.ts).
 These tests run the built ESM bundle through Miniflare without `nodejs_compat`.

@@ -731,15 +731,28 @@ Read the examples in the [`examples/`](./examples) directory:
 
 ### Package Exports
 
-The package root exports four runtime values:
+The package root exports six runtime values:
 
 - `ContainerBuilder`
 - `interfaceToken`
 - `ServiceProviderToken`
 - `CircularDependencyError`
+- `ContainerValidationError`
+- `DisposalError`
 
-It also exports the `TypeSafeServiceLocator` and `InterfaceToken` types. Concrete
-providers, lifecycle classes, wrappers, and builder helper types are internal.
+It also exports these public types:
+
+- `RootServiceContainer`
+- `TypeSafeServiceLocator`
+- `InterfaceToken`
+- `DisposalFailure`
+- `DisposalOperation`
+- `ContainerBuildOptions`
+- `ValidationIssue`
+- `ValidationIssueCode`
+
+Concrete providers, lifecycle classes, wrappers, and builder helper types are
+internal.
 
 Read the [public API hardening migration](./docs/migrations/public-api-hardening.md)
 when you update code that imported an internal symbol.

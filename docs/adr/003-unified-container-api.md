@@ -116,13 +116,19 @@ decision.
 ## Validation contracts
 
 TypeScript rejects unknown dependency keys in typed constructor registrations.
-JavaScript callers can still create invalid graphs.
+JavaScript callers and unsafe casts can still create invalid graphs.
 
-`validate()` reports graph errors, captive dependencies, and development-only
-parameter-name differences. `build()` does not call `validate()`.
+`validate()` reports missing dependencies, captive dependencies, circular
+dependencies, invalid keys, and disposed registrations. It uses the declared
+dependency keys. It does not inspect constructor parameter names.
 
-Some errors occur at registration. Other errors occur during explicit
-validation or first resolution. ADR-007 is the historical fail-fast decision.
+By default, `build()` validates the graph before it creates the root container.
+Both `validate()` and eager `build()` report the same graph errors.
+`build({ validation: 'deferred' })` skips this eager check for compatibility.
+The container then reports resolution errors when a consumer requests a service.
+
+Some errors occur during registration. Other errors occur during validation or
+resolution. ADR-007 records the historical fail-fast decision.
 
 ## Consequences
 

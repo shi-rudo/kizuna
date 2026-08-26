@@ -299,7 +299,7 @@ skills:
             // provider is TypeSafeServiceLocator<TRegistry> — fully typed
             const db = provider.get('Database'); // Type-safe!
             return new UserService(db);
-          })
+          }, 'Database')
         source: 'container-builder.ts factory signatures'
         priority: 'MEDIUM'
         status: 'active'

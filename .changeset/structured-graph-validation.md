@@ -12,3 +12,4 @@ Make dependency-graph validation deterministic and fail fast.
 - Multi-registration errors now identify the applicable registration index.
 - `disableStrictParameterValidation()` no longer exists.
 - Kizuna no longer reads constructor source code or parameter names.
+- Validate large and dense graphs with iterative traversal instead of recursion.

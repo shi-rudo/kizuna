@@ -11,8 +11,19 @@ The package root now exports these runtime values:
 - `interfaceToken`
 - `ServiceProviderToken`
 - `CircularDependencyError`
+- `ContainerValidationError`
+- `DisposalError`
 
-It also exports the `TypeSafeServiceLocator` and `InterfaceToken` types.
+It also exports these public types:
+
+- `RootServiceContainer`
+- `TypeSafeServiceLocator`
+- `InterfaceToken`
+- `DisposalFailure`
+- `DisposalOperation`
+- `ContainerBuildOptions`
+- `ValidationIssue`
+- `ValidationIssueCode`
 
 Concrete providers, lifecycle classes, service wrappers, and registrar helpers
 are internal. Do not import them from the package root or a package subpath.

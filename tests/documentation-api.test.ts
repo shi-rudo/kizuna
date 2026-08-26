@@ -414,7 +414,9 @@ ${example}
 		expect(adr).toContain("ADR-001");
 		expect(adr).toContain("ADR-008");
 		expect(adr).toContain("ADR-009");
-		expect(adr).toContain("`build()` does not call `validate()`");
+		expect(adr).toContain(
+			"Both `validate()` and eager `build()` report the same graph errors.",
+		);
 	});
 
 	it("documents the current scope replication contract", () => {
@@ -476,6 +478,41 @@ ${example}
 });
 
 describe("published feature evidence", () => {
+	it("documents every stable runtime export", () => {
+		const documents = [
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+			readFileSync(
+				join(repositoryRoot, "docs", "migrations", "public-api-hardening.md"),
+				"utf8",
+			),
+		];
+		const runtimeExports = [
+			"ContainerBuilder",
+			"interfaceToken",
+			"ServiceProviderToken",
+			"CircularDependencyError",
+			"ContainerValidationError",
+			"DisposalError",
+		];
+		const typeExports = [
+			"RootServiceContainer",
+			"TypeSafeServiceLocator",
+			"InterfaceToken",
+			"DisposalFailure",
+			"DisposalOperation",
+			"ContainerBuildOptions",
+			"ValidationIssue",
+			"ValidationIssueCode",
+		];
+
+		for (const document of documents) {
+			for (const publicExport of [...runtimeExports, ...typeExports]) {
+				expect(document).toContain(`- \`${publicExport}\``);
+			}
+			expect(document).not.toContain("exports four runtime values");
+		}
+	});
+
 	it("keeps type-safe mock examples free of unsafe type escapes", () => {
 		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
 		const heading = "### 🧪 **Testing with Type-Safe Mocks**";
@@ -606,6 +643,10 @@ describe("published feature evidence", () => {
 			join(repositoryRoot, ".github", "workflows", "e2e.yml"),
 			"utf8",
 		);
+		const packedValidation = readFileSync(
+			join(repositoryRoot, "tests", "fixtures", "package-validation.mjs"),
+			"utf8",
+		);
 
 		expect(readme).not.toContain("production use is encouraged");
 		expect(readme).not.toContain("The API surface is finalized");
@@ -625,6 +666,11 @@ describe("published feature evidence", () => {
 		}
 		expect(e2e).toContain("pnpm pack --json");
 		expect(e2e).toContain("pnpm run build");
+		expect(e2e).toContain("'ContainerValidationError'");
+		expect(e2e).toContain("node package-validation.mjs");
+		expect(packedValidation).toContain(
+			"error instanceof ContainerValidationError",
+		);
 		expect(evidence).toContain(
 			"These quality gates do not certify an application for production use.",
 		);
