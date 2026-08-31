@@ -478,7 +478,7 @@ ${example}
 });
 
 describe("published feature evidence", () => {
-	it("documents every stable runtime export", () => {
+	it("documents every stable public export", () => {
 		const documents = [
 			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
 			readFileSync(
@@ -503,6 +503,7 @@ describe("published feature evidence", () => {
 			"ContainerBuildOptions",
 			"ValidationIssue",
 			"ValidationIssueCode",
+			"ValidationPathSegment",
 		];
 
 		for (const document of documents) {

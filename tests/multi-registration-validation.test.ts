@@ -82,4 +82,45 @@ describe("multi-registration graph validation", () => {
 			}),
 		);
 	});
+
+	it("preserves an intermediate multi-registration identity in a cycle path", () => {
+		const issues = new ContainerBuilder()
+			.registerSingleton("root", Consumer, "group" as never)
+			.addSingleton("group", Leaf)
+			.addSingleton("group", Consumer, "root")
+			.validate()
+			.filter((issue) => issue.code === "CIRCULAR_DEPENDENCY");
+
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				path: ["root", "group", "root"],
+				pathSegments: [
+					{ key: "root" },
+					{ key: "group", registrationIndex: 1 },
+					{ key: "root" },
+				],
+			}),
+		);
+	});
+
+	it("preserves an intermediate multi-registration identity in a captive path", () => {
+		const issues = new ContainerBuilder()
+			.registerScoped("scoped", Leaf)
+			.addTransient("group", Leaf)
+			.addTransient("group", Consumer, "scoped")
+			.registerSingleton("root", Consumer, "group")
+			.validate()
+			.filter((issue) => issue.code === "CAPTIVE_DEPENDENCY");
+
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				path: ["root", "group", "scoped"],
+				pathSegments: [
+					{ key: "root" },
+					{ key: "group", registrationIndex: 1 },
+					{ key: "scoped" },
+				],
+			}),
+		);
+	});
 });

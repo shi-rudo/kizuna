@@ -96,20 +96,24 @@ describe('ContainerBuilder Validation', () => {
             expect(issues[0]?.dependencyKey).toBe('serviceWithNoDeps');
         });
 
-        it('should validate factory services (factories are always considered valid)', () => {
+        it('should validate a factory without declared dependency keys', () => {
             builder.registerSingletonFactory('FactoryService', () => ({ value: 42 }));
 
             const issues = builder.validate();
             expect(issues).toEqual([]);
         });
 
-        it('should validate factory services with provider dependencies', () => {
+        it('should validate declared factory dependencies', () => {
             builder
                 .registerSingleton('ServiceWithNoDeps', ServiceWithNoDeps)
-                .registerSingletonFactory('FactoryWithDeps', (provider) => {
-                    const dep = provider.get('ServiceWithNoDeps');
-                    return { value: dep.getValue() };
-                });
+                .registerSingletonFactory(
+                    'FactoryWithDeps',
+                    (provider) => {
+                        const dep = provider.get('ServiceWithNoDeps');
+                        return { value: dep.getValue() };
+                    },
+                    'ServiceWithNoDeps',
+                );
 
             const issues = builder.validate();
             expect(issues).toEqual([]);
@@ -138,8 +142,9 @@ describe('ContainerBuilder Validation', () => {
                 .registerSingleton('ServiceC', ServiceC, 'ServiceA');
 
             const issues = builder.validate();
-            // May not have circular detection implemented yet, so just check for issues
-            expect(issues.length).toBeGreaterThan(0);
+            expect(
+                issues.some(issue => issue.code === 'CIRCULAR_DEPENDENCY'),
+            ).toBe(true);
         });
 
         it('should detect self-referencing circular dependency', () => {
@@ -228,7 +233,7 @@ describe('ContainerBuilder Validation', () => {
             builder
                 .registerSingleton('Logger', ServiceWithOneDep, 'MissingDep1')  // Missing dep
                 .registerSingletonInterface(TestServiceToken, TestServiceImpl, 'MissingDep2')  // Missing dep
-                .registerSingletonFactory('Config', () => ({ env: 'test' }));  // Factory always valid
+                .registerSingletonFactory('Config', () => ({ env: 'test' }));  // No declared graph edges
 
             const issues = builder.validate();
             expect(issues).toHaveLength(2);
@@ -236,24 +241,36 @@ describe('ContainerBuilder Validation', () => {
             expect(issues.some(issue => issue.dependencyKey === 'MissingDep2')).toBe(true);
         });
 
-        it('should handle complex interdependencies between different patterns', () => {
+        it('should detect captive dependencies across registration patterns', () => {
             builder
                 .registerSingleton('serviceWithNoDeps', ServiceWithNoDeps)
                 .registerSingletonInterface(TestServiceToken, TestServiceImpl, 'serviceWithNoDeps')
                 .registerScoped('ScopedService', ServiceWithOneDep, 'serviceWithNoDeps')
-                .registerSingletonFactory('FactoryService', (provider) => {
-                    const base = provider.get('serviceWithNoDeps');
-                    const scoped = provider.get('ScopedService');
-                    const test = provider.get('ITestService');
-                    return {
-                        base: base.getValue(),
-                        scoped: scoped.getValue(),
-                        test: test.test()
-                    };
-                });
+                .registerSingletonFactory(
+                    'FactoryService',
+                    (provider) => {
+                        const base = provider.get('serviceWithNoDeps');
+                        const scoped = provider.get('ScopedService');
+                        const test = provider.get('ITestService');
+                        return {
+                            base: base.getValue(),
+                            scoped: scoped.getValue(),
+                            test: test.test()
+                        };
+                    },
+                    'serviceWithNoDeps',
+                    'ScopedService',
+                    'ITestService',
+                );
 
             const issues = builder.validate();
-            expect(issues).toEqual([]);
+            expect(issues).toContainEqual(
+                expect.objectContaining({
+                    code: 'CAPTIVE_DEPENDENCY',
+                    dependencyKey: 'ScopedService',
+                    path: ['FactoryService', 'ScopedService'],
+                }),
+            );
         });
     });
 

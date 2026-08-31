@@ -33,19 +33,25 @@ try {
 TypeScript rejects the missing key in normal TypeScript code. Runtime
 validation protects JavaScript and code that uses unsafe casts.
 
+A dependency key must be a non-empty string. Registration methods reject all
+other values. They throw a `TypeError` before they add the registration.
+
 ## The validate() result
 
 `validate()` returns the same immutable issues without building a provider.
+`ValidationIssue` is a discriminated union. The `code` property selects one
+error type. Dependency errors have a required `dependencyKey`.
+All variants have `message`, `serviceKey`, `path`, and `pathSegments` fields.
+A multi-registration issue can also have registration indexes.
 
 ```typescript
-interface ValidationIssue {
-  readonly code: ValidationIssueCode;
-  readonly message: string;
-  readonly serviceKey: string;
-  readonly dependencyKey?: string;
+if (issue.code === 'MISSING_DEPENDENCY') {
+  const dependencyKey: string = issue.dependencyKey;
+}
+
+interface ValidationPathSegment {
+  readonly key: string;
   readonly registrationIndex?: number;
-  readonly dependencyRegistrationIndex?: number;
-  readonly path: readonly string[];
 }
 ```
 
@@ -57,8 +63,10 @@ The public codes are:
 - `CAPTIVE_DEPENDENCY`
 - `CIRCULAR_DEPENDENCY`
 
-Each multi-registration uses a zero-based `registrationIndex`. A dependency can
-also have a `dependencyRegistrationIndex`.
+Each `pathSegments` entry identifies one key in the path. A registered
+multi-service entry contains its zero-based `registrationIndex`. A dependency
+can also have a `dependencyRegistrationIndex`. Kizuna derives `path` from the
+structured segments.
 
 ## Missing dependency
 

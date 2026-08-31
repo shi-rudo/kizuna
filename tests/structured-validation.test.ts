@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContainerBuilder } from "../src/api/container-builder";
+import { createValidationIssue } from "../src/api/validation";
 
 class Leaf {}
 
@@ -23,12 +24,27 @@ describe("structured container validation", () => {
 				dependencyKey: "missing",
 				message: "Service 'consumer' depends on unregistered service 'missing'",
 				path: ["consumer", "missing"],
+				pathSegments: [{ key: "consumer" }, { key: "missing" }],
 				serviceKey: "consumer",
 			},
 		]);
 		expect(Object.isFrozen(issues)).toBe(true);
 		expect(Object.isFrozen(issues[0])).toBe(true);
 		expect(Object.isFrozen(issues[0]?.path)).toBe(true);
+		expect(Object.isFrozen(issues[0]?.pathSegments)).toBe(true);
+		expect(Object.isFrozen(issues[0]?.pathSegments[0])).toBe(true);
+	});
+
+	it("derives the legacy path from structured path segments", () => {
+		const issue = createValidationIssue({
+			code: "MISSING_DEPENDENCY",
+			dependencyKey: "missing",
+			message: "Missing dependency",
+			pathSegments: [{ key: "consumer" }, { key: "missing" }],
+			serviceKey: "consumer",
+		});
+
+		expect(issue.path).toEqual(["consumer", "missing"]);
 	});
 
 	it("reports circular and captive paths as structured issues", () => {

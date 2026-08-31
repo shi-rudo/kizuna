@@ -32,6 +32,7 @@
 		"!skills/_artifacts"
 	],
 	"scripts": {
+		"benchmark": "vitest bench --run",
 		"build": "tsup && tsc -p tsconfig.json --emitDeclarationOnly",
 		"changeset": "changeset",
 		"test": "vitest",

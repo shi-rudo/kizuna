@@ -303,6 +303,8 @@ const service = container.get(''); // IDE suggests: 'UserService'
 
 TypeScript rejects most invalid registrations during compilation. Runtime
 validation also protects JavaScript and code that uses unsafe casts.
+A dependency key must be a non-empty string. Registration methods reject all
+other values.
 
 ```javascript
 const builder = new ContainerBuilder()
@@ -314,11 +316,16 @@ const issues = builder.validate();
 //   serviceKey: 'Service',
 //   dependencyKey: 'MissingDependency',
 //   path: ['Service', 'MissingDependency'],
+//   pathSegments: [{ key: 'Service' }, { key: 'MissingDependency' }],
 //   message: "Service 'Service' depends on unregistered service 'MissingDependency'"
 // }]
 
 builder.build(); // Throws ContainerValidationError.
 ```
+
+`ValidationIssue` is a discriminated union. The `code` property selects the
+fields for one error type. Dependency errors have a required `dependencyKey`.
+Kizuna derives `path` from `pathSegments`.
 
 Use `build({ validation: 'deferred' })` only for a dynamic graph. This option
 disables build-time graph validation. Actual lookup failures then occur during
@@ -750,6 +757,7 @@ It also exports these public types:
 - `ContainerBuildOptions`
 - `ValidationIssue`
 - `ValidationIssueCode`
+- `ValidationPathSegment`
 
 Concrete providers, lifecycle classes, wrappers, and builder helper types are
 internal.

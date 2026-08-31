@@ -24,6 +24,7 @@ It also exports these public types:
 - `ContainerBuildOptions`
 - `ValidationIssue`
 - `ValidationIssueCode`
+- `ValidationPathSegment`
 
 Concrete providers, lifecycle classes, service wrappers, and registrar helpers
 are internal. Do not import them from the package root or a package subpath.

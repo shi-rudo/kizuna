@@ -233,7 +233,7 @@ const builder = new ContainerBuilder()
   .registerSingleton('userService', UserService, 'database', 'logger');
 
 const issues = builder.validate();
-// Each issue has a stable code, message, service key, and path.
+// Each issue has a stable code, message, service key, and path segments.
 
 try {
   const container = builder.build();
@@ -452,7 +452,9 @@ Correct:
 .registerSingleton('userService', UserService, 'database', 'logger')
 ```
 
-Constructor registration is shorter, declares dependencies explicitly for `validate()`, and lets Kizuna handle the wiring. Factories hide dependencies from validation.
+Constructor registration is shorter and gives Kizuna the dependency list.
+Kizuna does not inspect a factory body. Only trailing dependency keys add
+factory lookups to `validate()`.
 
 Source: maintainer interview
 

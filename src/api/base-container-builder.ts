@@ -1,5 +1,8 @@
 import type { ServiceWrapper } from "../core/services/service-wrapper.js";
-import { validateRegistrationGraph } from "./registration-graph.js";
+import {
+    createRegistrationSnapshots,
+    validateRegistrationGraph,
+} from "./registration-graph.js";
 import type { ValidationIssue } from "./validation.js";
 
 /**
@@ -45,10 +48,11 @@ export abstract class BaseContainerBuilder {
      * @returns Immutable machine-readable validation issues
      */
     validate(): readonly ValidationIssue[] {
-        return validateRegistrationGraph(
+        const snapshots = createRegistrationSnapshots(
             this.registrations,
             this.multiRegistrations,
         );
+        return validateRegistrationGraph(snapshots);
     }
 
     /**

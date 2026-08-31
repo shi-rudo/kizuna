@@ -1,21 +1,60 @@
-/** Stable codes for container graph validation issues. */
-export type ValidationIssueCode =
-	| "INVALID_SERVICE_KEY"
-	| "DISPOSED_REGISTRATION"
-	| "MISSING_DEPENDENCY"
-	| "CAPTIVE_DEPENDENCY"
-	| "CIRCULAR_DEPENDENCY";
-
-/** One machine-readable problem in the registered dependency graph. */
-export interface ValidationIssue {
-	readonly code: ValidationIssueCode;
-	readonly message: string;
-	readonly serviceKey: string;
-	readonly dependencyKey?: string;
-	readonly dependencyRegistrationIndex?: number;
-	readonly path: readonly string[];
+/** One key in a validation path, with an index for a multi-registration node. */
+export interface ValidationPathSegment {
+	readonly key: string;
 	readonly registrationIndex?: number;
 }
+
+interface ValidationIssueBase {
+	readonly message: string;
+	readonly serviceKey: string;
+	readonly path: readonly string[];
+	readonly pathSegments: readonly ValidationPathSegment[];
+	readonly registrationIndex?: number;
+}
+
+interface InvalidServiceKeyIssue extends ValidationIssueBase {
+	readonly code: "INVALID_SERVICE_KEY";
+	readonly dependencyKey?: never;
+	readonly dependencyRegistrationIndex?: never;
+}
+
+interface DisposedRegistrationIssue extends ValidationIssueBase {
+	readonly code: "DISPOSED_REGISTRATION";
+	readonly dependencyKey?: never;
+	readonly dependencyRegistrationIndex?: never;
+}
+
+interface MissingDependencyIssue extends ValidationIssueBase {
+	readonly code: "MISSING_DEPENDENCY";
+	readonly dependencyKey: string;
+	readonly dependencyRegistrationIndex?: never;
+}
+
+interface CaptiveDependencyIssue extends ValidationIssueBase {
+	readonly code: "CAPTIVE_DEPENDENCY";
+	readonly dependencyKey: string;
+	readonly dependencyRegistrationIndex?: number;
+}
+
+interface CircularDependencyIssue extends ValidationIssueBase {
+	readonly code: "CIRCULAR_DEPENDENCY";
+	readonly dependencyKey: string;
+	readonly dependencyRegistrationIndex?: number;
+}
+
+/** One machine-readable problem in the registered dependency graph. */
+export type ValidationIssue =
+	| InvalidServiceKeyIssue
+	| DisposedRegistrationIssue
+	| MissingDependencyIssue
+	| CaptiveDependencyIssue
+	| CircularDependencyIssue;
+
+/** Stable codes for container graph validation issues. */
+export type ValidationIssueCode = ValidationIssue["code"];
+
+type WithoutPath<T> = T extends unknown ? Omit<T, "path"> : never;
+type ValidationIssueInput = WithoutPath<ValidationIssue>;
 
 /** Controls when the container validates its registered dependency graph. */
 export interface ContainerBuildOptions {
@@ -26,14 +65,23 @@ export interface ContainerBuildOptions {
 	readonly validation?: "eager" | "deferred";
 }
 
-/** Creates one immutable validation issue. */
-export const createValidationIssue = (
-	issue: ValidationIssue,
-): ValidationIssue =>
-	Object.freeze({
+const toImmutableValidationIssue = (
+	issue: ValidationIssueInput | ValidationIssue,
+): ValidationIssue => {
+	const pathSegments = Object.freeze(
+		issue.pathSegments.map((segment) => Object.freeze({ ...segment })),
+	);
+	return Object.freeze({
 		...issue,
-		path: Object.freeze([...issue.path]),
-	});
+		path: Object.freeze(pathSegments.map((segment) => segment.key)),
+		pathSegments,
+	}) as ValidationIssue;
+};
+
+/** Creates one immutable validation issue from structured path data. */
+export const createValidationIssue = (
+	issue: ValidationIssueInput,
+): ValidationIssue => toImmutableValidationIssue(issue);
 
 /** Thrown when a builder contains an invalid dependency graph. */
 export class ContainerValidationError extends Error {
@@ -42,7 +90,7 @@ export class ContainerValidationError extends Error {
 
 	constructor(issues: readonly ValidationIssue[]) {
 		const immutableIssues = Object.freeze(
-			issues.map((issue) => createValidationIssue(issue)),
+			issues.map((issue) => toImmutableValidationIssue(issue)),
 		);
 		const summary = immutableIssues
 			.map((issue) => `- [${issue.code}] ${issue.message}`)

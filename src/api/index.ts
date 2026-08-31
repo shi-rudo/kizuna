@@ -43,15 +43,16 @@ export type {
 } from "./contracts/interfaces.js";
 export type { InterfaceToken } from "./interface-token.js";
 export { interfaceToken } from "./interface-token.js";
+export type { DisposalFailure, DisposalOperation } from "./service-provider.js";
 export {
 	CircularDependencyError,
 	DisposalError,
 	ServiceProviderToken,
 } from "./service-provider.js";
-export type { DisposalFailure, DisposalOperation } from "./service-provider.js";
-export { ContainerValidationError } from "./validation.js";
 export type {
 	ContainerBuildOptions,
 	ValidationIssue,
 	ValidationIssueCode,
+	ValidationPathSegment,
 } from "./validation.js";
+export { ContainerValidationError } from "./validation.js";
