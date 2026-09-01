@@ -1,15 +1,6 @@
-import type { ServiceLifetime } from "../core/contracts.js";
-import type { ServiceWrapper } from "../core/services/service-wrapper.js";
 import { findStronglyConnectedComponents } from "../core/services/strongly-connected-components.js";
+import type { RegistrationSnapshot } from "./registration-snapshots.js";
 import { createValidationIssue, type ValidationIssue } from "./validation.js";
-
-export interface RegistrationSnapshot {
-	readonly dependencies: readonly string[];
-	readonly disposed: boolean;
-	readonly key: string;
-	readonly lifetime: ServiceLifetime;
-	readonly registrationIndex?: number;
-}
 
 interface RegistrationNode extends RegistrationSnapshot {
 	readonly id: number;
@@ -164,6 +155,12 @@ interface CaptiveTraversalWorkspace {
 	readonly visitGenerations: Uint32Array;
 }
 
+interface CaptiveTraversalContext {
+	readonly canReachScoped: Uint8Array;
+	readonly graph: RegistrationGraph;
+	readonly workspace: CaptiveTraversalWorkspace;
+}
+
 const startCaptiveTraversal = (
 	workspace: CaptiveTraversalWorkspace,
 	rootId: number,
@@ -177,12 +174,17 @@ const startCaptiveTraversal = (
 	return workspace.generation;
 };
 
-const createCaptiveDependencyIssue = (
-	graph: RegistrationGraph,
-	root: RegistrationNode,
-	node: RegistrationNode,
-	pathIds: readonly number[],
-): ValidationIssue => {
+const createCaptiveDependencyIssue = ({
+	graph,
+	root,
+	node,
+	pathIds,
+}: {
+	readonly graph: RegistrationGraph;
+	readonly root: RegistrationNode;
+	readonly node: RegistrationNode;
+	readonly pathIds: readonly number[];
+}): ValidationIssue => {
 	const path = pathIds.map((id) => graph.nodes[id].key);
 	const pathSegments = pathIds.map((id) => pathSegment(graph.nodes[id]));
 	return createValidationIssue({
@@ -200,12 +202,11 @@ const createCaptiveDependencyIssue = (
 	});
 };
 
-const findCaptiveDependenciesFromRoot = (
-	graph: RegistrationGraph,
-	canReachScoped: Uint8Array,
+const collectCaptiveDependenciesWithWorkspace = (
+	context: CaptiveTraversalContext,
 	root: RegistrationNode,
-	workspace: CaptiveTraversalWorkspace,
 ): ValidationIssue[] => {
+	const { canReachScoped, graph, workspace } = context;
 	const issues: ValidationIssue[] = [];
 	const visitGeneration = startCaptiveTraversal(workspace, root.id);
 	const stack: number[] = [];
@@ -245,7 +246,7 @@ const findCaptiveDependenciesFromRoot = (
 		}
 		pathIds.push(root.id);
 		pathIds.reverse();
-		issues.push(createCaptiveDependencyIssue(graph, root, node, pathIds));
+		issues.push(createCaptiveDependencyIssue({ graph, node, pathIds, root }));
 	}
 
 	return issues;
@@ -260,9 +261,14 @@ const detectCaptiveDependencies = (
 		predecessors: new Int32Array(graph.nodes.length),
 		visitGenerations: new Uint32Array(graph.nodes.length),
 	};
+	const context: CaptiveTraversalContext = {
+		canReachScoped,
+		graph,
+		workspace,
+	};
 	return graph.nodes.flatMap((root) =>
 		root.lifetime === "singleton" && canReachScoped[root.id] === 1
-			? findCaptiveDependenciesFromRoot(graph, canReachScoped, root, workspace)
+			? collectCaptiveDependenciesWithWorkspace(context, root)
 			: [],
 	);
 };
@@ -288,7 +294,7 @@ const isCyclicComponent = (
 	return graph.edges[onlyNodeId]?.includes(onlyNodeId) ?? false;
 };
 
-const findCyclePath = (
+const traceCyclePathWithWorkspace = (
 	graph: RegistrationGraph,
 	component: readonly number[],
 	visited: Uint8Array,
@@ -340,7 +346,7 @@ const detectCircularDependencies = (
 	return cyclicComponents.flatMap((component) => {
 		const rootId = lowestNodeId(component);
 		const root = graph.nodes[rootId];
-		const cycleIds = findCyclePath(graph, component, visited);
+		const cycleIds = traceCyclePathWithWorkspace(graph, component, visited);
 		if (!cycleIds) {
 			return [];
 		}
@@ -363,40 +369,6 @@ const detectCircularDependencies = (
 			}),
 		];
 	});
-};
-
-/** Creates immutable graph input from mutable registration wrappers. */
-export const createRegistrationSnapshots = (
-	registrations: ReadonlyMap<string, ServiceWrapper>,
-	multiRegistrations: ReadonlyMap<string, readonly ServiceWrapper[]>,
-): readonly RegistrationSnapshot[] => {
-	const snapshots: RegistrationSnapshot[] = [];
-	const addSnapshot = (
-		key: string,
-		resolver: ServiceWrapper,
-		registrationIndex?: number,
-	): void => {
-		snapshots.push(
-			Object.freeze({
-				dependencies: Object.freeze([...resolver.getDependencies()]),
-				disposed: resolver.isDisposed(),
-				key,
-				lifetime: resolver.getLifetime(),
-				...(registrationIndex === undefined ? {} : { registrationIndex }),
-			}),
-		);
-	};
-
-	registrations.forEach((resolver, key) => {
-		addSnapshot(key, resolver);
-	});
-	multiRegistrations.forEach((resolvers, key) => {
-		resolvers.forEach((resolver, registrationIndex) => {
-			addSnapshot(key, resolver, registrationIndex);
-		});
-	});
-
-	return Object.freeze(snapshots);
 };
 
 /** Validates every registration snapshot as one explicit graph node. */

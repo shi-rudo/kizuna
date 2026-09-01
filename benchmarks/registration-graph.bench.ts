@@ -34,15 +34,22 @@ const manyCycles = (cycleCount: number): DynamicBuilder => {
 	return builder;
 };
 
-describe("registration graph validation", () => {
-	const roots = manyRoots(1_000);
-	const cycles = manyCycles(500);
+const graphSizes = [500, 1_000, 2_000, 4_000] as const;
 
-	bench("1,000 singleton roots with one scoped target", () => {
-		roots.validate();
-	});
+describe("registration graph validation with singleton roots", () => {
+	for (const nodeCount of graphSizes) {
+		const roots = manyRoots(nodeCount - 1);
+		bench(`${nodeCount} nodes`, () => {
+			roots.validate();
+		});
+	}
+});
 
-	bench("500 independent two-node cycles", () => {
-		cycles.validate();
-	});
+describe("registration graph validation with independent cycles", () => {
+	for (const nodeCount of graphSizes) {
+		const cycles = manyCycles(nodeCount / 2);
+		bench(`${nodeCount} nodes`, () => {
+			cycles.validate();
+		});
+	}
 });
