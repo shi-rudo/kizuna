@@ -11,11 +11,12 @@ Kizuna has two registration modes: **single-registration** (`register*`) and **m
 | Needs runtime logic, returns primitive, or needs provider | Factory | `registerSingletonFactory('cfg', (p) => ({ ... }))` |
 | Multiple implementations under one key | Multi-reg | `addSingleton('plugins', PluginA)` then `addSingleton('plugins', PluginB)` |
 | Singleton owned by another container | Borrow | `borrowSingletonFrom(shared, 'logger')` |
-| Default choice when unsure | Constructor | Shorter, explicit deps, works with validate() |
+| Default choice when unsure | Constructor | Short, explicit dependencies, and full graph validation |
 
 ## Constructor registration
 
-The most common pattern. Dependencies are declared as trailing string arguments that match constructor parameter names.
+The most common pattern uses trailing dependency keys. TypeScript matches each
+key type with the constructor parameter at the same position.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -85,11 +86,12 @@ const container = new ContainerBuilder()
     const logger = provider.get('logger');
     logger.log(`Connecting to ${config.dbUrl}`);
     return new DatabaseConnection(config.dbUrl);
-  })
+  }, 'config', 'logger')
   .build();
 ```
 
-Factory dependencies are hidden from `validate()`. Prefer constructor registration when possible.
+The final keys declare the factory lookups. Validation and cleanup order use
+these graph edges. An undeclared locator lookup stays invisible.
 
 ## Borrowed singleton
 

@@ -1,122 +1,138 @@
 # Validation Errors
 
-## build() does NOT validate
+## Default build behavior
 
-The `build()` method creates the service locator without checks:
+`build()` validates the declared dependency graph. It rejects these errors:
 
-The concrete provider is internal. The public `build()` return type is
-`TypeSafeServiceLocator<TRegistry>`.
+- A dependency key has no registration.
+- A dependency cycle exists.
+- A singleton reaches a scoped registration.
+- A registration is already disposed.
 
-No call to `validate()`. No missing dependency check. No circular dependency check. No parameter name check. Errors surface at resolution time when a request hits the wrong code path.
-
-Always call `validate()` before `build()`:
+The build throws one `ContainerValidationError`. Its `issues` property contains
+all validation errors.
 
 ```typescript
-import { ContainerBuilder } from '@shirudo/kizuna';
+import {
+  ContainerBuilder,
+  ContainerValidationError,
+} from '@shirudo/kizuna';
 
 const builder = new ContainerBuilder()
-  .registerSingleton('userService', UserService, 'database', 'logger');
+  .registerSingleton('userService', UserService, 'database' as never);
 
-const issues = builder.validate();
-if (issues.length > 0) {
-  throw new Error(`Container validation failed:\n${issues.join('\n')}`);
+try {
+  builder.build();
+} catch (error) {
+  if (error instanceof ContainerValidationError) {
+    console.error(error.issues);
+  }
 }
-const container = builder.build();
 ```
 
-## What validate() checks
+TypeScript rejects the missing key in normal TypeScript code. Runtime
+validation protects JavaScript and code that uses unsafe casts.
 
-1. **Missing dependencies** — a registered service declares a dependency that is not registered (checks both single and multi-registrations).
-2. **Circular dependencies** — A depends on B depends on A (detected via DFS, includes multi-registration dependency graphs).
-3. **Parameter name mismatches** (strict mode, enabled by default) — dependency keys don't match constructor parameter names positionally.
-4. **Disposed registrations** — a service wrapper that has been disposed.
-5. **Captive dependencies** — a singleton depending on a scoped service (the scoped instance would be captured beyond its scope).
+A dependency key must be a non-empty string. Registration methods reject all
+other values. They throw a `TypeError` before they add the registration.
 
-## What validate() does NOT check
+## The validate() result
 
-- **Factory dependencies** — dependencies resolved inside factories are invisible.
-- **Runtime resolution errors** — a factory throws or a Promise value rejects.
-- **add*/register* key conflicts** — these are caught at registration time, not by validate().
+`validate()` returns the same immutable issues without building a provider.
+`ValidationIssue` is a discriminated union. The `code` property selects one
+error type. Dependency errors have a required `dependencyKey`.
+All variants have `message`, `serviceKey`, `path`, and `pathSegments` fields.
+A multi-registration issue can also have registration indexes.
 
-## Error types and debugging
+```typescript
+if (issue.code === 'MISSING_DEPENDENCY') {
+  const dependencyKey: string = issue.dependencyKey;
+}
 
-### Missing dependency
-
+interface ValidationPathSegment {
+  readonly key: string;
+  readonly registrationIndex?: number;
+}
 ```
+
+The public codes are:
+
+- `INVALID_SERVICE_KEY`
+- `DISPOSED_REGISTRATION`
+- `MISSING_DEPENDENCY`
+- `CAPTIVE_DEPENDENCY`
+- `CIRCULAR_DEPENDENCY`
+
+Each `pathSegments` entry identifies one key in the path. A registered
+multi-service entry contains its zero-based `registrationIndex`. A dependency
+can also have a `dependencyRegistrationIndex`. Kizuna derives `path` from the
+structured segments.
+
+## Missing dependency
+
+```text
 Service 'userService' depends on unregistered service 'database'
 ```
 
-Fix: Register the missing service before the one that depends on it.
+Register `database` before `userService`. Then pass `database` as a declared
+dependency key.
 
-### Circular dependency
+## Circular dependency
 
-```
+```text
 Circular dependency detected: userService -> orderService -> userService
 ```
 
-Fix: Break the cycle by extracting the shared dependency into a third service, or use a factory to defer resolution.
+Move the shared logic to a third service. Then make both services depend on the
+new service.
 
-### Parameter name mismatch
+Do not hide the cycle with an undeclared factory lookup. The runtime resolver
+still rejects a dynamic cycle.
 
-```
-Service 'UserService' parameter 0 is named 'db' but dependency 'DatabaseConnection' is provided.
-Consider: .registerSingleton('UserService', UserService, 'db')
-```
+## Captive dependency
 
-This happens when the dependency key string doesn't match the constructor parameter name. Two strategies:
-
-**Strategy A — Name registrations after constructor params:**
-
-```typescript
-class UserService {
-  constructor(private db: DatabaseConnection) {}
-}
-
-// Register as 'db' to match the param name
-.registerSingleton('db', DatabaseConnection)
-.registerSingleton('userService', UserService, 'db')
+```text
+Service 'userService' is a singleton but depends on scoped service 'requestContext'
 ```
 
-**Strategy B — Name constructor params after registrations:**
+Change `userService` to scoped, or remove its dependency on request state. A
+singleton must not store a scoped value.
 
-```typescript
-class UserService {
-  constructor(private database: DatabaseConnection) {}
-}
+## Factory dependency metadata
 
-// Both key and param are 'database'
-.registerSingleton('database', DatabaseConnection)
-.registerSingleton('userService', UserService, 'database')
-```
-
-Pick one convention and use it consistently across the project.
-
-### Strict parameter validation: auto-skip and opt-out
-
-The parameter name check is **automatically disabled when `NODE_ENV === "production"`** (or when `process` is unavailable, e.g. in Cloudflare Workers / Vercel Edge). Bundler minification mangles parameter names into `a`, `b`, `c` — running the check there would produce false positives. No opt-out needed for production builds.
-
-To also skip the check in development (rarely needed):
+Declare fixed locator lookups after the factory:
 
 ```typescript
 const builder = new ContainerBuilder()
-  .disableStrictParameterValidation()
-  .registerSingleton('UserService', UserService, 'DatabaseConnection');
+  .registerSingleton('database', DatabaseConnection)
+  .registerSingletonFactory(
+    'userService',
+    (provider) => new UserService(provider.get('database')),
+    'database',
+  );
 ```
 
-This disables only the parameter name check. Missing dependency and circular dependency checks still run. Avoid disabling in development unless you have a specific reason — the mismatch warnings catch real bugs.
+The final key adds an edge for validation and cleanup order. Kizuna does not
+inspect the factory body.
 
-**Source:** `BaseContainerBuilder.validate()` in `base-container-builder.ts` (the check is gated on `isDevelopment()`, which returns false when `NODE_ENV === "production"` or `process` is undefined).
+An undeclared locator lookup stays invisible to static graph validation. The
+runtime resolver still reports lookup failures and dynamic cycles.
 
-## How parameter name extraction works
+## Deferred validation
 
-The validator extracts parameter names by converting the constructor to a string and matching against regex patterns (base-container-builder.ts:402-461):
+Use deferred validation only for a graph that must remain dynamic:
 
+```typescript
+const container = builder.build({ validation: 'deferred' });
 ```
-constructor(params) → extracts from constructor signature
-function Name(params) → extracts from function signature
-(params) => → extracts from arrow function
-```
 
-It strips TypeScript access modifiers (`private`, `public`, `protected`, `readonly`), type annotations, and default values. Destructured parameters and rest params are skipped.
+This option disables build-time graph validation. Actual lookup failures occur
+during resolution. Unused dependency metadata does not trigger a lookup.
 
-This means minified code may produce incorrect parameter names. Run validation in development, not in production builds.
+## Runtime consistency
+
+Kizuna does not read constructor source code or parameter names. It also does
+not read `NODE_ENV`, `process`, or `__DEV__` during validation.
+
+Node.js, browser, and edge runtimes use the same graph rules. Minification does
+not change the validation result.

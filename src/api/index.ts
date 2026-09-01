@@ -25,7 +25,7 @@
  *   .registerSingletonFactory('Config', (provider) => {
  *     const logger = provider.get('Logger'); // Type: ConsoleLogger
  *     return { env: 'production', debug: false };
- *   })
+ *   }, 'Logger')
  *   .build();
  *
  * const userService = container.get('UserService'); // Type: UserService ✅
@@ -43,9 +43,16 @@ export type {
 } from "./contracts/interfaces.js";
 export type { InterfaceToken } from "./interface-token.js";
 export { interfaceToken } from "./interface-token.js";
+export type { DisposalFailure, DisposalOperation } from "./service-provider.js";
 export {
 	CircularDependencyError,
 	DisposalError,
 	ServiceProviderToken,
 } from "./service-provider.js";
-export type { DisposalFailure, DisposalOperation } from "./service-provider.js";
+export type {
+	ContainerBuildOptions,
+	ValidationIssue,
+	ValidationIssueCode,
+	ValidationPathSegment,
+} from "./validation.js";
+export { ContainerValidationError } from "./validation.js";

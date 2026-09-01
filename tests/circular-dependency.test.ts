@@ -17,7 +17,7 @@ describe('Circular dependency detection at resolve time', () => {
         const container = new ContainerBuilder()
             .registerSingleton('a', A, 'b')
             .registerSingleton('b', B, 'a')
-            .build();
+            .build({ validation: 'deferred' });
 
         expect(() => container.get('a')).toThrowError(CircularDependencyError);
 
@@ -35,7 +35,7 @@ describe('Circular dependency detection at resolve time', () => {
     it('detects a direct self-dependency', () => {
         const container = new ContainerBuilder()
             .registerSingleton('a', A, 'a')
-            .build();
+            .build({ validation: 'deferred' });
 
         expect(() => container.get('a')).toThrowError(
             'Circular dependency detected: a -> a',
@@ -57,7 +57,7 @@ describe('Circular dependency detection at resolve time', () => {
             .registerSingleton('a', A, 'b')
             .registerSingleton('b', B, 'a')
             .registerSingleton('ok', Standalone)
-            .build();
+            .build({ validation: 'deferred' });
 
         expect(() => container.get('a')).toThrowError(CircularDependencyError);
         // Same clean error on retry — no stale stack entries
@@ -71,7 +71,7 @@ describe('Circular dependency detection at resolve time', () => {
         const container = new ContainerBuilder()
             .registerSingleton('a', A, 'b')
             .registerSingleton('b', B, 'a')
-            .build();
+            .build({ validation: 'deferred' });
 
         try {
             container.get('a');
@@ -92,10 +92,10 @@ describe('Circular dependency detection in validate()', () => {
 
         const cycleIssues = builder
             .validate()
-            .filter((issue) => issue.includes('Circular dependency'));
+            .filter((issue) => issue.code === 'CIRCULAR_DEPENDENCY');
 
         expect(cycleIssues).toHaveLength(1);
-        expect(cycleIssues[0]).toContain('a -> b -> a');
+        expect(cycleIssues[0]?.path).toEqual(['a', 'b', 'a']);
     });
 
     it('reports two independent cycles separately', () => {
@@ -113,7 +113,7 @@ describe('Circular dependency detection in validate()', () => {
 
         const cycleIssues = builder
             .validate()
-            .filter((issue) => issue.includes('Circular dependency'));
+            .filter((issue) => issue.code === 'CIRCULAR_DEPENDENCY');
 
         expect(cycleIssues).toHaveLength(2);
     });
@@ -126,7 +126,7 @@ describe('Circular dependency detection in validate()', () => {
 
         const cycleIssues = builder
             .validate()
-            .filter((issue) => issue.includes('Circular dependency'));
+            .filter((issue) => issue.code === 'CIRCULAR_DEPENDENCY');
 
         expect(cycleIssues).toHaveLength(0);
     });

@@ -14,6 +14,15 @@ container.get("Logger");
 container.get(Kizuna.ServiceProviderToken);
 borrower.get("Logger");
 
+const pathSegment: Kizuna.ValidationPathSegment = { key: "Logger" };
+void pathSegment;
+
+const readMissingDependency = (
+	issue: Kizuna.ValidationIssue,
+): string | undefined =>
+	issue.code === "MISSING_DEPENDENCY" ? issue.dependencyKey : undefined;
+void readMissingDependency;
+
 borrower.dispose();
 container.dispose();
 

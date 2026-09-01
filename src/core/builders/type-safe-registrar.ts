@@ -1,7 +1,7 @@
 import type {
-    Factory,
-    ServiceRegistry,
-    TypeSafeRegistrar,
+	Factory,
+	ServiceRegistry,
+	TypeSafeRegistrar,
 } from "../../api/contracts/types.js";
 import type {
 	ConfigurableServiceLifecycle,
@@ -14,40 +14,59 @@ import { ServiceWrapper } from "../services/service-wrapper.js";
  * This replaces the complex ServiceBuilderFactory for the new type-safe API.
  */
 export class TypeSafeRegistrarImpl<TRegistry extends ServiceRegistry, T>
-    implements TypeSafeRegistrar<TRegistry, T>, ServiceBuilder {
-    private serviceName: string;
-    private factory?: (...args: any[]) => any;
-    private dependencies: string[] = [];
-    private constructorFn?: new (...args: any[]) => T;
+	implements TypeSafeRegistrar<TRegistry, T>, ServiceBuilder
+{
+	private readonly serviceName: string;
+	private factory?: (...args: any[]) => any;
+	private dependencies: string[] = [];
+	private constructorFn?: new (
+		...args: any[]
+	) => T;
 
-    constructor(serviceName: string) {
-        this.serviceName = serviceName;
-    }
+	constructor(serviceName: string) {
+		this.serviceName = serviceName;
+	}
 
-    useType<TCtor extends new (...args: any[]) => T>(
-        constructorType: TCtor,
-        ...dependencies: string[]
-    ): void {
-        this.constructorFn = constructorType;
-        this.dependencies = dependencies;
-        this.factory = (...args: any[]) => new constructorType(...args);
-    }
+	useType<TCtor extends new (...args: any[]) => T>(
+		constructorType: TCtor,
+		...dependencies: string[]
+	): void {
+		const validatedDependencies = this.validateDependencies(dependencies);
+		this.constructorFn = constructorType;
+		this.dependencies = validatedDependencies;
+		this.factory = (...args: any[]) => new constructorType(...args);
+	}
 
-    useFactory(factory: Factory<TRegistry, T>): void {
-        this.factory = factory;
-        this.dependencies = [];
-    }
+	useFactory(factory: Factory<TRegistry, T>, ...dependencies: string[]): void {
+		const validatedDependencies = this.validateDependencies(dependencies);
+		this.factory = factory;
+		this.dependencies = validatedDependencies;
+	}
 
-    getConstructor(): (new (...args: any[]) => T) | undefined {
-        return this.constructorFn;
-    }
+	build(lifecycleManager: ConfigurableServiceLifecycle): ServiceWrapper {
+		if (!this.factory) {
+			throw new Error(
+				`No factory configured for service '${this.serviceName}'`,
+			);
+		}
 
-    build(lifecycleManager: ConfigurableServiceLifecycle): ServiceWrapper {
-        if (!this.factory) {
-            throw new Error(`No factory configured for service '${this.serviceName}'`);
-        }
+		lifecycleManager.setFactory(this.factory);
+		return new ServiceWrapper(
+			this.serviceName,
+			lifecycleManager,
+			this.dependencies,
+			this.constructorFn,
+		);
+	}
 
-        lifecycleManager.setFactory(this.factory);
-        return new ServiceWrapper(this.serviceName, lifecycleManager, this.dependencies, this.constructorFn);
-    }
+	private validateDependencies(dependencies: readonly unknown[]): string[] {
+		return dependencies.map((dependency, index) => {
+			if (typeof dependency !== "string" || dependency.trim() === "") {
+				throw new TypeError(
+					`Dependency at index ${index} for service '${String(this.serviceName)}' must be a non-empty string`,
+				);
+			}
+			return dependency;
+		});
+	}
 }

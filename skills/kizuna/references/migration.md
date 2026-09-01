@@ -53,7 +53,7 @@ const builder = new ContainerBuilder()
   .registerScoped('userService', UserService, 'userRepo', 'orderRepo', 'logger');
 
 const issues = builder.validate();
-if (issues.length > 0) throw new Error(issues.join('\n'));
+if (issues.length > 0) throw new ContainerValidationError(issues);
 const container = builder.build();
 ```
 
@@ -61,8 +61,8 @@ const container = builder.build();
 
 1. Identify all classes that are instantiated with `new` and passed as dependencies.
 2. Register each class with a string key. Choose singleton for shared state, scoped for per-request state, transient for stateless.
-3. Name the key to match the constructor parameter name in consuming classes (to pass strict parameter validation).
-4. Call `validate()` to verify all dependencies are wired correctly.
+3. Pass dependency keys in the same order as the constructor parameters.
+4. Call `validate()` to inspect the dependency graph before the build.
 5. Replace `new` chains with `container.get()` calls.
 
 ## From tsyringe

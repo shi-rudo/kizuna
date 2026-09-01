@@ -49,7 +49,7 @@ const container = new ContainerBuilder()
   .registerSingletonFactory('diagnostics', (provider) => {
     const logger = provider.get('logger');
     return new Diagnostics(logger);
-  })
+  }, 'logger')
   .build();
 ```
 

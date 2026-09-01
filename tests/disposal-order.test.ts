@@ -329,7 +329,7 @@ describe("dependency-aware disposal order", () => {
 		const container = new ContainerBuilder()
 			.registerSingleton("first", First, "second")
 			.registerSingleton("second", Second, "first")
-			.build();
+			.build({ validation: "deferred" });
 
 		expect(() => container.dispose()).not.toThrow();
 	});
@@ -346,7 +346,7 @@ describe("dependency-aware disposal order", () => {
 		const container = new ContainerBuilder()
 			.registerSingleton("first", First, "second")
 			.registerSingleton("second", Second, "first")
-			.build();
+			.build({ validation: "deferred" });
 
 		await expect(container.disposeAsync()).resolves.toBeUndefined();
 	});

@@ -81,25 +81,39 @@ class ContainerBuilder {
 }
 ```
 
-### 5. Parameter Name Validation (Kizuna Feature)
+### 5. Explicit Dependency Metadata
 ```typescript
-// ✅ Strict parameter validation enabled by default
 class EmailService {
     constructor(private logger: Logger, private mailer: MailService) {}
 }
 
-// This will fail validation - parameter names don't match
-builder.registerScoped("EmailService", EmailService, "MailService", "Logger");
-//                                                    ^^^^^^^^^^^ Wrong order!
+const builder = new ContainerBuilder()
+    .registerSingleton("Logger", Logger)
+    .registerSingleton("MailService", MailService)
+    .registerScoped(
+        "EmailService",
+        EmailService,
+        "Logger",
+        "MailService",
+    );
 
-// ✅ Correct - parameter names match
-builder.registerScoped("EmailService", EmailService, "logger", "mailer");
-
-// ✅ Opt-out if needed (not recommended)
-builder
-    .disableStrictParameterValidation()  // Disable validation
-    .registerScoped("EmailService", EmailService, "MailService", "Logger"); // Now allowed
+const issues = builder.validate();
+const container = builder.build();
 ```
+
+TypeScript validates dependency count, type, and position. Runtime validation
+uses the declared keys and does not inspect parameter names.
+
+```typescript
+builder.registerSingletonFactory(
+    "Repository",
+    (provider) => new Repository(provider.get("Database")),
+    "Database",
+);
+```
+
+The final key declares the factory edge. This edge controls validation and
+cleanup order.
 
 ## Key Principles
 

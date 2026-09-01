@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ContainerBuilder } from '../src/api/container-builder';
+import type { ValidationIssue } from '../src/api/validation';
 
 class Dep {}
 class Consumer {
     constructor(public dep: unknown) {}
 }
 
-const captiveIssues = (issues: string[]) =>
-    issues.filter((issue) => issue.includes('captive dependency'));
+const captiveIssues = (issues: readonly ValidationIssue[]) =>
+    issues.filter((issue) => issue.code === 'CAPTIVE_DEPENDENCY');
 
 describe('Captive dependency validation (scoped injected into singleton)', () => {
     it('flags a singleton that depends on a scoped service', () => {
@@ -18,8 +19,8 @@ describe('Captive dependency validation (scoped injected into singleton)', () =>
 
         const captive = captiveIssues(issues);
         expect(captive).toHaveLength(1);
-        expect(captive[0]).toContain("'consumer'");
-        expect(captive[0]).toContain("'dep'");
+        expect(captive[0]?.serviceKey).toBe('consumer');
+        expect(captive[0]?.dependencyKey).toBe('dep');
     });
 
     it('flags a transitive scoped dependency with the complete dependency path', () => {
@@ -42,9 +43,12 @@ describe('Captive dependency validation (scoped injected into singleton)', () =>
 
         const captive = captiveIssues(issues);
         expect(captive).toHaveLength(1);
-        expect(captive[0]).toContain(
-            'consumer -> secondBridge -> firstBridge -> dep',
-        );
+        expect(captive[0]?.path).toEqual([
+            'consumer',
+            'secondBridge',
+            'firstBridge',
+            'dep',
+        ]);
     });
 
     it('does not flag singleton -> singleton dependencies', () => {
@@ -97,6 +101,6 @@ describe('Captive dependency validation (scoped injected into singleton)', () =>
 
         const captive = captiveIssues(issues);
         expect(captive).toHaveLength(1);
-        expect(captive[0]).toContain("'group'");
+        expect(captive[0]?.serviceKey).toBe('group');
     });
 });

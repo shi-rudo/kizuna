@@ -254,7 +254,9 @@ describe('Multi-Registration', () => {
                 .addSingleton('middleware', AuthMiddleware, 'missingDep');
 
             const issues = builder.validate();
-            expect(issues.some(i => i.includes('missingDep'))).toBe(true);
+            expect(
+                issues.some((issue) => issue.dependencyKey === 'missingDep'),
+            ).toBe(true);
         });
 
         it('should detect circular dependency involving multi-registrations', () => {
@@ -271,10 +273,12 @@ describe('Multi-Registration', () => {
                 .addSingleton('handlers', HandlerX, 'DepA');
 
             const issues = builder.validate();
-            const circularIssues = issues.filter(i => i.toLowerCase().includes('circular'));
+            const circularIssues = issues.filter(
+                (issue) => issue.code === 'CIRCULAR_DEPENDENCY',
+            );
             expect(circularIssues.length).toBeGreaterThan(0);
-            expect(circularIssues[0]).toContain('DepA');
-            expect(circularIssues[0]).toContain('handlers');
+            expect(circularIssues[0]?.path).toContain('DepA');
+            expect(circularIssues[0]?.path).toContain('handlers');
         });
 
         it('should detect circular dependency purely within multi-registrations', () => {
@@ -290,7 +294,9 @@ describe('Multi-Registration', () => {
                 .addSingleton('groupY', ServiceY, 'groupX');
 
             const issues = builder.validate();
-            const circularIssues = issues.filter(i => i.toLowerCase().includes('circular'));
+            const circularIssues = issues.filter(
+                (issue) => issue.code === 'CIRCULAR_DEPENDENCY',
+            );
             expect(circularIssues.length).toBeGreaterThan(0);
         });
     });
@@ -599,7 +605,7 @@ describe('Multi-Registration', () => {
         it('should throw meaningful error when multi-service dependency fails', () => {
             const container = new ContainerBuilder()
                 .addSingleton('middleware', AuthMiddleware, 'missingService')
-                .build();
+                .build({ validation: 'deferred' });
 
             expect(() => container.getAll('middleware')).toThrow(/missingService/);
         });

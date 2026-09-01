@@ -45,12 +45,16 @@ jobs:
         run: |
           cp -f tests/fixtures/package-consumer.ts test-app/src/test.ts
           cp -f tests/fixtures/package-interop.mjs test-app/package-interop.mjs
+          cp -f tests/fixtures/package-validation.mjs test-app/package-validation.mjs
           cp -f tests/fixtures/tsconfig.nodenext.json test-app/tsconfig.nodenext.json
 
       - name: Check packed runtime exports
         run: |
           cd test-app
-          node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['CircularDependencyError','ContainerBuilder','DisposalError','ServiceProviderToken','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
+          node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['CircularDependencyError','ContainerBuilder','ContainerValidationError','DisposalError','ServiceProviderToken','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
+
+      - name: Check packed validation errors
+        run: cd test-app && node package-validation.mjs
 
       - name: Check ESM and CommonJS borrowing
         run: cd test-app && node package-interop.mjs

@@ -13,10 +13,12 @@ The runtime suite runs through `pnpm test`. The type suite runs through
 | The builder infers fixed registry keys and the value type for `get()`. | [Public type tests](../tests/public-api-hardening.test-d.ts) | JavaScript and unsafe casts bypass compile-time checks. |
 | Constructor dependencies use compile-time count, type, and position checks. | [Constructor dependency type tests](../tests/constructor-dependencies.test-d.ts) | Structural typing cannot distinguish keys that provide the same structural type. |
 | Interface tokens connect one fixed string key with an interface type. | [Interface token type tests](../tests/interface-token.test-d.ts) | Interface conformance uses TypeScript structural typing. |
-| One builder supports constructor, interface, and factory registrations. | [Container builder tests](../tests/container-builder.test.ts) | Factory lookups do not create dependency metadata. |
+| One builder supports constructor, interface, and factory registrations. | [Container builder tests](../tests/container-builder.test.ts) | Only declared factory keys create graph edges. |
 | Singleton, scoped, and transient lifecycles have distinct cache behavior. | [Lifecycle tests](../tests/container-builder.test.ts) | Kizuna does not export a custom lifecycle extension point. |
 | Multi-registration preserves registration order and lifecycle behavior. | [Multi-registration tests](../tests/multi-registration.test.ts) | `get()` returns an array for a multi-key, and `getAll()` wraps a single registration. |
-| Validation reports missing keys, cycles, and captive dependencies. | [Validation tests](../tests/validation.test.ts) and [captive-dependency tests](../tests/captive-dependency.test.ts) | A factory can hide lookups from graph validation. |
+| Build validation reports missing keys, cycles, and captive dependencies with stable issue codes and registration-aware paths. | [Structured validation tests](../tests/structured-validation.test.ts), [validation type tests](../tests/validation-api.test-d.ts), [factory validation tests](../tests/factory-dependency-validation.test.ts), and [multi-registration validation tests](../tests/multi-registration-validation.test.ts) | Deferred builds and undeclared factory lookups bypass static graph validation. |
+| A dependency key must be a non-empty string. | [Dependency-key validation tests](../tests/dependency-key-validation.test.ts) | TypeScript rejects most invalid keys before runtime. The runtime rule protects JavaScript and unsafe casts. |
+| Validation workspace allocation grows linearly for many singleton roots and independent cycles. | [Graph scale tests](../tests/registration-graph-scale.test.ts) and [graph benchmarks](../benchmarks/registration-graph.bench.ts) | Issue paths and the issue count can still grow with the declared graph. |
 | Child scopes isolate scoped values and share singleton values. | [Scope tests](../tests/container-builder.test.ts) | The root is also a scope, and the root does not track child scopes. |
 | Disposal cleans owned values in dependency-aware order and aggregates errors. | [Disposal order tests](../tests/disposal-order.test.ts) and [disposal error tests](../tests/disposal-errors.test.ts) | Transient values are untracked, and independent async branches have no completion order. |
 | Singleton and scoped factories can expose stored Promise values. | [Promise factory tests](../tests/async-factory-disposal.test.ts) | Resolution stays synchronous, and the stored observer can have a different identity. |
@@ -39,8 +41,8 @@ The [CI workflow](../.github/workflows/ci.yml) runs these commands on Node.js
 The [package E2E workflow](../.github/workflows/e2e.yml) creates the package
 tarball. It installs that tarball in a Vite React TypeScript project.
 
-The package gate checks runtime exports, ESM and CommonJS interoperability,
-NodeNext declarations, and the Vite consumer build.
+The package gate checks runtime exports, structured validation errors, ESM and
+CommonJS interoperability, NodeNext declarations, and the Vite consumer build.
 
 The runtime suite includes the [workerd compatibility tests](../tests/edge-compat.test.ts).
 These tests run the built ESM bundle through Miniflare without `nodejs_compat`.

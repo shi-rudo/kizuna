@@ -17,7 +17,7 @@ lists the automated evidence and the exact limit for each retained claim.
 - **🔄 Multiple Lifecycles**: Singleton, scoped, and transient registrations
 - **📦 Multi-Registration**: Multiple implementations can share one key
 - **🛡️ Constructor Dependency Checks**: TypeScript checks dependency count, type, and position
-- **🔎 Development Diagnostics**: Development validation can compare keys with parameter names
+- **🔎 Graph Validation**: Build rejects missing, circular, and captive dependencies by default
 - **🧹 Owned-Value Cleanup**: Synchronous and asynchronous cleanup with dependency-aware order
 - **⚡ No Runtime Dependencies**: The package has no `dependencies` entries
 - **🌍 Tested Runtime Coverage**: CI covers listed Node.js versions, a Vite build, and workerd
@@ -168,7 +168,7 @@ const container = new ContainerBuilder()
       database: { url: 'postgresql://localhost:5432/app' },
       features: { analytics: true }
     };
-  })
+  }, 'Logger')
   
   // Factory returning primitives
   .registerSingletonFactory('MaxRetries', () => 3)
@@ -200,7 +200,7 @@ const container = new ContainerBuilder()
   // Singleton services (shared across entire application)
   .registerSingleton('Config', ConfigService)
   .registerSingletonInterface(LoggerService, ConsoleLogger)
-  .registerSingletonFactory('Database', (provider) => createConnection())
+  .registerSingletonFactory('Database', () => createConnection())
   
   // Scoped services (shared within scope, new per scope)
   .registerScoped('RequestContext', RequestContext, LoggerService)
@@ -296,22 +296,40 @@ const invalid = container.get('NonExistent');
 const service = container.get(''); // IDE suggests: 'UserService'
 ```
 
-### 🔍 **Runtime Validation**
+### 🔍 **Runtime Graph Validation**
 
-```typescript
+`validate()` returns immutable issues with stable codes and dependency paths.
+`build()` uses the same validation and rejects an invalid graph by default.
+
+TypeScript rejects most invalid registrations during compilation. Runtime
+validation also protects JavaScript and code that uses unsafe casts.
+A dependency key must be a non-empty string. Registration methods reject all
+other values.
+
+```javascript
 const builder = new ContainerBuilder()
-  .registerSingleton('Service', SomeService, 'MissingDependency'); // Oops!
+  .registerSingleton('Service', SomeService, 'MissingDependency');
 
-// Catch configuration errors before runtime
 const issues = builder.validate();
-// Returns: ["Service depends on unregistered service 'MissingDependency'"]
+// [{
+//   code: 'MISSING_DEPENDENCY',
+//   serviceKey: 'Service',
+//   dependencyKey: 'MissingDependency',
+//   path: ['Service', 'MissingDependency'],
+//   pathSegments: [{ key: 'Service' }, { key: 'MissingDependency' }],
+//   message: "Service 'Service' depends on unregistered service 'MissingDependency'"
+// }]
 
-if (issues.length === 0) {
-  const container = builder.build();
-} else {
-  console.error('Configuration issues:', issues);
-}
+builder.build(); // Throws ContainerValidationError.
 ```
+
+`ValidationIssue` is a discriminated union. The `code` property selects the
+fields for one error type. Dependency errors have a required `dependencyKey`.
+Kizuna derives `path` from `pathSegments`.
+
+Use `build({ validation: 'deferred' })` only for a dynamic graph. This option
+disables build-time graph validation. Actual lookup failures then occur during
+resolution.
 
 ### 🎯 **Constructor Dependency Checks**
 
@@ -334,21 +352,12 @@ const builder = new ContainerBuilder()
 builder.registerScoped('brokenEmailService', EmailService, 'mailer', 'logger');
 ```
 
-This check applies to `registerSingleton`, `registerScoped`, `registerTransient`, and their constructor-based `add*` methods.
+This check applies to `registerSingleton`, `registerScoped`,
+`registerTransient`, and the constructor-based `add*` methods.
 
-In development, strict parameter validation also compares each key with the source parameter name. This additional check can find naming mistakes.
-
-Production mode disables the name check because minifiers can change parameter names. The TypeScript type check does not depend on parameter names.
-
-If your key names and parameter names differ, disable only the parameter-name check:
-```typescript
-const container = new ContainerBuilder()
-  .disableStrictParameterValidation()
-  .registerSingleton('loggerService', Logger)
-  .registerSingleton('mailService', MailService)
-  .registerScoped('emailService', EmailService, 'loggerService', 'mailService')
-  .build();
-```
+Runtime validation uses only the declared dependency keys. Kizuna does not
+read constructor source code or parameter names. This behavior is the same in
+Node.js, browsers, and edge runtimes.
 
 ## 🔄 Working with Scopes
 
@@ -386,7 +395,7 @@ const container = new ContainerBuilder()
   .registerScopedFactory('Connection', (provider) => {
     const config = provider.get('Config');
     return createConnection(config.databaseUrl);
-  })
+  }, 'Config')
   .registerScoped('UserRepository', UserRepository, 'Connection')
   .registerScoped('OrderRepository', OrderRepository, 'Connection')
   .build();
@@ -500,9 +509,19 @@ The async API runs independent graph branches in parallel. Their relative
 completion order is not defined. All services under a multi-registration key
 are part of the graph.
 
-Factory lookups do not declare dependency keys. Therefore, these lookups do not
-define cleanup order. When cleanup order is necessary, use a constructor
-registration with explicit dependency keys.
+Factory registrations can declare dependency keys after the factory. These
+keys define validation edges and cleanup order.
+
+```typescript
+.registerSingletonFactory(
+  'UserRepository',
+  (provider) => new UserRepository(provider.get('DatabasePool')),
+  'DatabasePool',
+)
+```
+
+An undeclared locator lookup stays invisible to graph validation. Declare each
+fixed lookup that affects lifetimes or cleanup order.
 
 #### Promise factories
 
@@ -694,7 +713,7 @@ const container = new ContainerBuilder()
     return config.environment === 'production'
       ? new SMTPEmailService(config.smtp)
       : new MockEmailService();
-  })
+  }, 'Config')
   
   .registerSingletonFactory('Cache', (provider) => {
     const config = provider.get('Config');
@@ -702,7 +721,7 @@ const container = new ContainerBuilder()
     return config.redis.url
       ? new RedisCache(config.redis.url)
       : new InMemoryCache();
-  })
+  }, 'Config')
   
   .build();
 ```
@@ -719,15 +738,29 @@ Read the examples in the [`examples/`](./examples) directory:
 
 ### Package Exports
 
-The package root exports four runtime values:
+The package root exports six runtime values:
 
 - `ContainerBuilder`
 - `interfaceToken`
 - `ServiceProviderToken`
 - `CircularDependencyError`
+- `ContainerValidationError`
+- `DisposalError`
 
-It also exports the `TypeSafeServiceLocator` and `InterfaceToken` types. Concrete
-providers, lifecycle classes, wrappers, and builder helper types are internal.
+It also exports these public types:
+
+- `RootServiceContainer`
+- `TypeSafeServiceLocator`
+- `InterfaceToken`
+- `DisposalFailure`
+- `DisposalOperation`
+- `ContainerBuildOptions`
+- `ValidationIssue`
+- `ValidationIssueCode`
+- `ValidationPathSegment`
+
+Concrete providers, lifecycle classes, wrappers, and builder helper types are
+internal.
 
 Read the [public API hardening migration](./docs/migrations/public-api-hardening.md)
 when you update code that imported an internal symbol.
@@ -753,17 +786,17 @@ The main class for configuring your dependency injection container.
 // Singleton lifecycle
 .registerSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.registerSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 
 // Scoped lifecycle (one instance per scope)
 .registerScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.registerScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 
 // Transient lifecycle (new instance every time)
 .registerTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.registerTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 ```
 
 `LiteralServiceKey`, `InterfaceTokenService`, `InterfaceImplementationConstructor`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
@@ -775,9 +808,9 @@ The main class for configuring your dependency injection container.
 .addSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .addScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .addTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.addSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
-.addScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
-.addTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T)
+.addSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 ```
 
 #### Cross-Container Composition
@@ -793,9 +826,8 @@ Scopes and borrowers cannot lend a registration.
 #### Container Management
 
 ```typescript
-.build(): RootServiceContainer<TRegistry>              // Build the root container
-.validate(): string[]                                  // Validate configuration
-.disableStrictParameterValidation(): ContainerBuilder  // Disable param name validation (auto-off in production)
+.build(options?: { validation?: 'eager' | 'deferred' }): RootServiceContainer<TRegistry>
+.validate(): readonly ValidationIssue[]                // Validate the dependency graph
 .count: number                                         // Number of registered services
 .isRegistered(key: string): boolean                    // Check if service is registered
 .getRegisteredServiceNames(): string[]                 // List all registered keys
@@ -961,14 +993,13 @@ scoped registration for request data.
 - `Scoped`: anything touching the current request (`RequestContext`, per-request DB transactions, auth state)
 - `Transient`: per-call helpers (UUID generators, timestamps)
 
-#### Strict parameter validation under minification
+#### Deterministic graph validation
 
-`strictParameterValidation` reads `constructor.toString()` and compares dependency
-keys with parameter names. A bundler can change these names during minification.
+Kizuna validates declared graph edges. It does not read constructor source code
+or environment variables. Minification does not change validation results.
 
-Kizuna disables this diagnostic when `NODE_ENV` is `"production"`. It also
-disables the diagnostic when `process` is unavailable. Type-based dependency
-checks remain active during compilation.
+Factory locator calls are dynamic. Declare fixed factory dependencies that
+affect validation or cleanup order.
 
 ## ⚡ Concurrency Considerations
 

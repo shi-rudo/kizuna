@@ -38,7 +38,7 @@ const container = new ContainerBuilder()
   .registerSingletonFactory('config', (provider) => {
     const logger = provider.get('logger');
     return createConfiguration(logger);
-  })
+  }, 'logger')
   .build();
 
 container.get('logger');
@@ -66,8 +66,8 @@ The builder must contain each dependency before its consumer registration.
 Each registration key must be one fixed string literal.
 
 TypeScript uses structural assignability. It cannot distinguish two keys when
-both keys provide the same structural type. Development diagnostics can compare
-key text with source parameter names.
+both keys provide the same structural type. Runtime validation does not inspect
+parameter names.
 
 ### Interface registrations
 
@@ -82,8 +82,10 @@ checks as concrete constructor registrations.
 A factory receives a locator for the registry that exists before the factory
 registration. The factory return type becomes the service type for its key.
 
-Factory keys must be fixed string literals. Factory lookups do not create
-dependency metadata. Therefore, they do not define cleanup order.
+Factory keys must be fixed string literals. A factory can declare dependency
+keys after its function. These keys define validation edges and cleanup order.
+
+An undeclared locator lookup does not create dependency metadata.
 
 ADR-009 defines the factory type. ADR-001 defines Promise values from an
 `async` factory.
@@ -114,13 +116,19 @@ decision.
 ## Validation contracts
 
 TypeScript rejects unknown dependency keys in typed constructor registrations.
-JavaScript callers can still create invalid graphs.
+JavaScript callers and unsafe casts can still create invalid graphs.
 
-`validate()` reports graph errors, captive dependencies, and development-only
-parameter-name differences. `build()` does not call `validate()`.
+`validate()` reports missing dependencies, captive dependencies, circular
+dependencies, invalid keys, and disposed registrations. It uses the declared
+dependency keys. It does not inspect constructor parameter names.
 
-Some errors occur at registration. Other errors occur during explicit
-validation or first resolution. ADR-007 is the historical fail-fast decision.
+By default, `build()` validates the graph before it creates the root container.
+Both `validate()` and eager `build()` report the same graph errors.
+`build({ validation: 'deferred' })` skips this eager check for compatibility.
+The container then reports resolution errors when a consumer requests a service.
+
+Some errors occur during registration. Other errors occur during validation or
+resolution. ADR-007 records the historical fail-fast decision.
 
 ## Consequences
 

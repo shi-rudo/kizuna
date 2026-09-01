@@ -1,94 +1,79 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ContainerBuilder } from '../src/api/container-builder';
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ContainerBuilder } from "../src/api/container-builder";
 
 class Logger {
-    log(msg: string) { return msg; }
+	log(message: string) {
+		return message;
+	}
 }
 
 class UserService {
-    constructor(public logger: Logger) { }
+	constructor(public logger: Logger) {}
 }
 
-describe('strict parameter validation gating', () => {
-    afterEach(() => {
-        vi.unstubAllEnvs();
-        // Reset __DEV__ in case a test set it
-        delete (globalThis as { __DEV__?: boolean }).__DEV__;
-    });
+const validateMissingDependency = () =>
+	new ContainerBuilder()
+		.registerSingleton("UserService", UserService, "Logger" as never)
+		.validate();
 
-    describe('production mode', () => {
-        beforeEach(() => {
-            vi.stubEnv('NODE_ENV', 'production');
-        });
+describe("deterministic graph validation", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
+	});
 
-        it('silently skips parameter-name mismatch detection', () => {
-            const builder = new ContainerBuilder()
-                .registerSingleton('Logger', Logger)
-                .registerSingleton('UserService', UserService, 'WrongName'); // wrong param name
+	it("returns the same issue in development and production", () => {
+		vi.stubEnv("NODE_ENV", "development");
+		const developmentIssues = validateMissingDependency();
 
-            const issues = builder.validate();
-            const paramIssues = issues.filter(i => i.includes('parameter') && i.includes('named'));
-            expect(paramIssues).toEqual([]);
-        });
+		vi.stubEnv("NODE_ENV", "production");
+		const productionIssues = validateMissingDependency();
 
-        it('still detects unregistered dependencies', () => {
-            const builder = new ContainerBuilder()
-                .registerSingleton('UserService', UserService, 'Logger'); // Logger not registered
+		expect(productionIssues).toEqual(developmentIssues);
+		expect(productionIssues[0]).toMatchObject({
+			code: "MISSING_DEPENDENCY",
+			dependencyKey: "Logger",
+			path: ["UserService", "Logger"],
+		});
+	});
 
-            const issues = builder.validate();
-            expect(issues.some(i => i.includes('unregistered'))).toBe(true);
-        });
+	it("returns the same issue when process is unavailable", () => {
+		const nodeIssues = validateMissingDependency();
 
-        it('still detects circular dependencies', () => {
-            class A { constructor(public b: B) { } }
-            class B { constructor(public a: A) { } }
+		vi.stubGlobal("process", undefined);
 
-            const builder = new ContainerBuilder()
-                .registerSingleton('A', A, 'B')
-                .registerSingleton('B', B, 'A');
+		expect(validateMissingDependency()).toEqual(nodeIssues);
+	});
 
-            const issues = builder.validate();
-            expect(issues.some(i => i.toLowerCase().includes('circular'))).toBe(true);
-        });
-    });
+	it("does not infer dependency keys from parameter names", () => {
+		const issues = new ContainerBuilder()
+			.registerSingleton("DifferentKey", Logger)
+			.registerSingleton("UserService", UserService, "DifferentKey")
+			.validate();
 
-    describe('development mode (default in tests)', () => {
-        it('detects parameter-name mismatches', () => {
-            const builder = new ContainerBuilder()
-                .registerSingleton('Logger', Logger)
-                .registerSingleton('UserService', UserService, 'WrongName');
+		expect(issues).toEqual([]);
+	});
 
-            const issues = builder.validate();
-            const paramIssues = issues.filter(i => i.includes('parameter') && i.includes('named'));
-            expect(paramIssues.length).toBeGreaterThan(0);
-        });
-    });
+	it("detects cycles without environment checks", () => {
+		class A {
+			constructor(public b: B) {}
+		}
+		class B {
+			constructor(public a: A) {}
+		}
 
-    describe('explicit __DEV__ override', () => {
-        it('runs strict validation when __DEV__ is true even with NODE_ENV=production', () => {
-            vi.stubEnv('NODE_ENV', 'production');
-            (globalThis as { __DEV__?: boolean }).__DEV__ = true;
+		vi.stubGlobal("process", undefined);
 
-            const builder = new ContainerBuilder()
-                .registerSingleton('Logger', Logger)
-                .registerSingleton('UserService', UserService, 'WrongName');
+		const issues = new ContainerBuilder()
+			.registerSingleton("A", A, "B" as never)
+			.registerSingleton("B", B, "A")
+			.validate();
 
-            const issues = builder.validate();
-            const paramIssues = issues.filter(i => i.includes('parameter') && i.includes('named'));
-            expect(paramIssues.length).toBeGreaterThan(0);
-        });
-    });
-
-    describe('disableStrictParameterValidation() still works', () => {
-        it('opts out of validation in dev mode', () => {
-            const builder = new ContainerBuilder()
-                .registerSingleton('Logger', Logger)
-                .registerSingleton('UserService', UserService, 'WrongName')
-                .disableStrictParameterValidation();
-
-            const issues = builder.validate();
-            const paramIssues = issues.filter(i => i.includes('parameter') && i.includes('named'));
-            expect(paramIssues).toEqual([]);
-        });
-    });
+		expect(issues).toContainEqual(
+			expect.objectContaining({
+				code: "CIRCULAR_DEPENDENCY",
+				path: ["A", "B", "A"],
+			}),
+		);
+	});
 });
