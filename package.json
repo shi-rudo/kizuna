@@ -32,7 +32,7 @@
 		"!skills/_artifacts"
 	],
 	"scripts": {
-		"benchmark": "vitest bench --run",
+		"benchmark": "vitest bench --run --no-file-parallelism",
 		"build": "tsup && tsc -p tsconfig.json --emitDeclarationOnly",
 		"changeset": "changeset",
 		"test": "vitest",

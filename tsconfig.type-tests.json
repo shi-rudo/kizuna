@@ -7,6 +7,6 @@
 		"rootDir": ".",
 		"sourceMap": false
 	},
-	"include": ["src", "tests/**/*.test-d.ts"],
+	"include": ["src", "benchmarks", "tests/**/*.test-d.ts"],
 	"exclude": ["node_modules", "dist"]
 }

@@ -1,5 +1,6 @@
 import { bench, describe } from "vitest";
 import { ContainerBuilder } from "../src/api/container-builder";
+import { scenarioSizes } from "./scenarios";
 
 interface DynamicBuilder {
 	registerScopedFactory(
@@ -34,10 +35,8 @@ const manyCycles = (cycleCount: number): DynamicBuilder => {
 	return builder;
 };
 
-const graphSizes = [500, 1_000, 2_000, 4_000] as const;
-
 describe("registration graph validation with singleton roots", () => {
-	for (const nodeCount of graphSizes) {
+	for (const nodeCount of scenarioSizes("graph-singleton-roots")) {
 		const roots = manyRoots(nodeCount - 1);
 		bench(`${nodeCount} nodes`, () => {
 			roots.validate();
@@ -46,7 +45,7 @@ describe("registration graph validation with singleton roots", () => {
 });
 
 describe("registration graph validation with independent cycles", () => {
-	for (const nodeCount of graphSizes) {
+	for (const nodeCount of scenarioSizes("graph-independent-cycles")) {
 		const cycles = manyCycles(nodeCount / 2);
 		bench(`${nodeCount} nodes`, () => {
 			cycles.validate();
