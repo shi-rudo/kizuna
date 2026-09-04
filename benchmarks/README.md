@@ -19,17 +19,23 @@ machines.
 | Singleton-root validation | Validate many singleton roots that share one scoped dependency. |
 | Independent-cycle validation | Validate many small and independent dependency cycles. |
 
-The scenario manifest defines at least three input sizes for each operation. The
-graph scenarios use 500, 1,000, 2,000, and 4,000 nodes.
+The scenario manifest defines at least three input sizes for each operation. It
+also defines the number of operations in one sample. Each benchmark name shows
+this batch size. The graph scenarios use one operation in each sample.
 
 ## Measurement method
 
 Vitest runs the benchmark files in sequence. Tinybench warms each task before it
-records samples. The container-build, cold-resolution, and disposal tasks use
-20 recorded samples. Their setup prepares separate input for every invocation.
+records samples. One sample contains enough operations for a measurable time.
+This batching decreases timer noise for fast operations.
 
-The tables report times in milliseconds. Use the `p75` value for comparisons.
-It is less sensitive to rare pauses than the maximum value.
+The container-build, cold-resolution, and disposal tasks use 50 recorded
+samples. Their setup prepares a separate input for every operation. The setup
+and cleanup times are outside the reported time.
+
+The tables report the batch time in milliseconds. Use the `p75` value for
+comparisons. It is less sensitive to rare pauses than the maximum value. Compare
+only rows that have the same size and batch size.
 
 Run comparisons on the same machine and Node.js version. Close other busy
 programs before each run.
@@ -38,8 +44,9 @@ programs before each run.
 
 1. Install the locked dependencies.
 2. Run `pnpm benchmark` three times.
-3. Record the `p75` value for each scenario and size.
-4. Compare each result with the same row in the baseline.
+3. Record the `p75` batch time for each scenario and size.
+4. Calculate the median of the three recorded times.
+5. Compare the median with the same row in the baseline.
 
 Treat a row as a possible regression when it takes more than 1.5 times the
 baseline time. Repeat the three runs on an idle machine. If the increase occurs
@@ -52,3 +59,6 @@ profile.
 
 The committed [baseline](./BASELINE.md) records one reference environment. A
 result from another environment is useful only for growth-rate comparisons.
+
+CI runs the suite once on Node.js 24. This run makes sure that each benchmark is
+executable. CI does not apply performance limits because hosted runners vary.

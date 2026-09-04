@@ -1,32 +1,37 @@
 import { bench, describe } from "vitest";
 import {
 	type BenchmarkContainer,
+	benchmarkName,
 	createDisposableContainer,
-	scenarioSizes,
+	preparedSampleCount,
+	scenarioCases,
 } from "./scenarios";
 
-const disposalSampleCount = 20;
 // Tinybench calls each function once to detect asynchronous work.
 // This call is outside the reported samples.
-const disposalInvocationCount = disposalSampleCount + 1;
+const measuredInvocationCount = preparedSampleCount + 1;
 
 describe("synchronous disposal", () => {
-	for (const registrationCount of scenarioSizes("sync-dispose")) {
+	for (const benchmarkCase of scenarioCases("sync-dispose")) {
+		const { operationsPerSample, size: registrationCount } = benchmarkCase;
 		let available: BenchmarkContainer[] = [];
 		bench(
-			`${registrationCount} resolved resources`,
+			benchmarkName(benchmarkCase, "resolved resources"),
 			() => {
-				const container = available.pop();
-				if (!container) {
-					throw new Error("Disposal benchmark exhausted its container pool");
+				for (let index = 0; index < operationsPerSample; index++) {
+					const container = available.pop();
+					if (!container) {
+						throw new Error("Disposal benchmark exhausted its container pool");
+					}
+					container.dispose();
 				}
-				container.dispose();
 			},
 			{
-				iterations: disposalSampleCount,
+				iterations: preparedSampleCount,
 				setup: () => {
-					available = Array.from({ length: disposalInvocationCount }, () =>
-						createDisposableContainer(registrationCount, "sync"),
+					available = Array.from(
+						{ length: measuredInvocationCount * operationsPerSample },
+						() => createDisposableContainer(registrationCount, "sync"),
 					);
 				},
 				teardown: () => {
@@ -43,22 +48,26 @@ describe("synchronous disposal", () => {
 });
 
 describe("asynchronous disposal", () => {
-	for (const registrationCount of scenarioSizes("async-dispose")) {
+	for (const benchmarkCase of scenarioCases("async-dispose")) {
+		const { operationsPerSample, size: registrationCount } = benchmarkCase;
 		let available: BenchmarkContainer[] = [];
 		bench(
-			`${registrationCount} resolved resources`,
+			benchmarkName(benchmarkCase, "resolved resources"),
 			async () => {
-				const container = available.pop();
-				if (!container) {
-					throw new Error("Disposal benchmark exhausted its container pool");
+				for (let index = 0; index < operationsPerSample; index++) {
+					const container = available.pop();
+					if (!container) {
+						throw new Error("Disposal benchmark exhausted its container pool");
+					}
+					await container.disposeAsync();
 				}
-				await container.disposeAsync();
 			},
 			{
-				iterations: disposalSampleCount,
+				iterations: preparedSampleCount,
 				setup: () => {
-					available = Array.from({ length: disposalInvocationCount }, () =>
-						createDisposableContainer(registrationCount, "async"),
+					available = Array.from(
+						{ length: measuredInvocationCount * operationsPerSample },
+						() => createDisposableContainer(registrationCount, "async"),
 					);
 				},
 				teardown: async () => {

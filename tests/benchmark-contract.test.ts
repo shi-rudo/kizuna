@@ -28,26 +28,58 @@ const requiredBenchmarkFiles = [
 	"service-resolution.bench.ts",
 ] as const;
 
+interface BenchmarkCase {
+	readonly size: number;
+	readonly operationsPerSample: number;
+}
+
 const loadScenarios = async (): Promise<{
-	benchmarkScenarios: Readonly<Record<string, readonly number[]>>;
+	benchmarkScenarios: Readonly<Record<string, readonly BenchmarkCase[]>>;
+	preparedSampleCount: number;
 }> => {
 	expect(existsSync(scenarioModulePath)).toBe(true);
 	return import(/* @vite-ignore */ pathToFileURL(scenarioModulePath).href);
 };
 
 describe("benchmark contract", () => {
-	it("defines an increasing size series for every required scenario", async () => {
+	it("defines increasing sizes and measurable batches for every scenario", async () => {
 		const { benchmarkScenarios } = await loadScenarios();
 
 		expect(Object.keys(benchmarkScenarios).sort()).toEqual(
 			[...requiredScenarios].sort(),
 		);
-		for (const sizes of Object.values(benchmarkScenarios)) {
-			expect(sizes.length).toBeGreaterThanOrEqual(3);
-			for (let index = 1; index < sizes.length; index++) {
-				expect(sizes[index]).toBeGreaterThan(sizes[index - 1]);
+		for (const cases of Object.values(benchmarkScenarios)) {
+			expect(cases.length).toBeGreaterThanOrEqual(3);
+			for (const benchmarkCase of cases) {
+				expect(benchmarkCase.operationsPerSample).toBeGreaterThanOrEqual(1);
+			}
+			for (let index = 1; index < cases.length; index++) {
+				expect(cases[index].size).toBeGreaterThan(cases[index - 1].size);
 			}
 		}
+
+		for (const scenario of [
+			"container-build",
+			"cold-resolve",
+			"warm-resolve",
+			"deep-resolve",
+			"start-scope",
+			"get-all",
+			"sync-dispose",
+			"async-dispose",
+		] as const) {
+			expect(
+				benchmarkScenarios[scenario].some(
+					(benchmarkCase) => benchmarkCase.operationsPerSample > 1,
+				),
+			).toBe(true);
+		}
+	});
+
+	it("uses enough prepared samples to reduce outlier sensitivity", async () => {
+		const { preparedSampleCount } = await loadScenarios();
+
+		expect(preparedSampleCount).toBeGreaterThanOrEqual(50);
 	});
 
 	it("keeps every benchmark scenario connected to an executable benchmark", async () => {
@@ -61,8 +93,33 @@ describe("benchmark contract", () => {
 
 		expect(benchmarkFiles.sort()).toEqual([...requiredBenchmarkFiles].sort());
 		for (const scenario of Object.keys(benchmarkScenarios)) {
-			expect(benchmarkSource).toContain(`scenarioSizes("${scenario}")`);
+			expect(benchmarkSource).toContain(`scenarioCases("${scenario}")`);
 		}
+	});
+
+	it("records one baseline row for every scenario case", async () => {
+		const { benchmarkScenarios } = await loadScenarios();
+		const baseline = readFileSync(join(benchmarkRoot, "BASELINE.md"), "utf8");
+		const actualRows = [
+			...baseline.matchAll(
+				/^\| ([a-z][a-z-]+) \| (\d+) \| (\d+) \| ([0-9]+(?:\.[0-9]+)?) \|$/gm,
+			),
+		]
+			.map((match) => {
+				expect(Number(match[4])).toBeGreaterThan(0);
+				return `${match[1]}:${match[2]}:${match[3]}`;
+			})
+			.sort();
+		const expectedRows = Object.entries(benchmarkScenarios)
+			.flatMap(([scenario, cases]) =>
+				cases.map(
+					(benchmarkCase) =>
+						`${scenario}:${benchmarkCase.size}:${benchmarkCase.operationsPerSample}`,
+				),
+			)
+			.sort();
+
+		expect(actualRows).toEqual(expectedRows);
 	});
 
 	it("documents the measurement method and every public operation", () => {
@@ -82,6 +139,7 @@ describe("benchmark contract", () => {
 			expect(readme).toContain(operation);
 		}
 		expect(readme).toContain("pnpm benchmark");
+		expect(readme).toContain("Calculate the median");
 		expect(readme).toContain("Node.js version");
 		expect(readme).toContain("`p75`");
 		expect(readme).toContain("1.5 times");
@@ -101,5 +159,14 @@ describe("benchmark contract", () => {
 		) as { scripts?: { benchmark?: string } };
 
 		expect(packageJson.scripts?.benchmark).toContain("--no-file-parallelism");
+	});
+
+	it("runs the benchmark suite in CI", () => {
+		const workflow = readFileSync(
+			join(repositoryRoot, ".github/workflows/ci.yml"),
+			"utf8",
+		);
+
+		expect(workflow).toContain("run: pnpm benchmark");
 	});
 });

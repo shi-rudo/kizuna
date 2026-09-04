@@ -1,23 +1,13 @@
 import { bench, describe } from "vitest";
-import { ContainerBuilder } from "../src/api/container-builder";
-import { scenarioSizes } from "./scenarios";
+import {
+	type BenchmarkBuilder,
+	benchmarkName,
+	createBenchmarkBuilder,
+	scenarioCases,
+} from "./scenarios";
 
-interface DynamicBuilder {
-	registerScopedFactory(
-		key: string,
-		factory: () => unknown,
-		...dependencies: string[]
-	): DynamicBuilder;
-	registerSingletonFactory(
-		key: string,
-		factory: () => unknown,
-		...dependencies: string[]
-	): DynamicBuilder;
-	validate(): readonly unknown[];
-}
-
-const manyRoots = (rootCount: number): DynamicBuilder => {
-	const builder = new ContainerBuilder() as unknown as DynamicBuilder;
+const manyRoots = (rootCount: number): BenchmarkBuilder => {
+	const builder = createBenchmarkBuilder();
 	builder.registerScopedFactory("scoped", () => ({}));
 	for (let index = 0; index < rootCount; index++) {
 		builder.registerSingletonFactory(`root-${index}`, () => ({}), "scoped");
@@ -25,8 +15,8 @@ const manyRoots = (rootCount: number): DynamicBuilder => {
 	return builder;
 };
 
-const manyCycles = (cycleCount: number): DynamicBuilder => {
-	const builder = new ContainerBuilder() as unknown as DynamicBuilder;
+const manyCycles = (cycleCount: number): BenchmarkBuilder => {
+	const builder = createBenchmarkBuilder();
 	for (let index = 0; index < cycleCount; index++) {
 		builder
 			.registerSingletonFactory(`left-${index}`, () => ({}), `right-${index}`)
@@ -36,19 +26,25 @@ const manyCycles = (cycleCount: number): DynamicBuilder => {
 };
 
 describe("registration graph validation with singleton roots", () => {
-	for (const nodeCount of scenarioSizes("graph-singleton-roots")) {
+	for (const benchmarkCase of scenarioCases("graph-singleton-roots")) {
+		const { operationsPerSample, size: nodeCount } = benchmarkCase;
 		const roots = manyRoots(nodeCount - 1);
-		bench(`${nodeCount} nodes`, () => {
-			roots.validate();
+		bench(benchmarkName(benchmarkCase, "nodes"), () => {
+			for (let index = 0; index < operationsPerSample; index++) {
+				roots.validate();
+			}
 		});
 	}
 });
 
 describe("registration graph validation with independent cycles", () => {
-	for (const nodeCount of scenarioSizes("graph-independent-cycles")) {
+	for (const benchmarkCase of scenarioCases("graph-independent-cycles")) {
+		const { operationsPerSample, size: nodeCount } = benchmarkCase;
 		const cycles = manyCycles(nodeCount / 2);
-		bench(`${nodeCount} nodes`, () => {
-			cycles.validate();
+		bench(benchmarkName(benchmarkCase, "nodes"), () => {
+			for (let index = 0; index < operationsPerSample; index++) {
+				cycles.validate();
+			}
 		});
 	}
 });

@@ -1,23 +1,83 @@
 import { ContainerBuilder } from "../src/api/container-builder";
 
+export interface BenchmarkCase {
+	readonly size: number;
+	readonly operationsPerSample: number;
+}
+
+const benchmarkCase = (
+	size: number,
+	operationsPerSample: number,
+): BenchmarkCase => Object.freeze({ size, operationsPerSample });
+
 export const benchmarkScenarios = Object.freeze({
-	"container-build": Object.freeze([10, 100, 1_000]),
-	"cold-resolve": Object.freeze([10, 100, 400]),
-	"warm-resolve": Object.freeze([10, 100, 1_000]),
-	"deep-resolve": Object.freeze([10, 100, 400]),
-	"start-scope": Object.freeze([10, 100, 1_000]),
-	"get-all": Object.freeze([10, 100, 1_000]),
-	"sync-dispose": Object.freeze([10, 100, 1_000]),
-	"async-dispose": Object.freeze([10, 100, 1_000]),
-	"graph-singleton-roots": Object.freeze([500, 1_000, 2_000, 4_000]),
-	"graph-independent-cycles": Object.freeze([500, 1_000, 2_000, 4_000]),
+	"container-build": Object.freeze([
+		benchmarkCase(10, 200),
+		benchmarkCase(100, 25),
+		benchmarkCase(1_000, 5),
+	]),
+	"cold-resolve": Object.freeze([
+		benchmarkCase(10, 500),
+		benchmarkCase(100, 40),
+		benchmarkCase(400, 8),
+	]),
+	"warm-resolve": Object.freeze([
+		benchmarkCase(10, 25_000),
+		benchmarkCase(100, 25_000),
+		benchmarkCase(1_000, 25_000),
+	]),
+	"deep-resolve": Object.freeze([
+		benchmarkCase(10, 2_500),
+		benchmarkCase(100, 100),
+		benchmarkCase(400, 10),
+	]),
+	"start-scope": Object.freeze([
+		benchmarkCase(10, 1_000),
+		benchmarkCase(100, 100),
+		benchmarkCase(1_000, 10),
+	]),
+	"get-all": Object.freeze([
+		benchmarkCase(10, 10_000),
+		benchmarkCase(100, 1_500),
+		benchmarkCase(1_000, 150),
+	]),
+	"sync-dispose": Object.freeze([
+		benchmarkCase(10, 200),
+		benchmarkCase(100, 40),
+		benchmarkCase(1_000, 4),
+	]),
+	"async-dispose": Object.freeze([
+		benchmarkCase(10, 200),
+		benchmarkCase(100, 24),
+		benchmarkCase(1_000, 2),
+	]),
+	"graph-singleton-roots": Object.freeze([
+		benchmarkCase(500, 1),
+		benchmarkCase(1_000, 1),
+		benchmarkCase(2_000, 1),
+		benchmarkCase(4_000, 1),
+	]),
+	"graph-independent-cycles": Object.freeze([
+		benchmarkCase(500, 1),
+		benchmarkCase(1_000, 1),
+		benchmarkCase(2_000, 1),
+		benchmarkCase(4_000, 1),
+	]),
 });
 
 export type BenchmarkScenario = keyof typeof benchmarkScenarios;
 
-export const scenarioSizes = <TScenario extends BenchmarkScenario>(
+export const preparedSampleCount = 50;
+
+export const scenarioCases = <TScenario extends BenchmarkScenario>(
 	scenario: TScenario,
 ): (typeof benchmarkScenarios)[TScenario] => benchmarkScenarios[scenario];
+
+export const benchmarkName = (
+	benchmarkCase: BenchmarkCase,
+	unit: string,
+): string =>
+	`${benchmarkCase.size} ${unit} × ${benchmarkCase.operationsPerSample} operations/sample`;
 
 export interface BenchmarkContainer {
 	get(key: string): unknown;
@@ -51,10 +111,31 @@ export interface BenchmarkBuilder {
 		...dependencies: string[]
 	): BenchmarkBuilder;
 	build(): BenchmarkContainer;
+	validate(): readonly unknown[];
 }
 
-const dynamicBuilder = (): BenchmarkBuilder =>
-	new ContainerBuilder() as unknown as BenchmarkBuilder;
+const requiredBuilderMethods = [
+	"registerSingletonFactory",
+	"registerScopedFactory",
+	"registerTransientFactory",
+	"addSingletonFactory",
+	"build",
+	"validate",
+] as const satisfies readonly (keyof ContainerBuilder)[];
+
+/**
+ * Create a builder for benchmark data that uses keys generated at run time.
+ * The required public method names remain compile-time checked.
+ */
+export const createBenchmarkBuilder = (): BenchmarkBuilder => {
+	const builder = new ContainerBuilder();
+	for (const method of requiredBuilderMethods) {
+		if (typeof builder[method] !== "function") {
+			throw new TypeError(`ContainerBuilder.${method} must be a function`);
+		}
+	}
+	return builder as unknown as BenchmarkBuilder;
+};
 
 const staticValue = Object.freeze({ value: 1 });
 let _benchmarkSink: unknown;
@@ -67,7 +148,7 @@ export const consume = (value: unknown): void => {
 export const createSingletonBuilder = (
 	registrationCount: number,
 ): BenchmarkBuilder => {
-	const builder = dynamicBuilder();
+	const builder = createBenchmarkBuilder();
 	for (let index = 0; index < registrationCount; index++) {
 		builder.registerSingletonFactory(`service-${index}`, () => staticValue);
 	}
@@ -77,7 +158,7 @@ export const createSingletonBuilder = (
 export const createWarmResolutionContainer = (
 	registrationCount: number,
 ): BenchmarkContainer => {
-	const builder = dynamicBuilder().registerSingletonFactory(
+	const builder = createBenchmarkBuilder().registerSingletonFactory(
 		"target",
 		() => staticValue,
 	);
@@ -93,7 +174,7 @@ const createDependencyChain = (
 	depth: number,
 	lifetime: "singleton" | "transient",
 ): BenchmarkContainer => {
-	const builder = dynamicBuilder();
+	const builder = createBenchmarkBuilder();
 	for (let index = depth - 1; index >= 0; index--) {
 		const key = `node-${index}`;
 		const dependencyKey = index + 1 < depth ? `node-${index + 1}` : undefined;
@@ -124,7 +205,7 @@ export const createDeepResolutionContainer = (
 export const createScopeContainer = (
 	registrationCount: number,
 ): BenchmarkContainer => {
-	const builder = dynamicBuilder();
+	const builder = createBenchmarkBuilder();
 	for (let index = 0; index < registrationCount; index++) {
 		const key = `service-${index}`;
 		if (index % 3 === 0) {
@@ -141,7 +222,7 @@ export const createScopeContainer = (
 export const createMultiResolutionContainer = (
 	registrationCount: number,
 ): BenchmarkContainer => {
-	const builder = dynamicBuilder();
+	const builder = createBenchmarkBuilder();
 	for (let index = 0; index < registrationCount; index++) {
 		builder.addSingletonFactory("items", () => ({ index }));
 	}
@@ -154,7 +235,7 @@ export const createDisposableContainer = (
 	registrationCount: number,
 	operation: "sync" | "async",
 ): BenchmarkContainer => {
-	const builder = dynamicBuilder();
+	const builder = createBenchmarkBuilder();
 	for (let index = 0; index < registrationCount; index++) {
 		builder.addSingletonFactory(
 			"resources",

@@ -1,45 +1,49 @@
 import { bench, describe } from "vitest";
 import {
 	type BenchmarkContainer,
+	benchmarkName,
 	consume,
 	createColdResolutionContainer,
 	createDeepResolutionContainer,
 	createWarmResolutionContainer,
-	scenarioSizes,
+	preparedSampleCount,
+	scenarioCases,
 } from "./scenarios";
 
-const coldSampleCount = 20;
 // Tinybench calls each function once to detect asynchronous work.
 // This call is outside the reported samples.
-const coldInvocationCount = coldSampleCount + 1;
+const measuredInvocationCount = preparedSampleCount + 1;
 
 describe("cold resolve", () => {
-	for (const depth of scenarioSizes("cold-resolve")) {
+	for (const benchmarkCase of scenarioCases("cold-resolve")) {
+		const { operationsPerSample, size: depth } = benchmarkCase;
 		let available: BenchmarkContainer[] = [];
-		let used: BenchmarkContainer[] = [];
 
 		bench(
-			`${depth} singleton dependencies`,
+			benchmarkName(benchmarkCase, "singleton dependencies"),
 			() => {
-				const container = available.pop();
-				if (!container) {
-					throw new Error(
-						"Cold resolve benchmark exhausted its container pool",
-					);
+				let lastResult: unknown;
+				for (let index = 0; index < operationsPerSample; index++) {
+					const container = available.pop();
+					if (!container) {
+						throw new Error(
+							"Cold resolve benchmark exhausted its container pool",
+						);
+					}
+					lastResult = container.get("node-0");
 				}
-				used.push(container);
-				consume(container.get("node-0"));
+				consume(lastResult);
 			},
 			{
-				iterations: coldSampleCount,
+				iterations: preparedSampleCount,
 				setup: () => {
-					available = Array.from({ length: coldInvocationCount }, () =>
-						createColdResolutionContainer(depth),
+					available = Array.from(
+						{ length: measuredInvocationCount * operationsPerSample },
+						() => createColdResolutionContainer(depth),
 					);
-					used = [];
 				},
 				teardown: () => {
-					for (const container of [...available, ...used]) {
+					for (const container of available) {
 						container.dispose();
 					}
 				},
@@ -52,19 +56,29 @@ describe("cold resolve", () => {
 });
 
 describe("warm resolve", () => {
-	for (const registrationCount of scenarioSizes("warm-resolve")) {
+	for (const benchmarkCase of scenarioCases("warm-resolve")) {
+		const { operationsPerSample, size: registrationCount } = benchmarkCase;
 		const container = createWarmResolutionContainer(registrationCount);
-		bench(`${registrationCount} registrations`, () => {
-			consume(container.get("target"));
+		bench(benchmarkName(benchmarkCase, "registrations"), () => {
+			let lastResult: unknown;
+			for (let index = 0; index < operationsPerSample; index++) {
+				lastResult = container.get("target");
+			}
+			consume(lastResult);
 		});
 	}
 });
 
 describe("deep resolve", () => {
-	for (const depth of scenarioSizes("deep-resolve")) {
+	for (const benchmarkCase of scenarioCases("deep-resolve")) {
+		const { operationsPerSample, size: depth } = benchmarkCase;
 		const container = createDeepResolutionContainer(depth);
-		bench(`${depth} transient dependencies`, () => {
-			consume(container.get("node-0"));
+		bench(benchmarkName(benchmarkCase, "transient dependencies"), () => {
+			let lastResult: unknown;
+			for (let index = 0; index < operationsPerSample; index++) {
+				lastResult = container.get("node-0");
+			}
+			consume(lastResult);
 		});
 	}
 });

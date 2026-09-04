@@ -2,45 +2,43 @@ import { bench, describe } from "vitest";
 import {
 	type BenchmarkBuilder,
 	type BenchmarkContainer,
+	benchmarkName,
 	consume,
 	createSingletonBuilder,
-	scenarioSizes,
+	preparedSampleCount,
+	scenarioCases,
 } from "./scenarios";
 
-const buildSampleCount = 20;
 // Tinybench calls each function once to detect asynchronous work.
 // This call is outside the reported samples.
-const buildInvocationCount = buildSampleCount + 1;
+const measuredInvocationCount = preparedSampleCount + 1;
 
 describe("container build", () => {
-	for (const registrationCount of scenarioSizes("container-build")) {
+	for (const benchmarkCase of scenarioCases("container-build")) {
+		const { operationsPerSample, size: registrationCount } = benchmarkCase;
 		let available: BenchmarkBuilder[] = [];
-		let built: BenchmarkContainer[] = [];
 		bench(
-			`${registrationCount} registrations`,
+			benchmarkName(benchmarkCase, "registrations"),
 			() => {
-				const builder = available.pop();
-				if (!builder) {
-					throw new Error(
-						"Container build benchmark exhausted its builder pool",
-					);
+				let lastContainer: BenchmarkContainer | undefined;
+				for (let index = 0; index < operationsPerSample; index++) {
+					const builder = available.pop();
+					if (!builder) {
+						throw new Error(
+							"Container build benchmark exhausted its builder pool",
+						);
+					}
+					lastContainer = builder.build();
 				}
-				const container = builder.build();
-				built.push(container);
-				consume(container);
+				consume(lastContainer);
 			},
 			{
-				iterations: buildSampleCount,
+				iterations: preparedSampleCount,
 				setup: () => {
-					available = Array.from({ length: buildInvocationCount }, () =>
-						createSingletonBuilder(registrationCount),
+					available = Array.from(
+						{ length: measuredInvocationCount * operationsPerSample },
+						() => createSingletonBuilder(registrationCount),
 					);
-					built = [];
-				},
-				teardown: () => {
-					for (const container of built) {
-						container.dispose();
-					}
 				},
 				time: 0,
 				warmupIterations: 5,
