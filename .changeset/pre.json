@@ -5,11 +5,20 @@
     "@shirudo/kizuna": "1.0.0-rc.3"
   },
   "changesets": [
+    "aggregate-disposal-errors",
+    "compile-published-examples",
+    "dependency-aware-disposal",
+    "dispose-async-factory-values",
+    "dispose-function-values",
+    "public-api-hardening",
     "quiet-tools-release",
+    "retry-rejected-factory-promises",
     "separate-service-provider-token",
     "single-interface-key",
     "stable-string-resolution",
     "strict-interface-keys",
-    "typed-constructor-dependencies"
+    "structured-graph-validation",
+    "typed-constructor-dependencies",
+    "typed-interface-dependencies"
   ]
 }
