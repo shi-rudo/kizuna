@@ -44,3 +44,7 @@ jobs:
 
       - name: Check examples
         run: pnpm test:examples
+
+      - name: Run benchmark smoke test
+        if: matrix.node-version == '24.x'
+        run: pnpm benchmark
