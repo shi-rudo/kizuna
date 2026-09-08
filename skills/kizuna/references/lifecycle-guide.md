@@ -179,7 +179,7 @@ Sync cleanup keeps registration order inside each disposal layer. All services
 under a multi-registration key are part of the graph.
 
 Factory methods accept dependency keys after the factory. These keys define
-cleanup order. An undeclared locator lookup does not add a graph edge.
+cleanup order. An undeclared resolver lookup does not add a graph edge.
 
 ### Promise factory values
 

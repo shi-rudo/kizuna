@@ -497,6 +497,7 @@ describe("published feature evidence", () => {
 		const typeExports = [
 			"RootServiceContainer",
 			"TypeSafeServiceLocator",
+			"TypeSafeServiceResolver",
 			"InterfaceToken",
 			"DisposalFailure",
 			"DisposalOperation",

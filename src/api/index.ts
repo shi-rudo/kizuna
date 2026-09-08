@@ -40,6 +40,7 @@ export { ContainerBuilder } from "./container-builder.js";
 export type {
 	RootServiceContainer,
 	TypeSafeServiceLocator,
+	TypeSafeServiceResolver,
 } from "./contracts/interfaces.js";
 export type { InterfaceToken } from "./interface-token.js";
 export { interfaceToken } from "./interface-token.js";

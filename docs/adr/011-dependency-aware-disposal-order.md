@@ -24,18 +24,23 @@ Sync disposal invokes each layer in registration order. Async disposal starts th
 
 Async disposal starts each dependency group after all its consumer groups settle. Unrelated graph branches do not block one another.
 
+One global runner limits active cleanup hooks. The default limit is 16. The
+`maxAsyncDisposalConcurrency` build option changes this limit for the root and
+its child scopes.
+
 Sync disposal keeps registration order within each layer. The provider keeps one order across single registrations and multi-registrations.
 
 Async order between independent branches depends on completion timing. If cleanup order is required, applications must declare a dependency.
 
 Factory registrations can declare dependency keys after the factory. These keys add edges to the disposal graph.
 
-An undeclared locator lookup does not add an edge. Applications must declare fixed lookups that control cleanup order.
+An undeclared resolver lookup does not add an edge. Applications must declare fixed lookups that control cleanup order.
 
 ## Consequences
 
 - Consumer cleanup can use a declared dependency until the consumer cleanup completes.
 - Independent cleanup stays parallel in the async path.
+- Async cleanup has a finite concurrency limit.
 - Multi-registration dependencies use the same order as single registrations.
 - A cycle cannot have a valid internal disposal order. Services in the cycle start in registration order.
 - The graph plan takes `O((V + E) log V)` time and `O(V + E)` memory.

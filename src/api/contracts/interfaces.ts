@@ -6,11 +6,16 @@ import type {
 import type { ServiceProviderToken } from "../service-provider.js";
 
 /**
- * Type-safe ServiceLocator that provides compile-time safety and IDE autocompletion.
+ * Type-safe service resolver for factory callbacks.
  *
- * @template TRegistry - The service registry type mapping string keys to service types
+ * It provides service lookup without container lifecycle operations. This
+ * prevents accidental lifecycle changes through the callback argument.
+ *
+ * @template TRegistry - The service registry available to the factory
  */
-export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
+export interface TypeSafeServiceResolver<
+	TRegistry extends Record<string, any>,
+> {
 	/** Resolves a registered interface through its type-safe token. */
 	get<TToken extends InterfaceToken<unknown, string>>(
 		token: RegisteredInterfaceToken<TRegistry, TToken>,
@@ -28,12 +33,6 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	): TRegistry[K];
 
 	/**
-	 * Returns the current provider through its explicit infrastructure token.
-	 * Constructor values are not service keys.
-	 */
-	get(token: typeof ServiceProviderToken): TypeSafeServiceLocator<TRegistry>;
-
-	/**
 	 * Resolves all implementations registered under a key as an array.
 	 * For multi-registration keys, returns the array of all implementations.
 	 * For single-registration keys, wraps the result in a single-element array.
@@ -47,6 +46,41 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	): InterfaceTokenService<TToken> extends (infer U)[]
 		? U[]
 		: InterfaceTokenService<TToken>[];
+	getAll<K extends string & keyof TRegistry>(
+		key: K extends InterfaceToken<unknown, string> ? never : K,
+	): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
+}
+
+/**
+ * Type-safe ServiceLocator that provides compile-time safety and IDE autocompletion.
+ *
+ * @template TRegistry - The service registry type mapping string keys to service types
+ */
+export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
+	/** Resolves a registered interface through its type-safe token. */
+	get<TToken extends InterfaceToken<unknown, string>>(
+		token: RegisteredInterfaceToken<TRegistry, TToken>,
+	): InterfaceTokenService<TToken>;
+
+	/** Resolves one service by its registered string key. */
+	get<K extends keyof TRegistry>(
+		key: K extends InterfaceToken<unknown, string> ? never : K,
+	): TRegistry[K];
+
+	/**
+	 * Returns the current provider through its explicit infrastructure token.
+	 * Constructor values are not service keys.
+	 */
+	get(token: typeof ServiceProviderToken): TypeSafeServiceLocator<TRegistry>;
+
+	/** Resolves all services registered under an interface token. */
+	getAll<TToken extends InterfaceToken<unknown, string>>(
+		token: RegisteredInterfaceToken<TRegistry, TToken>,
+	): InterfaceTokenService<TToken> extends (infer U)[]
+		? U[]
+		: InterfaceTokenService<TToken>[];
+
+	/** Resolves all services registered under a string key. */
 	getAll<K extends string & keyof TRegistry>(
 		key: K extends InterfaceToken<unknown, string> ? never : K,
 	): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
@@ -76,8 +110,9 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	 * Services can implement `[Symbol.asyncDispose]` or return a Promise from
 	 * `dispose()`. This method also waits for stored Promise values and cleans
 	 * their resolved values. The provider cleans consumers before dependencies.
-	 * Independent handlers run in parallel. One rejection does not stop other
-	 * cleanup. This method then rejects with one `DisposalError`.
+	 * Independent handlers run in parallel up to the configured limit. One
+	 * rejection does not stop other cleanup. Concurrent calls wait for the same
+	 * active operation. This method then rejects with one `DisposalError`.
 	 */
 	disposeAsync(): Promise<void>;
 
@@ -100,8 +135,7 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
  * `ContainerBuilder.build()` returns this type. `startScope()` returns a
  * `TypeSafeServiceLocator` that cannot lend singleton registrations.
  */
-export interface RootServiceContainer<
-	TRegistry extends Record<string, any>,
-> extends TypeSafeServiceLocator<TRegistry> {
+export interface RootServiceContainer<TRegistry extends Record<string, any>>
+	extends TypeSafeServiceLocator<TRegistry> {
 	readonly [Symbol.toStringTag]: "KizunaRootServiceContainer";
 }

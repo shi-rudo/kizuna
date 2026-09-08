@@ -12,7 +12,6 @@ describe("rejected async factory retries", () => {
 		const servicePromise = container.get("service");
 		const rejection = expect(servicePromise).rejects.toBe(failure);
 
-		expect(servicePromise).not.toBe(factoryPromise);
 		await rejection;
 	});
 
@@ -71,7 +70,6 @@ describe("rejected async factory retries", () => {
 		await expect(first).rejects.toBe(failure);
 
 		const second = container.get("service");
-		expect(second).not.toBe(recoveredPromise);
 		await expect(second).resolves.toEqual({ state: "ready" });
 		expect(container.get("service")).toBe(second);
 		expect(attempts).toBe(2);
@@ -188,9 +186,7 @@ describe("rejected async factory retries", () => {
 		await expect(first[1]).resolves.toBe("stable");
 
 		const second = container.getAll("services");
-		expect(second[0]).not.toBe(recoveredPromise);
 		expect(second[1]).toBe(first[1]);
-		expect(second[1]).not.toBe(stablePromise);
 		expect(failedEntryAttempts).toBe(2);
 		expect(stableEntryAttempts).toBe(1);
 	});

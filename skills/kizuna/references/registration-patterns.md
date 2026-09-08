@@ -70,7 +70,8 @@ Use this only when you want the container to return an interface type. If the re
 
 ## Factory registration
 
-Factories receive a `TypeSafeServiceLocator<TRegistry>` with full type inference on `provider.get()`.
+Factories receive a `TypeSafeServiceResolver<TRegistry>`. It provides typed
+`get()` and `getAll()` methods without container lifecycle operations.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -81,9 +82,9 @@ const container = new ContainerBuilder()
     dbUrl: process.env.DATABASE_URL ?? 'postgres://localhost/dev',
     debug: process.env.NODE_ENV !== 'production',
   }))
-  .registerSingletonFactory('database', (provider) => {
-    const config = provider.get('config');
-    const logger = provider.get('logger');
+  .registerSingletonFactory('database', (resolver) => {
+    const config = resolver.get('config');
+    const logger = resolver.get('logger');
     logger.log(`Connecting to ${config.dbUrl}`);
     return new DatabaseConnection(config.dbUrl);
   }, 'config', 'logger')
@@ -91,7 +92,7 @@ const container = new ContainerBuilder()
 ```
 
 The final keys declare the factory lookups. Validation and cleanup order use
-these graph edges. An undeclared locator lookup stays invisible.
+these graph edges. An undeclared resolver lookup stays invisible.
 
 ## Borrowed singleton
 

@@ -30,6 +30,34 @@ describe("dependency-aware disposal order", () => {
 		expect(events).toEqual(["consumer", "dependency"]);
 	});
 
+	it("uses declared factory dependencies for disposal order", () => {
+		const events: string[] = [];
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("dependency", () => ({
+				dispose(): void {
+					events.push("dependency");
+				},
+			}))
+			.registerSingletonFactory(
+				"consumer",
+				(resolver) => {
+					resolver.get("dependency");
+					return {
+						dispose(): void {
+							events.push("consumer");
+						},
+					};
+				},
+				"dependency",
+			)
+			.build();
+
+		container.get("consumer");
+		container.dispose();
+
+		expect(events).toEqual(["consumer", "dependency"]);
+	});
+
 	it("waits for async consumers before starting dependency cleanup", async () => {
 		const events: string[] = [];
 		let finishConsumer!: () => void;
@@ -317,38 +345,56 @@ describe("dependency-aware disposal order", () => {
 		expect(events).toEqual(["consumer", "dependency"]);
 	});
 
-	it("does not hang when registration metadata contains a cycle", () => {
-		class First {
-			constructor(readonly second: unknown) {}
-		}
-
-		class Second {
-			constructor(readonly first: unknown) {}
-		}
-
+	it("disposes initialized services when registration metadata contains a cycle", () => {
+		const events: string[] = [];
 		const container = new ContainerBuilder()
-			.registerSingleton("first", First, "second")
-			.registerSingleton("second", Second, "first")
+			.registerSingletonFactory(
+				"first",
+				() => ({ dispose: () => events.push("first") }),
+				"second" as never,
+			)
+			.registerSingletonFactory(
+				"second",
+				() => ({ dispose: () => events.push("second") }),
+				"first",
+			)
 			.build({ validation: "deferred" });
 
-		expect(() => container.dispose()).not.toThrow();
+		container.get("first");
+		container.get("second");
+		container.dispose();
+
+		expect(events).toEqual(["first", "second"]);
 	});
 
-	it("does not hang during async disposal of cyclic metadata", async () => {
-		class First {
-			constructor(readonly second: unknown) {}
-		}
-
-		class Second {
-			constructor(readonly first: unknown) {}
-		}
-
+	it("disposes initialized services with cyclic metadata asynchronously", async () => {
+		const events: string[] = [];
 		const container = new ContainerBuilder()
-			.registerSingleton("first", First, "second")
-			.registerSingleton("second", Second, "first")
+			.registerSingletonFactory(
+				"first",
+				() => ({
+					async [Symbol.asyncDispose]() {
+						events.push("first");
+					},
+				}),
+				"second" as never,
+			)
+			.registerSingletonFactory(
+				"second",
+				() => ({
+					async [Symbol.asyncDispose]() {
+						events.push("second");
+					},
+				}),
+				"first",
+			)
 			.build({ validation: "deferred" });
 
-		await expect(container.disposeAsync()).resolves.toBeUndefined();
+		container.get("first");
+		container.get("second");
+		await container.disposeAsync();
+
+		expect(events).toEqual(["first", "second"]);
 	});
 
 	it("keeps dependency-aware disposal idempotent", async () => {

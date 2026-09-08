@@ -1,11 +1,11 @@
-import type { TypeSafeServiceLocator } from "./interfaces.js";
+import type { TypeSafeServiceResolver } from "./interfaces.js";
+export type { ObservedFactoryValue } from "../../core/services/promise-value.js";
 
 /**
  * Factory function type for creating service instances.
  *
- * Factory functions receive the typed service locator as a parameter, allowing them
- * to resolve dependencies and create complex service instances. This is useful
- * for services that require custom initialization logic or conditional creation.
+ * Factory functions receive a typed service resolver. The resolver provides
+ * `get()` and `getAll()` without container lifecycle operations.
  *
  * The container calls each factory synchronously. If a singleton or scoped
  * factory returns a Promise, its lifecycle stores and returns an observer
@@ -23,7 +23,7 @@ import type { TypeSafeServiceLocator } from "./interfaces.js";
  *
  * @template TRegistry - The registry available when the factory is registered
  * @template T - The type of service the factory creates
- * @param serviceProvider - The typed service locator for resolving dependencies
+ * @param serviceProvider - The typed service resolver for dependencies
  * @returns An instance of type T
  *
  * Registration methods accept optional dependency keys after this function.
@@ -33,19 +33,8 @@ import type { TypeSafeServiceLocator } from "./interfaces.js";
  * the package-root API. Consumers should let registration methods infer it.
  */
 export type Factory<TRegistry extends ServiceRegistry, T> = (
-	serviceProvider: TypeSafeServiceLocator<TRegistry>,
+	serviceProvider: TypeSafeServiceResolver<TRegistry>,
 ) => T;
-
-/**
- * Normalizes a cached Promise-like factory value to the native observer Promise
- * that singleton and scoped lifecycles return. Transient factories do not use
- * this type and keep their exact return value.
- *
- * @internal
- */
-export type ObservedFactoryValue<T> = T extends PromiseLike<unknown>
-	? Promise<Awaited<T>>
-	: T;
 
 /**
  * Represents a service registry mapping string keys to their service types.

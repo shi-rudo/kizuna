@@ -1,4 +1,7 @@
-import type { ObservedFactoryValue } from "../../api/contracts/types.js";
+/** Normalized cache type for a Promise-like factory value. @internal */
+export type ObservedFactoryValue<T> = T extends PromiseLike<unknown>
+	? Promise<Awaited<T>>
+	: T;
 
 /**
  * Returns a Promise-like service value that runs a callback before it rejects.

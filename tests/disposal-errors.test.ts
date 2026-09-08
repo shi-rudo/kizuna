@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ContainerBuilder, DisposalError } from "../src";
 
 function captureThrown(action: () => void): unknown {
@@ -20,6 +20,10 @@ async function captureRejection(action: Promise<void>): Promise<unknown> {
 
 	throw new Error("Expected the promise to reject");
 }
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 describe("disposal errors", () => {
 	it("attempts every sync cleanup and throws one DisposalError", () => {
@@ -82,8 +86,6 @@ describe("disposal errors", () => {
 		expect(() => container.get("good")).toThrow(/disposed container/);
 		expect(() => container.dispose()).not.toThrow();
 
-		errorSpy.mockRestore();
-		warnSpy.mockRestore();
 	});
 
 	it("attempts every async cleanup and rejects with one DisposalError", async () => {
@@ -148,8 +150,39 @@ describe("disposal errors", () => {
 		expect(() => container.get("good")).toThrow(/disposed container/);
 		await expect(container.disposeAsync()).resolves.toBeUndefined();
 
-		errorSpy.mockRestore();
-		warnSpy.mockRestore();
+	});
+
+	it("identifies each failed multi-registration", () => {
+		const firstFailure = new Error("first plugin failed");
+		const secondFailure = new Error("second plugin failed");
+		const container = new ContainerBuilder()
+			.addSingletonFactory("plugins", () => ({
+				dispose(): void {
+					throw firstFailure;
+				},
+			}))
+			.addSingletonFactory("plugins", () => ({
+				dispose(): void {
+					throw secondFailure;
+				},
+			}))
+			.build();
+		container.getAll("plugins");
+
+		const error = captureThrown(() => container.dispose()) as DisposalError;
+
+		expect(error.failures).toEqual([
+			expect.objectContaining({
+				serviceKey: "plugins",
+				registrationIndex: 0,
+				error: firstFailure,
+			}),
+			expect.objectContaining({
+				serviceKey: "plugins",
+				registrationIndex: 1,
+				error: secondFailure,
+			}),
+		]);
 	});
 
 	it("cleans up a dependency after its consumer cleanup rejects", async () => {

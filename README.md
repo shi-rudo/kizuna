@@ -505,9 +505,20 @@ depend on `DatabasePool`. Kizuna cleans these values in this order:
 2. `UserRepository`
 3. `DatabasePool`
 
-The async API runs independent graph branches in parallel. Their relative
-completion order is not defined. All services under a multi-registration key
-are part of the graph.
+The async API runs independent graph branches in parallel. It runs at most 16
+cleanup hooks at the same time by default. Their relative completion order is
+not defined. All services under a multi-registration key are part of the graph.
+
+Set `maxAsyncDisposalConcurrency` during the build to change this limit:
+
+```typescript
+const container = new ContainerBuilder()
+  .registerSingleton('Pool', DatabasePool)
+  .build({ maxAsyncDisposalConcurrency: 4 });
+```
+
+The limit must be a positive safe integer. Each child scope uses the limit of
+its root container.
 
 Factory registrations can declare dependency keys after the factory. These
 keys define validation edges and cleanup order.
@@ -515,12 +526,12 @@ keys define validation edges and cleanup order.
 ```typescript
 .registerSingletonFactory(
   'UserRepository',
-  (provider) => new UserRepository(provider.get('DatabasePool')),
+  (resolver) => new UserRepository(resolver.get('DatabasePool')),
   'DatabasePool',
 )
 ```
 
-An undeclared locator lookup stays invisible to graph validation. Declare each
+An undeclared resolver lookup stays invisible to graph validation. Declare each
 fixed lookup that affects lifetimes or cleanup order.
 
 #### Promise factories
@@ -537,15 +548,21 @@ the same error type. The `errors` property contains the original errors. Kizuna
 does not write these errors to the console.
 
 For errors that a container throws, the `failures` property adds the service
-key, lifetime, and cleanup operation. This context identifies the service that
-failed.
+key, lifetime, and cleanup operation. A multi-registration failure also has its
+zero-based `registrationIndex`.
 
 `DisposalError` extends the JavaScript `AggregateError` class. It reports
 multiple cleanup errors and does not represent a domain aggregate.
 
 The container clears its internal state before it reports errors. Later calls
-to `get()`, `getAll()`, or `startScope()` fail. A second disposal call is a
+to `get()`, `getAll()`, or `startScope()` fail.
+
+Concurrent `disposeAsync()` calls wait for the same active cleanup operation.
+They receive the same success or failure result. A call after completion is a
 no-op.
+
+A cleanup hook must not call `disposeAsync()` on its own container. That call
+waits for the cleanup operation that contains the same hook.
 
 ## 🏗️ Advanced Patterns
 
@@ -751,6 +768,7 @@ It also exports these public types:
 
 - `RootServiceContainer`
 - `TypeSafeServiceLocator`
+- `TypeSafeServiceResolver`
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`
@@ -764,6 +782,9 @@ internal.
 
 Read the [public API hardening migration](./docs/migrations/public-api-hardening.md)
 when you update code that imported an internal symbol.
+
+Read the [factory context migration](./docs/migrations/factory-resolution-context.md)
+when a factory parameter has an explicit locator type.
 
 ### interfaceToken
 
@@ -786,17 +807,17 @@ The main class for configuring your dependency injection container.
 // Singleton lifecycle
 .registerSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.registerSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (resolver: TypeSafeServiceResolver<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 
 // Scoped lifecycle (one instance per scope)
 .registerScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.registerScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (resolver: TypeSafeServiceResolver<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 
 // Transient lifecycle (new instance every time)
 .registerTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.registerTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (resolver: TypeSafeServiceResolver<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 ```
 
 `LiteralServiceKey`, `InterfaceTokenService`, `InterfaceImplementationConstructor`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
@@ -808,9 +829,9 @@ The main class for configuring your dependency injection container.
 .addSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .addScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .addTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.addSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
-.addScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
-.addTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (resolver: TypeSafeServiceResolver<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (resolver: TypeSafeServiceResolver<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (resolver: TypeSafeServiceResolver<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 ```
 
 #### Cross-Container Composition
@@ -826,7 +847,7 @@ Scopes and borrowers cannot lend a registration.
 #### Container Management
 
 ```typescript
-.build(options?: { validation?: 'eager' | 'deferred' }): RootServiceContainer<TRegistry>
+.build(options?: { validation?: 'eager' | 'deferred', maxAsyncDisposalConcurrency?: number }): RootServiceContainer<TRegistry>
 .validate(): readonly ValidationIssue[]                // Validate the dependency graph
 .count: number                                         // Number of registered services
 .isRegistered(key: string): boolean                    // Check if service is registered
@@ -853,6 +874,10 @@ interface TypeSafeServiceLocator<TRegistry> {
   [Symbol.asyncDispose](): Promise<void>;                     // TC39 `await using` syntax
 }
 ```
+
+A factory receives a `TypeSafeServiceResolver`. This interface only has
+`get()` and `getAll()`. A factory cannot create scopes, dispose the active
+container, or resolve `ServiceProviderToken`.
 
 Disposal attempts all cleanup operations before it reports failures. The sync
 API throws one `DisposalError`. The async API rejects with one `DisposalError`

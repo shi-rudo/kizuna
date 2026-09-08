@@ -24,6 +24,8 @@ export type DisposalOperation = "dispose" | "disposeAsync";
 /** Structured context for one service cleanup failure. */
 export interface DisposalFailure {
 	readonly serviceKey: string;
+	/** Zero-based position when the service key has multiple registrations. */
+	readonly registrationIndex?: number;
 	readonly lifetime: ServiceLifetime;
 	readonly operation: DisposalOperation;
 	readonly error: unknown;
