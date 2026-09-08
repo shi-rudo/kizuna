@@ -19,13 +19,20 @@ The internal factory contract is:
 
 ```typescript
 type Factory<TRegistry, T> = (
-  serviceProvider: TypeSafeServiceLocator<TRegistry>,
+  resolver: TypeSafeServiceResolver<TRegistry>,
 ) => T;
 ```
 
-The package root does not export this helper type. Registration methods infer
-the factory type. This design keeps one registry-aware contract through the
-builder and lifecycle implementation.
+The package root does not export the `Factory` helper type. Registration
+methods infer this type. The package exports `TypeSafeServiceResolver` for code
+that needs an explicit factory parameter type.
+
+The resolver only provides `get()` and `getAll()`. It does not provide scope,
+disposal, or self-resolution operations. This boundary prevents accidental
+lifecycle changes through the callback argument.
+
+Factory code remains trusted application code. A factory can still use a
+container reference that it gets from another source.
 
 Factory keys must be fixed string literals. Broad strings, unions, and open
 template-literal types do not create safe registry entries.
@@ -62,13 +69,13 @@ ADR-001 defines the full Promise-value contract.
 
 ## Consequences
 
-Factories keep full registry inference without casts to an unrestricted
-locator. Consumers do not need to import a factory helper type.
+Factories keep full registry inference without an unrestricted locator.
+Consumers do not need to import a factory helper type.
 
 Factory methods accept dependency keys after the factory. These keys define
 validation edges and cleanup order. TypeScript rejects unknown keys.
 
-An undeclared locator lookup stays invisible to the graph. Declare each fixed
+An undeclared resolver lookup stays invisible to the graph. Declare each fixed
 lookup that affects a lifetime rule or cleanup order.
 
 The package does not promise custom lifecycle strategies or asynchronous

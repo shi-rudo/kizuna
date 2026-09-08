@@ -38,5 +38,13 @@ if (issue) {
 const deferred: ContainerBuildOptions = { validation: "deferred" };
 builder.build(deferred);
 
+const boundedDisposal: ContainerBuildOptions = {
+	maxAsyncDisposalConcurrency: 4,
+};
+builder.build(boundedDisposal);
+
 // @ts-expect-error The build mode must be eager or deferred.
 builder.build({ validation: "disabled" });
+
+// @ts-expect-error The async disposal limit must be numeric.
+builder.build({ maxAsyncDisposalConcurrency: "four" });

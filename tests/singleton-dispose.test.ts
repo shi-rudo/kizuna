@@ -121,21 +121,22 @@ describe('Post-dispose behavior', () => {
         expect(() => container.getAll('service')).toThrow(/disposed container/);
     });
 
-    it('should keep child scope functional after parent dispose', () => {
+    it('keeps an initialized scoped value but invalidates a shared singleton after root disposal', () => {
         const container = new ContainerBuilder()
             .registerSingleton('singleton', NonDisposableService)
             .registerScoped('scoped', DisposableService)
             .build();
 
         const scope = container.startScope();
-        // Resolve before parent dispose to initialize
+        scope.get('singleton');
         const scopedBefore = scope.get('scoped');
 
         container.dispose();
 
-        // Child scope is independent — its own ServiceProvider with _disposed=false
         expect(() => scope.get('scoped')).not.toThrow();
-        expect(scope.get('scoped')).toBe(scopedBefore); // Same scoped instance
+        expect(scope.get('scoped')).toBe(scopedBefore);
+        expect(() => scope.get('singleton')).toThrow(/disposed singleton lifecycle/);
+        scope.dispose();
     });
 
     it('should resolve the root provider through its identity token', () => {

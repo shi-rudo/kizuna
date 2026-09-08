@@ -70,6 +70,29 @@ test("factory registrations require one fixed service key", () => {
 	provider.get("never-registered");
 });
 
+test("factory callbacks can resolve services but cannot manage the container", () => {
+	const resolver = null as unknown as Kizuna.TypeSafeServiceResolver<{
+		logger: Logger;
+	}>;
+	expectTypeOf(resolver.get("logger")).toEqualTypeOf<Logger>();
+	expectTypeOf(resolver.getAll("logger")).toEqualTypeOf<Logger[]>();
+
+	new Kizuna.ContainerBuilder()
+		.registerSingleton("logger", Logger)
+		.registerSingletonFactory("service", (resolver) => {
+			expectTypeOf(resolver.get("logger")).toEqualTypeOf<Logger>();
+			expectTypeOf(resolver.getAll("logger")).toEqualTypeOf<Logger[]>();
+			// @ts-expect-error Factories cannot dispose the container that resolves them.
+			resolver.dispose();
+			// @ts-expect-error Factories cannot create a scope during resolution.
+			resolver.startScope();
+			// @ts-expect-error Factories cannot obtain the full provider.
+			resolver.get(Kizuna.ServiceProviderToken);
+			return {};
+		})
+		.build();
+});
+
 test("cached Promise factories expose their normalized observer type", () => {
 	const factoryPromise = new TaggedPromise<string>(() => undefined);
 	const provider = new Kizuna.ContainerBuilder()
@@ -84,7 +107,9 @@ test("cached Promise factories expose their normalized observer type", () => {
 	expectTypeOf(provider.get("singleton")).toEqualTypeOf<Promise<string>>();
 	expectTypeOf(provider.get("scoped")).toEqualTypeOf<Promise<string>>();
 	expectTypeOf(provider.getAll("cached")).toEqualTypeOf<Promise<string>[]>();
-	expectTypeOf(provider.get("transient")).toEqualTypeOf<TaggedPromise<string>>();
+	expectTypeOf(provider.get("transient")).toEqualTypeOf<
+		TaggedPromise<string>
+	>();
 	expectTypeOf(provider.getAll("transient-group")).toEqualTypeOf<
 		TaggedPromise<string>[]
 	>();

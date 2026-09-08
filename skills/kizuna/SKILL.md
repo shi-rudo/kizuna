@@ -7,7 +7,7 @@ description: >
   addScoped, addTransient, addSingletonFactory, addScopedFactory,
   addTransientFactory, borrowSingletonFrom, build(), validate(), get(), getAll(), startScope(),
   dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose,
-  getRegisteredServiceNames(), TypeSafeServiceLocator,
+  getRegisteredServiceNames(), TypeSafeServiceLocator, TypeSafeServiceResolver,
   ContainerValidationError, CircularDependencyError.
   Activate when registering services, choosing lifecycles, managing request
   scopes, registering multiple implementations under one key, debugging
@@ -91,7 +91,7 @@ const email = container.get(EmailService); // Type: IEmailService
 
 ### Register a factory for config or conditional logic
 
-Use factories when construction needs runtime logic, returns primitives, or requires the service provider.
+Use factories when construction needs runtime logic, returns primitives, or requires a typed service resolver.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -290,7 +290,11 @@ contains a `TypeError`.
 
 Kizuna gets cleanup order from declared registration dependencies. It cleans a
 consumer before its dependencies. The async API runs independent graph branches
-in parallel. Their relative completion order is not defined.
+in parallel. It runs at most 16 cleanup hooks at the same time by default.
+Their relative completion order is not defined.
+
+Set `maxAsyncDisposalConcurrency` during the build to change the limit. The
+value must be a positive safe integer. Child scopes use the root limit.
 
 For example, Kizuna cleans `UserService`, `UserRepository`, and `DatabasePool`
 in that order when each service depends on the next service.
@@ -301,16 +305,17 @@ validation edges and cleanup order.
 ```typescript
 .registerSingletonFactory(
   'userRepository',
-  (provider) => new UserRepository(provider.get('database')),
+  (resolver) => new UserRepository(resolver.get('database')),
   'database',
 )
 ```
 
-An undeclared locator lookup stays invisible to graph validation.
+An undeclared resolver lookup stays invisible to graph validation.
 
 Both APIs attempt all cleanup operations. They report all failures in one
 `DisposalError`. The `errors` property contains the original errors. The
 `failures` property identifies the service key, lifetime, and cleanup operation.
+A multi-registration failure also has its zero-based `registrationIndex`.
 Kizuna does not write cleanup errors to the console.
 
 Singleton and scoped factories can return Promises. The async API waits for a
@@ -322,8 +327,13 @@ cache. The next resolution invokes the factory again. Consumers must handle the
 original rejection.
 
 The container clears its internal state before it reports errors. Later calls
-to `get()`, `getAll()`, or `startScope()` fail. A second disposal call is a
-no-op.
+to `get()`, `getAll()`, or `startScope()` fail.
+
+Concurrent `disposeAsync()` calls wait for the same active operation. A call
+after completion is a no-op.
+
+Do not call `disposeAsync()` on the same container from one of its cleanup
+hooks. The nested call waits for the operation that contains the hook.
 
 Kizuna does not track child scopes. Dispose each scope before its root
 container. Dispose each borrower before the source root container.
@@ -573,8 +583,8 @@ Wrong:
 ```typescript
 new ContainerBuilder()
   .registerSingleton('database', DatabaseConnection)
-  .registerSingletonFactory('userService', (provider) =>
-    new UserService(provider.get('database')),
+  .registerSingletonFactory('userService', (resolver) =>
+    new UserService(resolver.get('database')),
   )
 ```
 
@@ -585,7 +595,7 @@ new ContainerBuilder()
   .registerSingleton('database', DatabaseConnection)
   .registerSingletonFactory(
     'userService',
-    (provider) => new UserService(provider.get('database')),
+    (resolver) => new UserService(resolver.get('database')),
     'database',
   )
 ```

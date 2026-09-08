@@ -79,13 +79,13 @@ checks as concrete constructor registrations.
 
 ### Factory registrations
 
-A factory receives a locator for the registry that exists before the factory
+A factory receives a resolver for the registry that exists before the factory
 registration. The factory return type becomes the service type for its key.
 
 Factory keys must be fixed string literals. A factory can declare dependency
 keys after its function. These keys define validation edges and cleanup order.
 
-An undeclared locator lookup does not create dependency metadata.
+An undeclared resolver lookup does not create dependency metadata.
 
 ADR-009 defines the factory type. ADR-001 defines Promise values from an
 `async` factory.

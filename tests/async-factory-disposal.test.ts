@@ -15,7 +15,6 @@ describe("async factory value disposal", () => {
 			.build();
 
 		const storedPromise = container.get("service");
-		expect(storedPromise).not.toBe(servicePromise);
 		expect(container.get("service")).toBe(storedPromise);
 
 		await container.disposeAsync();
@@ -35,7 +34,6 @@ describe("async factory value disposal", () => {
 		const scope = container.startScope();
 
 		const storedPromise = scope.get("service");
-		expect(storedPromise).not.toBe(factoryResult.promise);
 		expect(scope.get("service")).toBe(storedPromise);
 
 		let disposalFinished = false;
@@ -153,6 +151,23 @@ describe("async factory value disposal", () => {
 		await container.get("service");
 
 		await expect(container.disposeAsync()).resolves.toBeUndefined();
+	});
+
+	it("disposes a function resolved from a factory Promise", async () => {
+		let disposeCalls = 0;
+		const service = Object.assign(() => "service", {
+			async [Symbol.asyncDispose]() {
+				disposeCalls++;
+			},
+		});
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("service", () => Promise.resolve(service))
+			.build();
+
+		expect(await container.get("service")).toBe(service);
+		await container.disposeAsync();
+
+		expect(disposeCalls).toBe(1);
 	});
 });
 

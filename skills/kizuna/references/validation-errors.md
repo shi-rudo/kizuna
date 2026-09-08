@@ -100,14 +100,14 @@ singleton must not store a scoped value.
 
 ## Factory dependency metadata
 
-Declare fixed locator lookups after the factory:
+Declare fixed resolver lookups after the factory:
 
 ```typescript
 const builder = new ContainerBuilder()
   .registerSingleton('database', DatabaseConnection)
   .registerSingletonFactory(
     'userService',
-    (provider) => new UserService(provider.get('database')),
+    (resolver) => new UserService(resolver.get('database')),
     'database',
   );
 ```
@@ -115,7 +115,7 @@ const builder = new ContainerBuilder()
 The final key adds an edge for validation and cleanup order. Kizuna does not
 inspect the factory body.
 
-An undeclared locator lookup stays invisible to static graph validation. The
+An undeclared resolver lookup stays invisible to static graph validation. The
 runtime resolver still reports lookup failures and dynamic cycles.
 
 ## Deferred validation

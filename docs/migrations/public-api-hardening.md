@@ -18,6 +18,7 @@ It also exports these public types:
 
 - `RootServiceContainer`
 - `TypeSafeServiceLocator`
+- `TypeSafeServiceResolver`
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`

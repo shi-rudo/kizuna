@@ -7,9 +7,9 @@ string key.
 
 ## Context
 
-Factories and infrastructure code sometimes need the current service provider.
-An automatic string registration made that dependency look like a normal
-application service. It also reserved a user-facing key.
+Infrastructure code sometimes needs the current service provider. An automatic
+string registration made that dependency look like a normal application
+service. It also reserved a user-facing key.
 
 The provider needs one stable identity that cannot collide with a user key.
 Normal services still need explicit constructor dependencies.
@@ -25,8 +25,8 @@ the root container. A scope call returns that scope.
 `ServiceProviderToken` is an exported unique symbol. It cannot collide with the
 string key `"ServiceProvider"`.
 
-A factory receives the current `TypeSafeServiceLocator` as its parameter.
-ADR-009 defines this factory contract.
+A factory receives a `TypeSafeServiceResolver`. This interface does not accept
+`ServiceProviderToken`. ADR-009 defines this factory contract.
 
 Constructor dependencies still use registered service keys. They cannot use
 `ServiceProviderToken` as a dependency key. Arbitrary constructors are also not
@@ -53,7 +53,7 @@ const container = new ContainerBuilder()
   .build();
 ```
 
-The factory parameter is the preferred provider access for factory code.
+The factory parameter is the preferred dependency resolver for factory code.
 
 ## Explicit infrastructure lookup
 
@@ -78,7 +78,7 @@ The container does not reserve a string key for itself. User registrations can
 use the text `"ServiceProvider"`.
 
 Constructor signatures continue to show normal service dependencies. Dynamic
-provider access remains explicit in factories and infrastructure code.
+provider access remains explicit in infrastructure code.
 
-The API cannot prevent service-locator use inside a factory. Code review and
-application architecture must control that use.
+Factory code remains trusted application code. It can use a container reference
+that it gets from another source.

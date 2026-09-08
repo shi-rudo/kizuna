@@ -51,7 +51,7 @@ edges without changing the factory argument.
 ```typescript
 .registerSingletonFactory(
   'repository',
-  (provider) => new Repository(provider.get('database')),
+  (resolver) => new Repository(resolver.get('database')),
   'database',
 )
 ```

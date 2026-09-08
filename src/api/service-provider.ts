@@ -2,12 +2,8 @@ import {
     CircularDependencyError,
     DisposalError,
     type DisposalFailure,
-    type DisposalOperation,
 } from "../core/errors.js";
-import {
-    createDisposalLayers,
-    createDisposalPlan,
-} from "../core/services/disposal-order.js";
+import { DisposalCoordinator } from "../core/services/disposal-coordinator.js";
 import type { ServiceWrapper } from "../core/services/service-wrapper.js";
 import {
     borrowableSourceCapability,
@@ -16,6 +12,7 @@ import {
 } from "./borrowed-singleton-capability.js";
 import type {
     TypeSafeServiceLocator,
+    TypeSafeServiceResolver,
 } from "./contracts/interfaces.js";
 import type { ServiceRegistry } from "./contracts/types.js";
 import type {
@@ -29,6 +26,14 @@ export type { DisposalFailure, DisposalOperation } from "../core/errors.js";
 
 /** Stable identity token for resolving the current service provider. */
 export const ServiceProviderToken: unique symbol = Symbol("ServiceProvider");
+
+interface ServiceProviderOptions {
+    readonly registrations: ReadonlyMap<string, ServiceWrapper>;
+    readonly multiRegistrations?: ReadonlyMap<string, readonly ServiceWrapper[]>;
+    readonly registrationOrder?: readonly ServiceWrapper[];
+    readonly maxAsyncDisposalConcurrency: number;
+    readonly isRootContainer?: boolean;
+}
 
 /**
  * ServiceProvider that provides compile-time safety and IDE autocompletion.
@@ -45,7 +50,11 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     private readonly multiRegistrations: Map<string, ServiceWrapper[]>;
     private readonly registrationOrder: ServiceWrapper[];
     private readonly isRootContainer: boolean;
+    private readonly maxAsyncDisposalConcurrency: number;
+    private readonly factoryResolver: TypeSafeServiceResolver<TRegistry>;
+    private readonly disposalCoordinator: DisposalCoordinator;
     private _disposed = false;
+    private _activeAsyncDisposal?: Promise<void>;
 
     get [Symbol.toStringTag]():
         | "KizunaRootServiceContainer"
@@ -61,12 +70,14 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      */
     private readonly _resolutionStack: string[] = [];
 
-    constructor(
-        registrations: ReadonlyMap<string, ServiceWrapper>,
-        multiRegistrations: ReadonlyMap<string, readonly ServiceWrapper[]> = new Map(),
-        registrationOrder?: readonly ServiceWrapper[],
-        isRootContainer = true,
-    ) {
+    constructor(options: ServiceProviderOptions) {
+        const {
+            registrations,
+            multiRegistrations = new Map(),
+            registrationOrder,
+            maxAsyncDisposalConcurrency,
+            isRootContainer = true,
+        } = options;
         if (!registrations) {
             throw new Error("Registrations cannot be null or undefined");
         }
@@ -75,12 +86,32 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             [...multiRegistrations].map(([key, resolvers]) => [key, [...resolvers]]),
         );
         this.isRootContainer = isRootContainer;
+        this.maxAsyncDisposalConcurrency = maxAsyncDisposalConcurrency;
         this.registrationOrder = registrationOrder
             ? [...registrationOrder]
             : [
                 ...this.registrations.values(),
                 ...[...this.multiRegistrations.values()].flat(),
             ];
+        this.disposalCoordinator = new DisposalCoordinator(
+            this.registrationOrder,
+            this.multiRegistrations,
+            this.maxAsyncDisposalConcurrency,
+        );
+        this.factoryResolver = Object.freeze({
+            get: (key: unknown) => {
+                if (typeof key !== "string") {
+                    throw new TypeError("Factory service keys must be strings");
+                }
+                return this.get(key as never);
+            },
+            getAll: (key: unknown) => {
+                if (typeof key !== "string") {
+                    throw new TypeError("Factory service keys must be strings");
+                }
+                return this.getAll(key as never);
+            },
+        }) as unknown as TypeSafeServiceResolver<TRegistry>;
     }
 
     /**
@@ -118,7 +149,9 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
 
         try {
-            return this.trackResolution(typeName, () => resolver.resolve(this));
+            return this.trackResolution(typeName, () =>
+                resolver.resolve(this.factoryResolver)
+            );
         } catch (error) {
             if (error instanceof CircularDependencyError) {
                 throw error;
@@ -138,9 +171,12 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     getAll<K extends string & keyof TRegistry>(
         key: K extends InterfaceToken<unknown, string> ? never : K,
     ): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
-    getAll(key: any): any[] {
+    getAll(key: unknown): any[] {
         this.ensureNotDisposed();
-        const typeName = String(key);
+        if (typeof key !== "string") {
+            throw new TypeError("Service keys must be strings");
+        }
+        const typeName = key;
 
         // Multi-registration key — resolve all wrappers
         const multiResolvers = this.multiRegistrations.get(typeName);
@@ -152,7 +188,9 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         const resolver = this.registrations.get(typeName);
         if (resolver) {
             try {
-                return [this.trackResolution(typeName, () => resolver.resolve(this))];
+                return [this.trackResolution(typeName, () =>
+                    resolver.resolve(this.factoryResolver)
+                )];
             } catch (error) {
                 if (error instanceof CircularDependencyError) {
                     throw error;
@@ -191,12 +229,13 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
             .map((resolver) => scopedResolvers.get(resolver))
             .filter((resolver): resolver is ServiceWrapper => resolver !== undefined);
 
-        return new ServiceProvider<TRegistry>(
-            newRegistrations,
-            newMultiRegistrations,
-            scopedRegistrationOrder,
-            false,
-        );
+        return new ServiceProvider<TRegistry>({
+            registrations: newRegistrations,
+            multiRegistrations: newMultiRegistrations,
+            registrationOrder: scopedRegistrationOrder,
+            maxAsyncDisposalConcurrency: this.maxAsyncDisposalConcurrency,
+            isRootContainer: false,
+        });
     }
 
     /**
@@ -254,21 +293,9 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
         }
         this._disposed = true;
 
-        const failures: DisposalFailure[] = [];
+        let failures: readonly DisposalFailure[] = [];
         try {
-            for (const layer of createDisposalLayers(this.registrationOrder)) {
-                for (const resolver of layer) {
-                    try {
-                        resolver.dispose();
-                    } catch (error) {
-                        failures.push(this.createDisposalFailure(
-                            resolver,
-                            "dispose",
-                            error,
-                        ));
-                    }
-                }
-            }
+            failures = this.disposalCoordinator.dispose();
         } finally {
             this.clearRegistrations();
         }
@@ -281,21 +308,38 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      * cleanup. This includes resolved values from singleton and scoped Promise
      * factories.
      *
-     * Independent dispose handlers run in parallel. A dependency starts only
-     * after all of its consumer groups settle. Rejections do not stop other
-     * cleanup. After all cleanup settles, this method throws one
-     * `DisposalError` with the original failures. Idempotent — safe to call
-     * multiple times.
+     * Independent dispose handlers run in parallel up to the configured limit.
+     * A dependency starts only after all of its consumer groups settle.
+     * Rejections do not stop other cleanup. Concurrent calls wait for the same
+     * active operation. After all cleanup settles, this method throws one
+     * `DisposalError` with the original failures.
      */
-    async disposeAsync(): Promise<void> {
+    disposeAsync(): Promise<void> {
+        if (this._activeAsyncDisposal) {
+            return this._activeAsyncDisposal;
+        }
         if (this._disposed) {
-            return;
+            return Promise.resolve();
         }
         this._disposed = true;
 
+        const operation = this.disposeAsynchronously();
+        this._activeAsyncDisposal = operation;
+        void operation.then(
+            () => {
+                this._activeAsyncDisposal = undefined;
+            },
+            () => {
+                this._activeAsyncDisposal = undefined;
+            },
+        );
+        return operation;
+    }
+
+    private async disposeAsynchronously(): Promise<void> {
         let failures: readonly DisposalFailure[] = [];
         try {
-            failures = await this.runDependencyAwareDisposeAsync();
+            failures = await this.disposalCoordinator.disposeAsync();
         } finally {
             this.clearRegistrations();
         }
@@ -315,79 +359,6 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
      */
     async [Symbol.asyncDispose](): Promise<void> {
         await this.disposeAsync();
-    }
-
-    private async runDependencyAwareDisposeAsync(): Promise<readonly DisposalFailure[]> {
-        const plan = createDisposalPlan(this.registrationOrder);
-        if (plan.groups.length === 0) {
-            return [];
-        }
-
-        const failuresByResolver = new Map<ServiceWrapper, DisposalFailure>();
-
-        const remainingConsumerGroups = plan.groups.map(
-            (group) => group.consumerGroupCount,
-        );
-
-        await new Promise<void>((resolve) => {
-            let completedGroups = 0;
-
-            const startGroup = (groupIndex: number): void => {
-                const tasks = plan.groups[groupIndex].resolvers.map(
-                    async (resolver) => {
-                        try {
-                            await resolver.disposeAsync();
-                        } catch (error) {
-                            failuresByResolver.set(
-                                resolver,
-                                this.createDisposalFailure(
-                                    resolver,
-                                    "disposeAsync",
-                                    error,
-                                ),
-                            );
-                        }
-                    },
-                );
-
-                void Promise.all(tasks).then(() => {
-                    completedGroups++;
-
-                    for (const dependencyGroup of plan.groups[groupIndex].dependencyGroups) {
-                        remainingConsumerGroups[dependencyGroup]--;
-                        if (remainingConsumerGroups[dependencyGroup] === 0) {
-                            startGroup(dependencyGroup);
-                        }
-                    }
-
-                    if (completedGroups === plan.groups.length) {
-                        resolve();
-                    }
-                });
-            };
-
-            for (const groupIndex of plan.rootGroups) {
-                startGroup(groupIndex);
-            }
-        });
-
-        return this.registrationOrder.flatMap((resolver) => {
-            const failure = failuresByResolver.get(resolver);
-            return failure ? [failure] : [];
-        });
-    }
-
-    private createDisposalFailure(
-        resolver: ServiceWrapper,
-        operation: DisposalOperation,
-        error: unknown,
-    ): DisposalFailure {
-        return Object.freeze({
-            serviceKey: resolver.getName(),
-            lifetime: resolver.getLifetime(),
-            operation,
-            error,
-        });
     }
 
     private throwDisposalFailures(failures: readonly DisposalFailure[]): void {
@@ -415,7 +386,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
     private resolveMulti(typeName: string, resolvers: readonly ServiceWrapper[]): any[] {
         try {
             return this.trackResolution(typeName, () =>
-                resolvers.map(resolver => resolver.resolve(this))
+                resolvers.map(resolver => resolver.resolve(this.factoryResolver))
             );
         } catch (error) {
             if (error instanceof CircularDependencyError) {

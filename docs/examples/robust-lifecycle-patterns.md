@@ -107,7 +107,7 @@ uses the declared keys and does not inspect parameter names.
 ```typescript
 builder.registerSingletonFactory(
     "Repository",
-    (provider) => new Repository(provider.get("Database")),
+    (resolver) => new Repository(resolver.get("Database")),
     "Database",
 );
 ```

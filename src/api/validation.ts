@@ -63,7 +63,41 @@ export interface ContainerBuildOptions {
 	 * graph validation. Actual lookup failures then occur during resolution.
 	 */
 	readonly validation?: "eager" | "deferred";
+
+	/**
+	 * Maximum number of service cleanup hooks that `disposeAsync()` runs at the
+	 * same time. The default is 16. The value must be a positive safe integer.
+	 */
+	readonly maxAsyncDisposalConcurrency?: number;
 }
+
+const DEFAULT_MAX_ASYNC_DISPOSAL_CONCURRENCY = 16;
+
+/** Resolves and validates the graph validation mode. @internal */
+export const resolveValidationMode = (
+	value: ContainerBuildOptions["validation"],
+): "eager" | "deferred" => {
+	if (value === undefined || value === "eager") {
+		return "eager";
+	}
+	if (value === "deferred") {
+		return "deferred";
+	}
+	throw new TypeError("validation must be 'eager' or 'deferred'");
+};
+
+/** Resolves and validates the async disposal concurrency limit. @internal */
+export const resolveMaxAsyncDisposalConcurrency = (
+	value: number | undefined,
+): number => {
+	const resolved = value ?? DEFAULT_MAX_ASYNC_DISPOSAL_CONCURRENCY;
+	if (!Number.isSafeInteger(resolved) || resolved < 1) {
+		throw new RangeError(
+			"maxAsyncDisposalConcurrency must be a positive safe integer",
+		);
+	}
+	return resolved;
+};
 
 const toImmutableValidationIssue = (
 	issue: ValidationIssueInput | ValidationIssue,

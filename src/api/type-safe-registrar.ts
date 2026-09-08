@@ -1,27 +1,22 @@
 import type {
+	ConfigurableServiceLifecycle,
+	ServiceBuilder,
+} from "../core/contracts.js";
+import { ServiceWrapper } from "../core/services/service-wrapper.js";
+import type {
 	Factory,
 	ServiceRegistry,
 	TypeSafeRegistrar,
-} from "../../api/contracts/types.js";
-import type {
-	ConfigurableServiceLifecycle,
-	ServiceBuilder,
-} from "../contracts.js";
-import { ServiceWrapper } from "../services/service-wrapper.js";
+} from "./contracts/types.js";
 
-/**
- * Implementation of TypeSafeRegistrar that creates ServiceWrapper instances.
- * This replaces the complex ServiceBuilderFactory for the new type-safe API.
- */
+/** Creates internal service wrappers for the type-safe builder. */
 export class TypeSafeRegistrarImpl<TRegistry extends ServiceRegistry, T>
 	implements TypeSafeRegistrar<TRegistry, T>, ServiceBuilder
 {
 	private readonly serviceName: string;
 	private factory?: (...args: any[]) => any;
 	private dependencies: string[] = [];
-	private constructorFn?: new (
-		...args: any[]
-	) => T;
+	private constructorFn?: new (...args: any[]) => T;
 
 	constructor(serviceName: string) {
 		this.serviceName = serviceName;

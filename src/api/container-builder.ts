@@ -1,4 +1,3 @@
-import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar.js";
 import type { ConfigurableServiceLifecycle } from "../core/contracts.js";
 import { BorrowedSingletonLifecycle } from "../core/scopes/borrowed-singleton.js";
 import { ScopedLifecycle } from "../core/scopes/scoped.js";
@@ -27,9 +26,12 @@ import type {
 } from "./interface-token.js";
 import type { LiteralServiceKey } from "./literal-service-key.js";
 import { ServiceProvider } from "./service-provider.js";
+import { TypeSafeRegistrarImpl } from "./type-safe-registrar.js";
 import {
     type ContainerBuildOptions,
     ContainerValidationError,
+    resolveMaxAsyncDisposalConcurrency,
+    resolveValidationMode,
 } from "./validation.js";
 
 type ServiceConstructor = new (...args: any[]) => any;
@@ -646,9 +648,11 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
     /**
      * Builds the fully type-safe service container.
      * 
-     * @param options - Selects eager or deferred graph validation
+     * @param options - Controls graph validation and async cleanup concurrency
      * @returns The configured root container with complete type inference
      * @throws {ContainerValidationError} If eager validation finds an invalid graph
+     * @throws {TypeError} If an option has an unsupported value
+     * @throws {RangeError} If the async cleanup limit is not a positive safe integer
      * @throws {Error} If the builder has already been built
      * 
      * @example
@@ -664,8 +668,12 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
      */
     build(options: ContainerBuildOptions = {}): RootServiceContainer<TRegistry> {
         this.ensureNotBuilt();
+        const maxAsyncDisposalConcurrency = resolveMaxAsyncDisposalConcurrency(
+            options.maxAsyncDisposalConcurrency,
+        );
+        const validation = resolveValidationMode(options.validation);
 
-        if (options.validation !== "deferred") {
+        if (validation === "eager") {
             const issues = this.validate();
             if (issues.length > 0) {
                 throw new ContainerValidationError(issues);
@@ -678,11 +686,12 @@ export class ContainerBuilder<TRegistry extends ServiceRegistry = {}> extends Ba
             this.logWarning("Building ServiceProvider with no registered services");
         }
 
-        return new ServiceProvider<TRegistry>(
-            this.registrations,
-            this.multiRegistrations,
-            this.registrationOrder,
-        ) as unknown as RootServiceContainer<TRegistry>;
+        return new ServiceProvider<TRegistry>({
+            registrations: this.registrations,
+            multiRegistrations: this.multiRegistrations,
+            registrationOrder: this.registrationOrder,
+            maxAsyncDisposalConcurrency,
+        }) as unknown as RootServiceContainer<TRegistry>;
     }
 
     // =================

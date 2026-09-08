@@ -22,14 +22,6 @@ class SyncDisposableService {
     }
 }
 
-class SymbolAsyncDisposableService {
-    disposed = false;
-    async [Symbol.asyncDispose](): Promise<void> {
-        await new Promise(resolve => setTimeout(resolve, 5));
-        this.disposed = true;
-    }
-}
-
 class NonDisposableService {
     value = 42;
 }
@@ -54,23 +46,43 @@ describe('disposeAsync()', () => {
         expect(svc.disposeCalls).toBe(1);
     });
 
-    it('awaits multiple async disposals in parallel', async () => {
+    it('starts independent async disposals in parallel', async () => {
+        const events: string[] = [];
+        let releaseFirst!: () => void;
+        let releaseSecond!: () => void;
+        const firstGate = new Promise<void>((resolve) => {
+            releaseFirst = resolve;
+        });
+        const secondGate = new Promise<void>((resolve) => {
+            releaseSecond = resolve;
+        });
         const container = new ContainerBuilder()
-            .registerSingleton('a', AsyncDisposableService)
-            .registerSingleton('b', AsyncDisposableService)
+            .registerSingletonFactory('a', () => ({
+                async [Symbol.asyncDispose]() {
+                    events.push('a:start');
+                    await firstGate;
+                    events.push('a:end');
+                },
+            }))
+            .registerSingletonFactory('b', () => ({
+                async [Symbol.asyncDispose]() {
+                    events.push('b:start');
+                    await secondGate;
+                    events.push('b:end');
+                },
+            }))
             .build();
 
-        const a = container.get('a');
-        const b = container.get('b');
+        container.get('a');
+        container.get('b');
+        const disposal = container.disposeAsync();
+        await Promise.resolve();
 
-        const start = Date.now();
-        await container.disposeAsync();
-        const elapsed = Date.now() - start;
-
-        expect(a.disposed).toBe(true);
-        expect(b.disposed).toBe(true);
-        // Parallel: ~10ms each, not 20ms sequential. Give generous slack for CI.
-        expect(elapsed).toBeLessThan(50);
+        expect(events).toEqual(['a:start', 'b:start']);
+        releaseFirst();
+        releaseSecond();
+        await disposal;
+        expect(events).toEqual(['a:start', 'b:start', 'a:end', 'b:end']);
     });
 
     it('continues disposing other services before it reports a rejection', async () => {
@@ -137,14 +149,25 @@ describe('disposeAsync()', () => {
         await expect(container.disposeAsync()).resolves.toBeUndefined();
     });
 
-    it('prefers Symbol.asyncDispose over dispose()', async () => {
+    it('prefers Symbol.asyncDispose over every synchronous hook', async () => {
+        const hooks: string[] = [];
         const container = new ContainerBuilder()
-            .registerSingleton('service', SymbolAsyncDisposableService)
+            .registerSingletonFactory('service', () => ({
+                async [Symbol.asyncDispose]() {
+                    hooks.push('Symbol.asyncDispose');
+                },
+                [Symbol.dispose]() {
+                    hooks.push('Symbol.dispose');
+                },
+                dispose() {
+                    hooks.push('dispose');
+                },
+            }))
             .build();
 
-        const svc = container.get('service');
+        container.get('service');
         await container.disposeAsync();
-        expect(svc.disposed).toBe(true);
+        expect(hooks).toEqual(['Symbol.asyncDispose']);
     });
 
     it('disposes scoped instances asynchronously', async () => {
