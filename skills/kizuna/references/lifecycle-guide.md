@@ -179,7 +179,7 @@ Sync cleanup keeps registration order inside each disposal layer. All services
 under a multi-registration key are part of the graph.
 
 Factory methods accept dependency keys after the factory. These keys define
-cleanup order. An undeclared locator lookup does not add a graph edge.
+cleanup order. An undeclared container lookup does not add a graph edge.
 
 ### Promise factory values
 
@@ -219,7 +219,7 @@ The container clears its internal maps before it reports errors. Later calls to
 
 ## startScope() allocates O(n) objects
 
-Every `startScope()` call creates a new `ServiceProvider`, new maps, and one new
+Every `startScope()` call creates a new container, new maps, and one new
 `ServiceWrapper` for each registration. Singleton wrappers still share their
 lifecycle. Large containers can create allocation pressure at high request
 rates.

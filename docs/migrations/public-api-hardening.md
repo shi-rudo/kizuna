@@ -9,7 +9,8 @@ The package root now exports these runtime values:
 
 - `ContainerBuilder`
 - `interfaceToken`
-- `ServiceProviderToken`
+- `ServiceContainerToken`
+- `ServiceProviderToken` (deprecated alias of `ServiceContainerToken`)
 - `CircularDependencyError`
 - `ContainerValidationError`
 - `DisposalError`
@@ -17,7 +18,8 @@ The package root now exports these runtime values:
 It also exports these public types:
 
 - `RootServiceContainer`
-- `TypeSafeServiceLocator`
+- `ServiceContainer`
+- `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`
@@ -26,13 +28,14 @@ It also exports these public types:
 - `ValidationIssueCode`
 - `ValidationPathSegment`
 
-Concrete providers, lifecycle classes, service wrappers, and registrar helpers
-are internal. Do not import them from the package root or a package subpath.
+The concrete container class, lifecycle classes, service wrappers, and
+registrar helpers are internal. Do not import them from the package root or a
+package subpath.
 
-## Provider Access
+## Container Access
 
-Do not construct or extend `ServiceProvider`. Build a container and use its
-public locator contract.
+Do not construct or extend the concrete container class. Build a container and
+use its public `ServiceContainer` contract.
 
 ```typescript
 const container = new ContainerBuilder()
@@ -40,18 +43,40 @@ const container = new ContainerBuilder()
   .build();
 ```
 
-Use `ServiceProviderToken` when infrastructure code needs the current locator.
-The token returns the root locator from the root container. It returns the scope
-locator from a scope.
+Use `ServiceContainerToken` when infrastructure code needs the current
+container. The token returns the root container from the root container. It
+returns the scope from a scope.
 
 ```typescript
-const root = container.get(ServiceProviderToken);
+const root = container.get(ServiceContainerToken);
 const scope = container.startScope();
-const currentScope = scope.get(ServiceProviderToken);
+const currentScope = scope.get(ServiceContainerToken);
 ```
 
-Both values have the type `TypeSafeServiceLocator<TRegistry>`. The concrete
-provider type is not public.
+Both values have the type `ServiceContainer<TRegistry>`. The concrete container
+type is not public.
+
+## Renamed Container Contracts
+
+The container terms now follow one glossary. A container resolves services. The
+root container comes from `build()`. A scope comes from `startScope()`.
+
+| Previous name | Current name |
+| --- | --- |
+| `TypeSafeServiceLocator` | `ServiceContainer` |
+| `ServiceProviderToken` | `ServiceContainerToken` |
+
+The previous names remain as deprecated aliases. `ServiceProviderToken` holds
+the same symbol as `ServiceContainerToken`. A future major version removes the
+aliases. Replace them when you update:
+
+```typescript
+// Before
+import { ServiceProviderToken, type TypeSafeServiceLocator } from '@shirudo/kizuna';
+
+// After
+import { ServiceContainerToken, type ServiceContainer } from '@shirudo/kizuna';
+```
 
 ## Builder Changes
 

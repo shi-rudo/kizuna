@@ -38,7 +38,7 @@ other values. They throw a `TypeError` before they add the registration.
 
 ## The validate() result
 
-`validate()` returns the same immutable issues without building a provider.
+`validate()` returns the same immutable issues without building a container.
 `ValidationIssue` is a discriminated union. The `code` property selects one
 error type. Dependency errors have a required `dependencyKey`.
 All variants have `message`, `serviceKey`, `path`, and `pathSegments` fields.
@@ -100,14 +100,14 @@ singleton must not store a scoped value.
 
 ## Factory dependency metadata
 
-Declare fixed locator lookups after the factory:
+Declare fixed container lookups after the factory:
 
 ```typescript
 const builder = new ContainerBuilder()
   .registerSingleton('database', DatabaseConnection)
   .registerSingletonFactory(
     'userService',
-    (provider) => new UserService(provider.get('database')),
+    (container) => new UserService(container.get('database')),
     'database',
   );
 ```
@@ -115,7 +115,7 @@ const builder = new ContainerBuilder()
 The final key adds an edge for validation and cleanup order. Kizuna does not
 inspect the factory body.
 
-An undeclared locator lookup stays invisible to static graph validation. The
+An undeclared container lookup stays invisible to static graph validation. The
 runtime resolver still reports lookup failures and dynamic cycles.
 
 ## Deferred validation

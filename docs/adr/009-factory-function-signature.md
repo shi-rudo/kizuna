@@ -19,7 +19,7 @@ The internal factory contract is:
 
 ```typescript
 type Factory<TRegistry, T> = (
-  serviceProvider: TypeSafeServiceLocator<TRegistry>,
+  serviceProvider: ServiceContainer<TRegistry>,
 ) => T;
 ```
 
@@ -36,9 +36,9 @@ template-literal types do not create safe registry entries.
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)
   .registerSingleton('Logger', LoggerService)
-  .registerSingletonFactory('Database', (provider) => {
-    const config = provider.get('Config');
-    const logger = provider.get('Logger');
+  .registerSingletonFactory('Database', (container) => {
+    const config = container.get('Config');
+    const logger = container.get('Logger');
     return new DatabaseService(config.connectionString, logger);
   }, 'Config', 'Logger')
   .build();
@@ -68,7 +68,7 @@ locator. Consumers do not need to import a factory helper type.
 Factory methods accept dependency keys after the factory. These keys define
 validation edges and cleanup order. TypeScript rejects unknown keys.
 
-An undeclared locator lookup stays invisible to the graph. Declare each fixed
+An undeclared container lookup stays invisible to the graph. Declare each fixed
 lookup that affects a lifetime rule or cleanup order.
 
 The package does not promise custom lifecycle strategies or asynchronous

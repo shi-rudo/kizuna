@@ -127,7 +127,7 @@ if (isMainThread) {
 
 function workerThreadHandler() {
     // Each worker creates its own container
-    let workerContainer: TypeSafeServiceLocator<any>;
+    let workerContainer: ServiceContainer<any>;
 
     parentPort?.on('message', (data) => {
         switch (data.type) {
@@ -312,7 +312,7 @@ class MessageBus extends EventEmitter {
 
 // Service modules run in isolation
 class UserServiceModule {
-    private container: TypeSafeServiceLocator<any>;
+    private container: ServiceContainer<any>;
     
     constructor(private messageBus: MessageBus) {
         // Each module has its own container
@@ -410,7 +410,7 @@ if (cluster.isPrimary) {
     startServer(workerContainer);
 }
 
-function startServer(container: TypeSafeServiceLocator<any>) {
+function startServer(container: ServiceContainer<any>) {
     const app = express();
     
     app.use((req, res, next) => {

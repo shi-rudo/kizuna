@@ -14,23 +14,23 @@ A dependency sometimes closed before its consumer completed cleanup. This behavi
 
 ## Decision
 
-The provider creates a disposal graph from the declared dependency keys. Each graph edge points from a consumer to its dependency.
+The container creates a disposal graph from the declared dependency keys. Each graph edge points from a consumer to its dependency.
 
 A dependency key can identify one service or a multi-registration group. The graph includes each service in that group.
 
-The provider puts circular components into one group. It then processes the graph in consumer-first layers.
+The container puts circular components into one group. It then processes the graph in consumer-first layers.
 
 Sync disposal invokes each layer in registration order. Async disposal starts the root groups in parallel.
 
 Async disposal starts each dependency group after all its consumer groups settle. Unrelated graph branches do not block one another.
 
-Sync disposal keeps registration order within each layer. The provider keeps one order across single registrations and multi-registrations.
+Sync disposal keeps registration order within each layer. The container keeps one order across single registrations and multi-registrations.
 
 Async order between independent branches depends on completion timing. If cleanup order is required, applications must declare a dependency.
 
 Factory registrations can declare dependency keys after the factory. These keys add edges to the disposal graph.
 
-An undeclared locator lookup does not add an edge. Applications must declare fixed lookups that control cleanup order.
+An undeclared container lookup does not add an edge. Applications must declare fixed lookups that control cleanup order.
 
 ## Consequences
 

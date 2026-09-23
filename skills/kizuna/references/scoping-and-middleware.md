@@ -347,7 +347,7 @@ After `container.dispose()`, all calls to `get()`, `getAll()`, and `startScope()
 
 ## Common mistake: scopes are read-only
 
-Do NOT try to add registrations to a scope. Scopes returned by `startScope()` are read-only `ServiceProvider` instances. Methods like `registerInstance()` and `reset()` do not exist.
+Do NOT try to add registrations to a scope. Scopes returned by `startScope()` are read-only containers. Methods like `registerInstance()` and `reset()` do not exist.
 
 For per-request values, use scoped factories:
 
@@ -357,4 +357,4 @@ For per-request values, use scoped factories:
 
 ## Performance: startScope() is O(n)
 
-Every `startScope()` allocates a new `ServiceProvider`, a new record object, and a new `ServiceWrapper` for every registered service — including singletons. With many services and high request throughput, this creates allocation pressure. There is no scope pooling or `reset()` method.
+Every `startScope()` allocates a new container, a new record object, and a new `ServiceWrapper` for every registered service — including singletons. With many services and high request throughput, this creates allocation pressure. There is no scope pooling or `reset()` method.
