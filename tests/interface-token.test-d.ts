@@ -105,7 +105,8 @@ test("interface tokens infer interface registration keys and service types", () 
 	expectTypeOf(provider.get("EmailService")).toEqualTypeOf<EmailContract>();
 	expectTypeOf(provider.get("EmailConsumer")).toEqualTypeOf<EmailConsumer>();
 	expectTypeOf(provider.startScope().get(Cache)).toEqualTypeOf<CacheContract>();
-	expectTypeOf(provider.getAll(EmailService)).toEqualTypeOf<EmailContract[]>();
+	// @ts-expect-error An interface token holds one registration. Use get().
+	provider.getAll(EmailService);
 
 	const Missing = interfaceToken<EmailContract>()("Missing");
 	// @ts-expect-error An unregistered token must not resolve.
@@ -114,18 +115,21 @@ test("interface tokens infer interface registration keys and service types", () 
 	const WrongEmailService = interfaceToken<CacheContract>()("EmailService");
 	// @ts-expect-error A token with the right key but the wrong service type must not resolve.
 	provider.get(WrongEmailService);
-	// @ts-expect-error getAll must also reject a token with the wrong service type.
+	// @ts-expect-error getAll rejects interface tokens.
 	provider.getAll(WrongEmailService);
 });
 
-test("interface tokens preserve getAll array semantics", () => {
+test("interface tokens do not resolve multi-registration keys", () => {
 	const Plugins = interfaceToken<Plugin[]>()("Plugins");
-	const provider = new ContainerBuilder()
+	const container = new ContainerBuilder()
 		.addSingleton("Plugins", Plugin)
 		.build();
 
-	expectTypeOf(provider.get(Plugins)).toEqualTypeOf<Plugin[]>();
-	expectTypeOf(provider.getAll(Plugins)).toEqualTypeOf<Plugin[]>();
+	// @ts-expect-error A multi-registration key is not an interface registration.
+	container.get(Plugins);
+	// @ts-expect-error getAll() takes the string key of a multi-registration.
+	container.getAll(Plugins);
+	expectTypeOf(container.getAll("Plugins")).toEqualTypeOf<Plugin[]>();
 });
 
 test("interface tokens require fixed keys and replace string registrations", () => {

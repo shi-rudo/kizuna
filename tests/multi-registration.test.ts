@@ -194,28 +194,31 @@ describe("Multi-Registration", () => {
 	});
 
 	describe("get() for multi-keys", () => {
-		it("should return array when using get() on a multi-key", () => {
+		it("should reject get() on a multi-key and name getAll()", () => {
 			const container = new ContainerBuilder()
 				.addSingleton("handlers", HandlerA)
 				.addSingleton("handlers", HandlerB)
 				.build();
+			const untyped = container as unknown as { get(key: string): unknown };
 
-			const handlers = container.get("handlers");
-			expect(Array.isArray(handlers)).toBe(true);
-			expect(handlers).toHaveLength(2);
+			expect(() => untyped.get("handlers")).toThrow(
+				"Use getAll('handlers') to resolve them.",
+			);
 		});
 	});
 
 	describe("getAll() on single-keys", () => {
-		it("should wrap single-key result in array", () => {
+		it("should reject getAll() on a single key and name get()", () => {
 			const container = new ContainerBuilder()
 				.registerSingleton("config", AppConfig)
 				.build();
+			const untyped = container as unknown as {
+				getAll(key: string): unknown;
+			};
 
-			const result = container.getAll("config");
-			expect(Array.isArray(result)).toBe(true);
-			expect(result).toHaveLength(1);
-			expect(result[0]).toBeInstanceOf(AppConfig);
+			expect(() => untyped.getAll("config")).toThrow(
+				"Use get('config') to resolve it.",
+			);
 		});
 	});
 
@@ -324,14 +327,15 @@ describe("Multi-Registration", () => {
 	});
 
 	describe("builder state", () => {
-		it("should include multi-registrations in count", () => {
+		it("should count a multi-registration key once and each registration separately", () => {
 			const builder = new ContainerBuilder()
 				.registerSingleton("config", AppConfig)
 				.addSingleton("handlers", HandlerA)
 				.addSingleton("handlers", HandlerB);
 
-			// config + handlers = 2 registered service names
-			expect(builder.count).toBe(2);
+			// config + handlers = 2 keys; config + HandlerA + HandlerB = 3 registrations
+			expect(builder.keyCount).toBe(2);
+			expect(builder.registrationCount).toBe(3);
 		});
 
 		it("should report multi-keys as registered", () => {
@@ -419,14 +423,14 @@ describe("Multi-Registration", () => {
 		});
 	});
 
-	describe("get() on multi-key verifies instances", () => {
-		it("should return correct instance types via get()", () => {
+	describe("getAll() on multi-key verifies instances", () => {
+		it("should return correct instance types via getAll()", () => {
 			const container = new ContainerBuilder()
 				.addSingleton("handlers", HandlerA)
 				.addSingleton("handlers", HandlerB)
 				.build();
 
-			const handlers = container.get("handlers");
+			const handlers = container.getAll("handlers");
 			expect(handlers[0]).toBeInstanceOf(HandlerA);
 			expect(handlers[1]).toBeInstanceOf(HandlerB);
 			expect((handlers[0] as HandlerA).handle()).toBe("A");
@@ -573,7 +577,7 @@ describe("Multi-Registration", () => {
 				.addSingleton("handlers", HandlerA)
 				.addSingleton("handlers", HandlerB)
 				.addSingletonFactory("aggregator", (p) => {
-					const handlers = p.get("handlers");
+					const handlers = p.getAll("handlers");
 					return { count: handlers.length, handlers };
 				})
 				.build();
@@ -643,14 +647,14 @@ describe("Multi-Registration", () => {
 			expect(() => container.getAll("middleware")).toThrow(/missingService/);
 		});
 
-		it("should throw meaningful error via get() on failing multi-service", () => {
+		it("should throw meaningful error via getAll() on a failing factory", () => {
 			const container = new ContainerBuilder()
 				.addSingletonFactory("broken", () => {
 					throw new Error("factory failed");
 				})
 				.build();
 
-			expect(() => container.get("broken")).toThrow(/factory failed/);
+			expect(() => container.getAll("broken")).toThrow(/factory failed/);
 		});
 	});
 
@@ -725,15 +729,23 @@ describe("Multi-Registration", () => {
 			expect(() => container.getAll("items")).toThrow(/factory-2-boom/);
 		});
 
-		it("should throw via get() on partial multi-resolution failure", () => {
+		it("should reject get() before it resolves any entry", () => {
+			let created = 0;
 			const container = new ContainerBuilder()
-				.addSingletonFactory("items", () => ({ id: 1 }))
+				.addSingletonFactory("items", () => {
+					created++;
+					return { id: 1 };
+				})
 				.addSingletonFactory("items", () => {
 					throw new Error("boom");
 				})
 				.build();
+			const untyped = container as unknown as { get(key: string): unknown };
 
-			expect(() => container.get("items")).toThrow(/boom/);
+			expect(() => untyped.get("items")).toThrow(
+				"Use getAll('items') to resolve them.",
+			);
+			expect(created).toBe(0);
 		});
 	});
 

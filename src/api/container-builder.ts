@@ -17,7 +17,9 @@ import type {
 	AddToRegistry,
 	Factory,
 	ObservedFactoryValue,
+	ResolvedDependency,
 	ServiceRegistry,
+	SingleRegistrationKey,
 	TypeSafeRegistrar,
 } from "./contracts/types.js";
 import type {
@@ -90,7 +92,9 @@ type InterfaceImplementationConstructor<
 > = [ConstructedService<TCtor>] extends [TInterface] ? TCtor : never;
 
 type MatchingDependencyKey<TRegistry, TParameter> = {
-	[K in Extract<keyof TRegistry, string>]: TRegistry[K] extends TParameter
+	[K in Extract<keyof TRegistry, string>]: ResolvedDependency<
+		TRegistry[K]
+	> extends TParameter
 		? K
 		: never;
 }[Extract<keyof TRegistry, string>];
@@ -185,7 +189,7 @@ export class ContainerBuilder<
 	>;
 	borrowSingletonFrom<
 		TSourceRegistry extends ServiceRegistry,
-		K extends string & keyof TSourceRegistry,
+		K extends string & SingleRegistrationKey<TSourceRegistry>,
 	>(
 		source: RootServiceContainer<TSourceRegistry>,
 		key: K extends InterfaceToken<unknown, string>

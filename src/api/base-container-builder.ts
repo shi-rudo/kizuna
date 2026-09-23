@@ -27,11 +27,27 @@ export abstract class BaseContainerBuilder {
 	}
 
 	/**
-	 * Gets the number of registered services.
-	 * @returns {number} The count of registered services
+	 * Gets the number of registered keys. A multi-registration key counts once.
+	 * @returns {number} The number of distinct keys
+	 */
+	get keyCount(): number {
+		return this.registrationNames.size;
+	}
+
+	/**
+	 * Gets the number of registrations. Each `add*()` call counts separately.
+	 * @returns {number} The number of registrations
+	 */
+	get registrationCount(): number {
+		return this.registrationOrder.length;
+	}
+
+	/**
+	 * @deprecated Use {@link keyCount}. This value counts keys, not
+	 * registrations, and will be removed in a future major version.
 	 */
 	get count(): number {
-		return this.registrationNames.size;
+		return this.keyCount;
 	}
 
 	/**

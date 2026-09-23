@@ -127,6 +127,7 @@ describe("Workers compatibility (workerd via miniflare)", () => {
 		expect(res.status).toBe(200);
 		const body = (await res.json()) as {
 			ok: boolean;
+			keyCount: number;
 			registrationCount: number;
 			wasRegistered: boolean;
 			namesLength: number;
@@ -135,7 +136,8 @@ describe("Workers compatibility (workerd via miniflare)", () => {
 		};
 		expect(body.ok).toBe(true);
 		expect(body.wasRegistered).toBe(true);
-		expect(body.registrationCount).toBe(3);
+		expect(body.keyCount).toBe(3);
+		expect(body.registrationCount).toBe(4);
 		expect(body.allPluginsLength).toBe(2);
 		expect(body.usingScopeIdShape).toBe("string");
 	});

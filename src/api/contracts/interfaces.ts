@@ -4,6 +4,11 @@ import type {
 	InterfaceTokenService,
 	RegisteredInterfaceToken,
 } from "../interface-token.js";
+import type {
+	MultiRegistrationKey,
+	MultiRegistrationService,
+	SingleRegistrationKey,
+} from "./types.js";
 
 /**
  * Resolves registered services. The root container and every scope implement
@@ -18,13 +23,15 @@ export interface ServiceContainer<TRegistry extends Record<string, any>> {
 	): InterfaceTokenService<TToken>;
 
 	/**
-	 * Type-safe service resolution by string key with autocompletion and type inference.
+	 * Resolves the service of a key with one registration.
+	 * Use `getAll()` for a key with multiple registrations.
 	 *
-	 * @template K - The string key from the registry
+	 * @template K - A single-registration key from the registry
 	 * @param key - The string key identifying the service (must be registered)
 	 * @returns An instance of the service with inferred type
+	 * @throws {Error} If the key has multiple registrations
 	 */
-	get<K extends keyof TRegistry>(
+	get<K extends SingleRegistrationKey<TRegistry>>(
 		key: K extends InterfaceToken<unknown, string> ? never : K,
 	): TRegistry[K];
 
@@ -35,22 +42,17 @@ export interface ServiceContainer<TRegistry extends Record<string, any>> {
 	get(token: typeof ServiceContainerToken): ServiceContainer<TRegistry>;
 
 	/**
-	 * Resolves all implementations registered under a key as an array.
-	 * For multi-registration keys, returns the array of all implementations.
-	 * For single-registration keys, wraps the result in a single-element array.
+	 * Resolves all services of a key with multiple registrations, in
+	 * registration order. Use `get()` for a key with one registration.
 	 *
-	 * @template K - The string key from the registry
-	 * @param key - The string key identifying the services
+	 * @template K - A multi-registration key from the registry
+	 * @param key - The string key that the `add*()` methods registered
 	 * @returns An array of service instances
+	 * @throws {Error} If the key has one registration
 	 */
-	getAll<TToken extends InterfaceToken<unknown, string>>(
-		token: RegisteredInterfaceToken<TRegistry, TToken>,
-	): InterfaceTokenService<TToken> extends (infer U)[]
-		? U[]
-		: InterfaceTokenService<TToken>[];
-	getAll<K extends string & keyof TRegistry>(
+	getAll<K extends string & MultiRegistrationKey<TRegistry>>(
 		key: K extends InterfaceToken<unknown, string> ? never : K,
-	): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
+	): MultiRegistrationService<TRegistry[K]>[];
 
 	/**
 	 * Creates a new scope with the same type safety.
