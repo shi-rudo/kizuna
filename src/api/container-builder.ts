@@ -709,10 +709,6 @@ export class ContainerBuilder<
 
 		this.markAsBuilt();
 
-		if (this.registrations.size === 0 && this.multiRegistrations.size === 0) {
-			this.logWarning("Building ServiceProvider with no registered services");
-		}
-
 		return new ServiceProvider<TRegistry>(
 			this.registrations,
 			this.multiRegistrations,

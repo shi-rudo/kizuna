@@ -155,18 +155,4 @@ export abstract class BaseContainerBuilder {
 	protected markAsBuilt(): void {
 		this.isBuilt = true;
 	}
-
-	/**
-	 * Environment-agnostic logging methods
-	 * @protected
-	 */
-	protected logWarning(message: string): void {
-		try {
-			if (typeof console !== "undefined" && console.warn) {
-				console.warn(message);
-			}
-		} catch {
-			// Silently ignore if console is not available
-		}
-	}
 }
