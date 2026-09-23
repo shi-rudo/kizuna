@@ -9,6 +9,10 @@ bd.sock.startlock
 sync-state.json
 last-touched
 
+# Local JSONL export and viewer lock (issue data stays local)
+issues.jsonl
+.bv.lock
+
 # Local version tracking (prevents upgrade notification spam after git ops)
 .local_version
 
