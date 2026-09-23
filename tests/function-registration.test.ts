@@ -447,7 +447,7 @@ describe("ContainerBuilder - Function Registration", () => {
 			const ICacheToken = interfaceToken<ICache>()("ICache");
 
 			class DatabaseService {
-				query(sql: string) {
+				query(_sql: string) {
 					return [{ id: 1, name: "test" }];
 				}
 			}
@@ -772,15 +772,19 @@ describe("ContainerBuilder - Function Registration", () => {
 
 					return {
 						on(event: string, listener: (...args: any[]) => void) {
-							if (!listeners.has(event)) {
-								listeners.set(event, []);
+							let eventListeners = listeners.get(event);
+							if (!eventListeners) {
+								eventListeners = [];
+								listeners.set(event, eventListeners);
 							}
-							listeners.get(event)!.push(listener);
+							eventListeners.push(listener);
 						},
 
 						emit(event: string, ...args: any[]) {
 							const eventListeners = listeners.get(event) || [];
-							eventListeners.forEach((listener) => listener(...args));
+							for (const listener of eventListeners) {
+								listener(...args);
+							}
 						},
 
 						off(event: string, listener: (...args: any[]) => void) {
@@ -856,7 +860,7 @@ describe("ContainerBuilder - Function Registration", () => {
 			class EmailService {
 				constructor(private config: any) {}
 
-				send(to: string, subject: string, body: string) {
+				send(to: string, subject: string, _body: string) {
 					return `Sent to ${to}: ${subject} (${this.config.environment})`;
 				}
 			}

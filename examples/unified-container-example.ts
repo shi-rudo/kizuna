@@ -265,10 +265,10 @@ console.log("✅ Unified container built successfully!\n");
 console.log("🎯 Demonstrating type-safe service resolution:\n");
 
 // All services are fully typed!
-const logger = container.get("Logger"); // Type: Logger
+const resolvedLogger = container.get("Logger"); // Type: Logger
 const userService = container.get("UserService"); // Type: UserService
-const database = container.get(Database); // Type: IDatabase
-const cache = container.get(Cache); // Type: ICache
+const resolvedDatabase = container.get(Database); // Type: IDatabase
+const resolvedCache = container.get(Cache); // Type: ICache
 const config = container.get("AppConfig"); // Type: inferred from factory!
 
 // Advanced function-based services are also fully typed!
@@ -278,10 +278,10 @@ const maxRetries = container.get("MaxRetryAttempts"); // Type: number
 const languages = container.get("SupportedLanguages"); // Type: string[]
 
 console.log("Service types resolved:");
-console.log(`- Logger: ${logger.constructor.name}`);
+console.log(`- Logger: ${resolvedLogger.constructor.name}`);
 console.log(`- UserService: ${userService.constructor.name}`);
-console.log(`- Database: ${database.constructor.name}`);
-console.log(`- Cache: ${cache.constructor.name}`);
+console.log(`- Database: ${resolvedDatabase.constructor.name}`);
+console.log(`- Cache: ${resolvedCache.constructor.name}`);
 console.log(`- Config: ${typeof config}`);
 console.log(
 	`- Validators: ${typeof validators} with ${Object.keys(validators).length} rules`,
@@ -331,7 +331,7 @@ console.log("\n📊 Using the services:\n");
 // Use the user service (demonstrates all integrations working together)
 userService.getUser(123).then(() => {
 	console.log("\n📝 All logged messages:");
-	logger.getMessages().forEach((msg, i) => {
+	resolvedLogger.getMessages().forEach((msg, i) => {
 		console.log(`${i + 1}. ${msg}`);
 	});
 
