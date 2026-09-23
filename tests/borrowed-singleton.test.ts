@@ -91,10 +91,7 @@ describe("borrowSingletonFrom()", () => {
 			.build();
 
 		expect(() =>
-			new ContainerBuilder().borrowSingletonFrom(
-				source,
-				"Missing" as never,
-			),
+			new ContainerBuilder().borrowSingletonFrom(source, "Missing" as never),
 		).toThrow(
 			"Cannot borrow service 'Missing'. The source has no such registration.",
 		);
@@ -170,35 +167,37 @@ describe("borrowSingletonFrom()", () => {
 		expect(borrower.get(Clock)).toBe(source.get(Clock));
 	});
 
-	it.each(["toString", "constructor", "hasOwnProperty", "__proto__"])(
-		"supports the prototype-colliding key %s",
-		(key) => {
-			let disposeCalls = 0;
-			class SharedService {
-				dispose(): void {
-					disposeCalls++;
-				}
+	it.each([
+		"toString",
+		"constructor",
+		"hasOwnProperty",
+		"__proto__",
+	])("supports the prototype-colliding key %s", (key) => {
+		let disposeCalls = 0;
+		class SharedService {
+			dispose(): void {
+				disposeCalls++;
 			}
+		}
 
-			const source = new ContainerBuilder()
-				.registerSingleton(key as never, SharedService)
-				.build();
-			const borrower = new ContainerBuilder()
-				.borrowSingletonFrom(source, key as never)
-				.build();
-			const scope = borrower.startScope();
+		const source = new ContainerBuilder()
+			.registerSingleton(key as never, SharedService)
+			.build();
+		const borrower = new ContainerBuilder()
+			.borrowSingletonFrom(source, key as never)
+			.build();
+		const scope = borrower.startScope();
 
-			expect(borrower.get(key as never)).toBe(source.get(key as never));
-			expect(scope.get(key as never)).toBe(source.get(key as never));
+		expect(borrower.get(key as never)).toBe(source.get(key as never));
+		expect(scope.get(key as never)).toBe(source.get(key as never));
 
-			scope.dispose();
-			borrower.dispose();
-			expect(disposeCalls).toBe(0);
+		scope.dispose();
+		borrower.dispose();
+		expect(disposeCalls).toBe(0);
 
-			source.dispose();
-			expect(disposeCalls).toBe(1);
-		},
-	);
+		source.dispose();
+		expect(disposeCalls).toBe(1);
+	});
 
 	it("does not dispose a borrowed value on the synchronous path", () => {
 		let disposeCalls = 0;

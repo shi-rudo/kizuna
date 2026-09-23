@@ -1,106 +1,106 @@
-import { describe, expect, it } from 'vitest';
-import { ContainerBuilder } from '../src/api/container-builder';
-import type { ValidationIssue } from '../src/api/validation';
+import { describe, expect, it } from "vitest";
+import { ContainerBuilder } from "../src/api/container-builder";
+import type { ValidationIssue } from "../src/api/validation";
 
 class Dep {}
 class Consumer {
-    constructor(public dep: unknown) {}
+	constructor(public dep: unknown) {}
 }
 
 const captiveIssues = (issues: readonly ValidationIssue[]) =>
-    issues.filter((issue) => issue.code === 'CAPTIVE_DEPENDENCY');
+	issues.filter((issue) => issue.code === "CAPTIVE_DEPENDENCY");
 
-describe('Captive dependency validation (scoped injected into singleton)', () => {
-    it('flags a singleton that depends on a scoped service', () => {
-        const issues = new ContainerBuilder()
-            .registerScoped('dep', Dep)
-            .registerSingleton('consumer', Consumer, 'dep')
-            .validate();
+describe("Captive dependency validation (scoped injected into singleton)", () => {
+	it("flags a singleton that depends on a scoped service", () => {
+		const issues = new ContainerBuilder()
+			.registerScoped("dep", Dep)
+			.registerSingleton("consumer", Consumer, "dep")
+			.validate();
 
-        const captive = captiveIssues(issues);
-        expect(captive).toHaveLength(1);
-        expect(captive[0]?.serviceKey).toBe('consumer');
-        expect(captive[0]?.dependencyKey).toBe('dep');
-    });
+		const captive = captiveIssues(issues);
+		expect(captive).toHaveLength(1);
+		expect(captive[0]?.serviceKey).toBe("consumer");
+		expect(captive[0]?.dependencyKey).toBe("dep");
+	});
 
-    it('flags a transitive scoped dependency with the complete dependency path', () => {
-        class FirstBridge {
-            constructor(public dep: unknown) {}
-        }
-        class SecondBridge {
-            constructor(public firstBridge: unknown) {}
-        }
-        class RootConsumer {
-            constructor(public secondBridge: unknown) {}
-        }
+	it("flags a transitive scoped dependency with the complete dependency path", () => {
+		class FirstBridge {
+			constructor(public dep: unknown) {}
+		}
+		class SecondBridge {
+			constructor(public firstBridge: unknown) {}
+		}
+		class RootConsumer {
+			constructor(public secondBridge: unknown) {}
+		}
 
-        const issues = new ContainerBuilder()
-            .registerScoped('dep', Dep)
-            .registerTransient('firstBridge', FirstBridge, 'dep')
-            .registerTransient('secondBridge', SecondBridge, 'firstBridge')
-            .registerSingleton('consumer', RootConsumer, 'secondBridge')
-            .validate();
+		const issues = new ContainerBuilder()
+			.registerScoped("dep", Dep)
+			.registerTransient("firstBridge", FirstBridge, "dep")
+			.registerTransient("secondBridge", SecondBridge, "firstBridge")
+			.registerSingleton("consumer", RootConsumer, "secondBridge")
+			.validate();
 
-        const captive = captiveIssues(issues);
-        expect(captive).toHaveLength(1);
-        expect(captive[0]?.path).toEqual([
-            'consumer',
-            'secondBridge',
-            'firstBridge',
-            'dep',
-        ]);
-    });
+		const captive = captiveIssues(issues);
+		expect(captive).toHaveLength(1);
+		expect(captive[0]?.path).toEqual([
+			"consumer",
+			"secondBridge",
+			"firstBridge",
+			"dep",
+		]);
+	});
 
-    it('does not flag singleton -> singleton dependencies', () => {
-        const issues = new ContainerBuilder()
-            .registerSingleton('dep', Dep)
-            .registerSingleton('consumer', Consumer, 'dep')
-            .validate();
+	it("does not flag singleton -> singleton dependencies", () => {
+		const issues = new ContainerBuilder()
+			.registerSingleton("dep", Dep)
+			.registerSingleton("consumer", Consumer, "dep")
+			.validate();
 
-        expect(captiveIssues(issues)).toHaveLength(0);
-    });
+		expect(captiveIssues(issues)).toHaveLength(0);
+	});
 
-    it('does not flag scoped -> scoped or scoped -> singleton dependencies', () => {
-        const issues = new ContainerBuilder()
-            .registerScoped('dep', Dep)
-            .registerScoped('consumer', Consumer, 'dep')
-            .validate();
-        expect(captiveIssues(issues)).toHaveLength(0);
+	it("does not flag scoped -> scoped or scoped -> singleton dependencies", () => {
+		const issues = new ContainerBuilder()
+			.registerScoped("dep", Dep)
+			.registerScoped("consumer", Consumer, "dep")
+			.validate();
+		expect(captiveIssues(issues)).toHaveLength(0);
 
-        const issues2 = new ContainerBuilder()
-            .registerSingleton('dep', Dep)
-            .registerScoped('consumer', Consumer, 'dep')
-            .validate();
-        expect(captiveIssues(issues2)).toHaveLength(0);
-    });
+		const issues2 = new ContainerBuilder()
+			.registerSingleton("dep", Dep)
+			.registerScoped("consumer", Consumer, "dep")
+			.validate();
+		expect(captiveIssues(issues2)).toHaveLength(0);
+	});
 
-    it('does not flag transient consumers', () => {
-        const issues = new ContainerBuilder()
-            .registerScoped('dep', Dep)
-            .registerTransient('consumer', Consumer, 'dep')
-            .validate();
+	it("does not flag transient consumers", () => {
+		const issues = new ContainerBuilder()
+			.registerScoped("dep", Dep)
+			.registerTransient("consumer", Consumer, "dep")
+			.validate();
 
-        expect(captiveIssues(issues)).toHaveLength(0);
-    });
+		expect(captiveIssues(issues)).toHaveLength(0);
+	});
 
-    it('flags a singleton depending on a multi-registration key that contains a scoped service', () => {
-        class HandlerA {}
-        const issues = new ContainerBuilder()
-            .addScoped('dep', HandlerA)
-            .registerSingleton('consumer', Consumer, 'dep')
-            .validate();
+	it("flags a singleton depending on a multi-registration key that contains a scoped service", () => {
+		class HandlerA {}
+		const issues = new ContainerBuilder()
+			.addScoped("dep", HandlerA)
+			.registerSingleton("consumer", Consumer, "dep")
+			.validate();
 
-        expect(captiveIssues(issues)).toHaveLength(1);
-    });
+		expect(captiveIssues(issues)).toHaveLength(1);
+	});
 
-    it('flags a singleton inside a multi-registration that depends on a scoped service', () => {
-        const issues = new ContainerBuilder()
-            .registerScoped('dep', Dep)
-            .addSingleton('group', Consumer, 'dep')
-            .validate();
+	it("flags a singleton inside a multi-registration that depends on a scoped service", () => {
+		const issues = new ContainerBuilder()
+			.registerScoped("dep", Dep)
+			.addSingleton("group", Consumer, "dep")
+			.validate();
 
-        const captive = captiveIssues(issues);
-        expect(captive).toHaveLength(1);
-        expect(captive[0]?.serviceKey).toBe('group');
-    });
+		const captive = captiveIssues(issues);
+		expect(captive).toHaveLength(1);
+		expect(captive[0]?.serviceKey).toBe("group");
+	});
 });

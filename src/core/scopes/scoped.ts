@@ -1,313 +1,316 @@
-import type { ConfigurableServiceLifecycle } from '../contracts.js';
-import { CircularDependencyError } from '../errors.js';
+import type { ConfigurableServiceLifecycle } from "../contracts.js";
+import { CircularDependencyError } from "../errors.js";
 import {
-    invokeAsyncDispose,
-    invokeSyncDispose,
-    requireSynchronousDispose,
-} from '../services/async-dispose.js';
-import { observePromiseRejection } from '../services/promise-value.js';
+	invokeAsyncDispose,
+	invokeSyncDispose,
+	requireSynchronousDispose,
+} from "../services/async-dispose.js";
+import { observePromiseRejection } from "../services/promise-value.js";
 
 /**
  * Scoped lifecycle implementation that maintains one instance per scope.
- * 
+ *
  * This lifecycle strategy creates a new instance the first time it's requested within
  * a scope and reuses that instance for all subsequent requests within the same scope.
  * When a new scope is created, a fresh instance is created for that scope. This is
  * ideal for request-scoped services in web applications where you want isolation
  * between different requests but sharing within a single request.
- * 
+ *
  * **Characteristics:**
  * - **Instance Creation**: Lazy (created on first access within each scope)
  * - **Instance Sharing**: Shared within the same scope only
  * - **Memory Usage**: Medium (one instance per active scope)
  * - **Disposal**: Instance is disposed when the scope is disposed
  * - **Isolation**: Each scope has its own instance
- * 
+ *
  * **Use Cases:**
  * - Request-scoped services in web applications
  * - Database transactions (one per request)
  * - User context services
  * - Request-specific configuration
  * - Services that maintain state during a workflow
- * 
+ *
  * @example
  * ```typescript
  * // Register a scoped service
  * builder.registerScoped('UserContext', UserContext);
- * 
+ *
  * // Within the same scope - same instance
  * const scope1 = container.startScope();
  * const ctx1a = scope1.get('UserContext');
  * const ctx1b = scope1.get('UserContext');
  * console.log(ctx1a === ctx1b); // true
- * 
+ *
  * // Different scope - different instance
  * const scope2 = container.startScope();
  * const ctx2 = scope2.get('UserContext');
  * console.log(ctx1a === ctx2); // false
- * 
+ *
  * // Clean up when done
  * scope1.dispose(); // ctx1a/ctx1b are disposed
  * scope2.dispose(); // ctx2 is disposed
  * ```
- * 
+ *
  * @implements {ServiceLifecycle}
  */
 export class ScopedLifecycle implements ConfigurableServiceLifecycle {
-    public readonly lifetime = 'scoped' as const;
-    public readonly valueOwnership = 'owned' as const;
-    /**
-     * The scoped instance.
-     * @private
-     */
-    private _instance: any;
+	public readonly lifetime = "scoped" as const;
+	public readonly valueOwnership = "owned" as const;
+	/**
+	 * The scoped instance.
+	 * @private
+	 */
+	private _instance: any;
 
-    /**
-     * Whether the instance has been created within this scope.
-     * @private
-     */
-    private _initialized = false;
+	/**
+	 * Whether the instance has been created within this scope.
+	 * @private
+	 */
+	private _initialized = false;
 
-    /**
-     * The factory function used to create instances within this scope.
-     * @private
-     */
-    private _factory: ((...args: any[]) => any) | null = null;
+	/**
+	 * The factory function used to create instances within this scope.
+	 * @private
+	 */
+	private _factory: ((...args: any[]) => any) | null = null;
 
-    /**
-     * Tracks whether this scope has been disposed.
-     * @private
-     */
-    private _isDisposed = false;
+	/**
+	 * Tracks whether this scope has been disposed.
+	 * @private
+	 */
+	private _isDisposed = false;
 
-    /**
-     * Sets the factory function that will be used to create instances within this scope.
-     * 
-     * This method must be called before getInstance() to provide the creation logic.
-     * The factory will be called once per scope when the first instance is requested.
-     * 
-     * @param {Function} factory - The factory function that creates the service instance
-     * @throws {Error} If the scope has been disposed
-     * @throws {Error} If factory is not a valid function
-     * 
-     * @example
-     * ```typescript
-     * const lifecycle = new ScopedLifecycle();
-     * lifecycle.setFactory((userId) => new UserContext(userId));
-     * ```
-     */
-    public setFactory(factory: (...args: any[]) => any): void {
-        if (this._isDisposed) {
-            throw new Error('Cannot set factory on a disposed scoped lifecycle');
-        }
-        if (!factory || typeof factory !== 'function') {
-            throw new Error('Factory must be a valid function');
-        }
-        this._factory = factory;
-    }
+	/**
+	 * Sets the factory function that will be used to create instances within this scope.
+	 *
+	 * This method must be called before getInstance() to provide the creation logic.
+	 * The factory will be called once per scope when the first instance is requested.
+	 *
+	 * @param {Function} factory - The factory function that creates the service instance
+	 * @throws {Error} If the scope has been disposed
+	 * @throws {Error} If factory is not a valid function
+	 *
+	 * @example
+	 * ```typescript
+	 * const lifecycle = new ScopedLifecycle();
+	 * lifecycle.setFactory((userId) => new UserContext(userId));
+	 * ```
+	 */
+	public setFactory(factory: (...args: any[]) => any): void {
+		if (this._isDisposed) {
+			throw new Error("Cannot set factory on a disposed scoped lifecycle");
+		}
+		if (!factory || typeof factory !== "function") {
+			throw new Error("Factory must be a valid function");
+		}
+		this._factory = factory;
+	}
 
-    /**
-     * Gets or creates the scoped instance within this scope.
-     * 
-     * On the first call within this scope, this method creates the instance using
-     * the registered factory and stores it for reuse within the same scope. All
-     * subsequent calls within the same scope return the same instance.
-     * 
-     * **Note:** Each scope maintains its own instance. Different scopes will have
-     * different instances even if they use the same factory.
-     * 
-     * @template T - The type of the service instance
-     * @param {...any[]} args - Arguments to pass to the factory function (only used on first call within scope)
-     * @returns {T} The scoped instance
-     * @throws {Error} If no factory has been registered
-     * @throws {Error} If the factory function throws an error during instance creation
-     * 
-     * @example
-     * ```typescript
-     * const lifecycle = new ScopedLifecycle();
-     * lifecycle.setFactory((userId) => new UserContext(userId));
-     * 
-     * // First call in this scope - creates the instance
-     * const ctx1 = lifecycle.getInstance('user123');
-     * 
-     * // Subsequent calls in same scope - returns same instance
-     * const ctx2 = lifecycle.getInstance('different-user');
-     * console.log(ctx1 === ctx2); // true (arguments ignored after first call)
-     * 
-     * // New scope would create a new instance
-     * const newScope = lifecycle.createScope();
-     * const ctx3 = newScope.getInstance('user456');
-     * console.log(ctx1 === ctx3); // false
-     * ```
-     */
-    public getInstance<T>(...args: any[]): T {
-        if (this._isDisposed) {
-            throw new Error('Cannot resolve from a disposed scoped lifecycle');
-        }
-        if (!this._factory) {
-            throw new Error('No factory registered for this lifecycle');
-        }
-        
-        if (!this._initialized) {
-            try {
-                const factoryValue = this._factory(...args);
-                let instance: any;
-                instance = observePromiseRejection(factoryValue, () => {
-                    if (!this._isDisposed && this._instance === instance) {
-                        this._instance = undefined;
-                        this._initialized = false;
-                    }
-                });
-                this._instance = instance;
-                this._initialized = true;
-            } catch (error) {
-                if (error instanceof CircularDependencyError) {
-                    throw error;
-                }
-                throw new Error(`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
-            }
-        }
-        
-        return this._instance as T;
-    }
+	/**
+	 * Gets or creates the scoped instance within this scope.
+	 *
+	 * On the first call within this scope, this method creates the instance using
+	 * the registered factory and stores it for reuse within the same scope. All
+	 * subsequent calls within the same scope return the same instance.
+	 *
+	 * **Note:** Each scope maintains its own instance. Different scopes will have
+	 * different instances even if they use the same factory.
+	 *
+	 * @template T - The type of the service instance
+	 * @param {...any[]} args - Arguments to pass to the factory function (only used on first call within scope)
+	 * @returns {T} The scoped instance
+	 * @throws {Error} If no factory has been registered
+	 * @throws {Error} If the factory function throws an error during instance creation
+	 *
+	 * @example
+	 * ```typescript
+	 * const lifecycle = new ScopedLifecycle();
+	 * lifecycle.setFactory((userId) => new UserContext(userId));
+	 *
+	 * // First call in this scope - creates the instance
+	 * const ctx1 = lifecycle.getInstance('user123');
+	 *
+	 * // Subsequent calls in same scope - returns same instance
+	 * const ctx2 = lifecycle.getInstance('different-user');
+	 * console.log(ctx1 === ctx2); // true (arguments ignored after first call)
+	 *
+	 * // New scope would create a new instance
+	 * const newScope = lifecycle.createScope();
+	 * const ctx3 = newScope.getInstance('user456');
+	 * console.log(ctx1 === ctx3); // false
+	 * ```
+	 */
+	public getInstance<T>(...args: any[]): T {
+		if (this._isDisposed) {
+			throw new Error("Cannot resolve from a disposed scoped lifecycle");
+		}
+		if (!this._factory) {
+			throw new Error("No factory registered for this lifecycle");
+		}
 
-    /**
-     * Creates a new scope with the same factory configuration.
-     * 
-     * This method creates a fresh ScopedLifecycle instance that shares the same
-     * factory function but maintains its own instance state. Each new scope will
-     * create its own instance when getInstance() is first called, providing
-     * isolation between different scopes.
-     * 
-     * @returns {ScopedLifecycle} A new ScopedLifecycle instance for the new scope
-     * @throws {Error} If this scope has been disposed
-     * @throws {Error} If no factory is available to copy to the new scope
-     * 
-     * @example
-     * ```typescript
-     * const lifecycle = new ScopedLifecycle();
-     * lifecycle.setFactory(() => new RequestContext());
-     * 
-     * // Create the first instance in the original scope
-     * const ctx1 = lifecycle.getInstance();
-     * 
-     * // Create a new scope - independent of the original
-     * const newScope = lifecycle.createScope();
-     * const ctx2 = newScope.getInstance();
-     * 
-     * console.log(ctx1 === ctx2); // false - different instances
-     * 
-     * // But within the same scope, instances are reused
-     * const ctx3 = newScope.getInstance();
-     * console.log(ctx2 === ctx3); // true - same scope, same instance
-     * ```
-     */
-    public createScope(): ScopedLifecycle {
-        if (this._isDisposed) {
-            throw new Error('Cannot create new scope from disposed lifecycle');
-        }
-        if (!this._factory) {
-            throw new Error('No factory available to create new scope');
-        }
-        const lifecycle = new ScopedLifecycle();
-        lifecycle.setFactory(this._factory);
-        return lifecycle;
-    }
+		if (!this._initialized) {
+			try {
+				const factoryValue = this._factory(...args);
+				let instance: any;
+				instance = observePromiseRejection(factoryValue, () => {
+					if (!this._isDisposed && this._instance === instance) {
+						this._instance = undefined;
+						this._initialized = false;
+					}
+				});
+				this._instance = instance;
+				this._initialized = true;
+			} catch (error) {
+				if (error instanceof CircularDependencyError) {
+					throw error;
+				}
+				throw new Error(
+					`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`,
+					{ cause: error },
+				);
+			}
+		}
 
-    /**
-     * Disposes the scoped instance and cleans up resources.
-     * 
-     * This method disposes the current instance if it exists and implements the
-     * dispose pattern. It also marks this scope as disposed, preventing further
-     * use. If the instance has a dispose() method, it will be called to allow
-     * the service to clean up its own resources.
-     * 
-     * After disposal, this scope cannot be used to create new instances or
-     * create new scopes.
-     * 
-     * @example
-     * ```typescript
-     * const lifecycle = new ScopedLifecycle();
-     * lifecycle.setFactory(() => new DatabaseTransaction());
-     * 
-     * const transaction = lifecycle.getInstance();
-     * 
-     * // Clean up when the scope is done
-     * lifecycle.dispose();
-     * 
-     * // The scope is now disposed and cannot be used
-     * console.log(lifecycle.isDisposed); // true
-     * 
-     * // This would throw an error
-     * // lifecycle.getInstance(); // Error: Cannot resolve from a disposed scoped lifecycle
-     * ```
-     */
-    public dispose(): void {
-        if (this._isDisposed) {
-            return;
-        }
-        this._isDisposed = true;
+		return this._instance as T;
+	}
 
-        try {
-            // Dispose the instance if it implements a sync or TC39 dispose hook
-            if (this._initialized) {
-                const result = invokeSyncDispose(this._instance);
-                requireSynchronousDispose(result);
-            }
-        } finally {
-            this._instance = undefined;
-            this._initialized = false;
-            this._factory = null;
-        }
-    }
+	/**
+	 * Creates a new scope with the same factory configuration.
+	 *
+	 * This method creates a fresh ScopedLifecycle instance that shares the same
+	 * factory function but maintains its own instance state. Each new scope will
+	 * create its own instance when getInstance() is first called, providing
+	 * isolation between different scopes.
+	 *
+	 * @returns {ScopedLifecycle} A new ScopedLifecycle instance for the new scope
+	 * @throws {Error} If this scope has been disposed
+	 * @throws {Error} If no factory is available to copy to the new scope
+	 *
+	 * @example
+	 * ```typescript
+	 * const lifecycle = new ScopedLifecycle();
+	 * lifecycle.setFactory(() => new RequestContext());
+	 *
+	 * // Create the first instance in the original scope
+	 * const ctx1 = lifecycle.getInstance();
+	 *
+	 * // Create a new scope - independent of the original
+	 * const newScope = lifecycle.createScope();
+	 * const ctx2 = newScope.getInstance();
+	 *
+	 * console.log(ctx1 === ctx2); // false - different instances
+	 *
+	 * // But within the same scope, instances are reused
+	 * const ctx3 = newScope.getInstance();
+	 * console.log(ctx2 === ctx3); // true - same scope, same instance
+	 * ```
+	 */
+	public createScope(): ScopedLifecycle {
+		if (this._isDisposed) {
+			throw new Error("Cannot create new scope from disposed lifecycle");
+		}
+		if (!this._factory) {
+			throw new Error("No factory available to create new scope");
+		}
+		const lifecycle = new ScopedLifecycle();
+		lifecycle.setFactory(this._factory);
+		return lifecycle;
+	}
 
-    /**
-     * Asynchronously disposes the scoped lifecycle. For a Promise instance,
-     * it waits for the value and invokes that value's cleanup hook.
-     */
-    public async disposeAsync(): Promise<void> {
-        if (this._isDisposed) {
-            return;
-        }
-        this._isDisposed = true;
+	/**
+	 * Disposes the scoped instance and cleans up resources.
+	 *
+	 * This method disposes the current instance if it exists and implements the
+	 * dispose pattern. It also marks this scope as disposed, preventing further
+	 * use. If the instance has a dispose() method, it will be called to allow
+	 * the service to clean up its own resources.
+	 *
+	 * After disposal, this scope cannot be used to create new instances or
+	 * create new scopes.
+	 *
+	 * @example
+	 * ```typescript
+	 * const lifecycle = new ScopedLifecycle();
+	 * lifecycle.setFactory(() => new DatabaseTransaction());
+	 *
+	 * const transaction = lifecycle.getInstance();
+	 *
+	 * // Clean up when the scope is done
+	 * lifecycle.dispose();
+	 *
+	 * // The scope is now disposed and cannot be used
+	 * console.log(lifecycle.isDisposed); // true
+	 *
+	 * // This would throw an error
+	 * // lifecycle.getInstance(); // Error: Cannot resolve from a disposed scoped lifecycle
+	 * ```
+	 */
+	public dispose(): void {
+		if (this._isDisposed) {
+			return;
+		}
+		this._isDisposed = true;
 
-        try {
-            if (this._initialized) {
-                await invokeAsyncDispose(this._instance);
-            }
-        } finally {
-            this._instance = undefined;
-            this._initialized = false;
-            this._factory = null;
-        }
-    }
+		try {
+			// Dispose the instance if it implements a sync or TC39 dispose hook
+			if (this._initialized) {
+				const result = invokeSyncDispose(this._instance);
+				requireSynchronousDispose(result);
+			}
+		} finally {
+			this._instance = undefined;
+			this._initialized = false;
+			this._factory = null;
+		}
+	}
 
-    /**
-     * Indicates whether this scope has been disposed.
-     * 
-     * Once a scope is disposed, it cannot be used to create instances or
-     * create new scopes. This property helps identify disposed scopes and
-     * prevent their accidental reuse.
-     * 
-     * @returns {boolean} True if the scope has been disposed, false otherwise
-     * 
-     * @example
-     * ```typescript
-     * const lifecycle = new ScopedLifecycle();
-     * console.log(lifecycle.isDisposed); // false
-     * 
-     * lifecycle.dispose();
-     * console.log(lifecycle.isDisposed); // true
-     * 
-     * // Trying to use disposed scope throws error
-     * try {
-     *   lifecycle.getInstance();
-     * } catch (error) {
-     *   console.log(error.message); // "Cannot resolve from a disposed scoped lifecycle"
-     * }
-     * ```
-     */
-    public get isDisposed(): boolean {
-        return this._isDisposed;
-    }
+	/**
+	 * Asynchronously disposes the scoped lifecycle. For a Promise instance,
+	 * it waits for the value and invokes that value's cleanup hook.
+	 */
+	public async disposeAsync(): Promise<void> {
+		if (this._isDisposed) {
+			return;
+		}
+		this._isDisposed = true;
+
+		try {
+			if (this._initialized) {
+				await invokeAsyncDispose(this._instance);
+			}
+		} finally {
+			this._instance = undefined;
+			this._initialized = false;
+			this._factory = null;
+		}
+	}
+
+	/**
+	 * Indicates whether this scope has been disposed.
+	 *
+	 * Once a scope is disposed, it cannot be used to create instances or
+	 * create new scopes. This property helps identify disposed scopes and
+	 * prevent their accidental reuse.
+	 *
+	 * @returns {boolean} True if the scope has been disposed, false otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * const lifecycle = new ScopedLifecycle();
+	 * console.log(lifecycle.isDisposed); // false
+	 *
+	 * lifecycle.dispose();
+	 * console.log(lifecycle.isDisposed); // true
+	 *
+	 * // Trying to use disposed scope throws error
+	 * try {
+	 *   lifecycle.getInstance();
+	 * } catch (error) {
+	 *   console.log(error.message); // "Cannot resolve from a disposed scoped lifecycle"
+	 * }
+	 * ```
+	 */
+	public get isDisposed(): boolean {
+		return this._isDisposed;
+	}
 }
