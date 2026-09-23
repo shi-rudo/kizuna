@@ -138,7 +138,8 @@ const allValid = validators.every(v => v.validate('hello')); // true
 
 **Key rules:**
 - `add*()` and `register*()` cannot share the same key — pick one pattern per key
-- `getAll()` returns an array; `get()` on a multi-key also returns the array
+- `getAll()` resolves only `add*()` keys; `get()` resolves only `register*()` keys and interface tokens. The wrong method fails at compile time and at runtime.
+- A constructor dependency on an `add*()` key receives all services as an array. Factories call `getAll()`.
 - Each implementation can have its own lifecycle (mix singleton + scoped under one key)
 - Factory variants available: `addSingletonFactory`, `addScopedFactory`, `addTransientFactory`
 - `validate()` checks multi-registration dependencies, circular deps, and captive dependencies
@@ -351,7 +352,8 @@ const builder = new ContainerBuilder()
 // Inspect registered services
 builder.getRegisteredServiceNames(); // ['logger', 'database', 'userService']
 builder.isRegistered('database'); // true
-builder.count; // 3
+builder.keyCount; // 3 (a multi-registration key counts once)
+builder.registrationCount; // 3 (each add*() call counts)
 ```
 
 Re-registering an existing `register*()` key throws. Create a new builder when
@@ -663,7 +665,7 @@ const container = new ContainerBuilder()
   .build();
 
 const validator = container.get('validators');
-// Returns the ARRAY, not a single validator — confusing
+// Compile-time error; at runtime: "Key 'validators' has multiple registrations. Use getAll('validators') to resolve them."
 ```
 
 Correct:
@@ -673,7 +675,7 @@ const validators = container.getAll('validators');
 // Explicitly returns Validator[] — intent is clear
 ```
 
-`get()` on a multi-registration key returns the array (same as `getAll()`), but `getAll()` communicates intent. For single-registration keys, `getAll()` wraps the result in a single-element array.
+`get()` rejects a multi-registration key, and `getAll()` rejects a single registration. Each error names the correct method. A constructor dependency on a multi-registration key still receives the array.
 
 Source: container.ts (`get()` and `getAll()`)
 

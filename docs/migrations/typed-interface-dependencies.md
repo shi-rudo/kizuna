@@ -59,11 +59,11 @@ Pass the token to `get()` to preserve the interface type:
 ```typescript
 const container = builder.build();
 const emailService = container.get(EmailService); // IEmailService
-const emailServices = container.getAll(EmailService); // IEmailService[]
 ```
 
-Both methods reject an unregistered token. They also reject a token that has the
-correct key and a different interface type.
+`get()` rejects an unregistered token. It also rejects a token that has the
+correct key and a different interface type. An interface token holds one
+registration, so `getAll()` does not accept it.
 
 Tokens are strings at runtime. You can use a registered token as a constructor
 dependency key:
