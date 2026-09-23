@@ -876,19 +876,17 @@ if (require.main === module) {
 }
 
 export {
-	ECommerceApplication,
+	createOrderDomainContainer,
 	createSharedContainer,
 	createUserDomainContainer,
-	createOrderDomainContainer,
-	// Export services for potential reuse
-	UserService,
-	OrderService,
-	Logger,
+	ECommerceApplication,
 	EmailService,
-	// Export interfaces
-	type IUserRepository,
-	type IOrderRepository,
-	type IPaymentGateway,
 	type IConfig,
 	type IMetrics,
+	type IOrderRepository,
+	type IPaymentGateway,
+	type IUserRepository,
+	Logger,
+	OrderService,
+	UserService,
 };

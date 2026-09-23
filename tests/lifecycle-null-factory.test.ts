@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SingletonLifecycle } from "../src/core/scopes/singleton";
 import { ScopedLifecycle } from "../src/core/scopes/scoped";
+import { SingletonLifecycle } from "../src/core/scopes/singleton";
 
 describe("Lifecycle null factory return", () => {
 	describe("SingletonLifecycle", () => {

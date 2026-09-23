@@ -5,12 +5,12 @@ import { ScopedLifecycle } from "../core/scopes/scoped.js";
 import { SingletonLifecycle } from "../core/scopes/singleton.js";
 import { TransientLifecycle } from "../core/scopes/transient.js";
 import { ServiceWrapper } from "../core/services/service-wrapper.js";
+import { BaseContainerBuilder } from "./base-container-builder.js";
 import {
+	type BorrowableSingletonSource,
 	borrowableSourceCapability,
 	isBorrowedSingletonReference,
-	type BorrowableSingletonSource,
 } from "./borrowed-singleton-capability.js";
-import { BaseContainerBuilder } from "./base-container-builder.js";
 import type { RootServiceContainer } from "./contracts/interfaces.js";
 import type {
 	AddToRegistry,

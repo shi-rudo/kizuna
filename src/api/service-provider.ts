@@ -10,9 +10,9 @@ import {
 } from "../core/services/disposal-order.js";
 import type { ServiceWrapper } from "../core/services/service-wrapper.js";
 import {
-	borrowableSourceCapability,
 	type BorrowableSingletonSource,
 	type BorrowedSingletonReference,
+	borrowableSourceCapability,
 } from "./borrowed-singleton-capability.js";
 import type { TypeSafeServiceLocator } from "./contracts/interfaces.js";
 import type { ServiceRegistry } from "./contracts/types.js";
@@ -22,8 +22,8 @@ import type {
 	RegisteredInterfaceToken,
 } from "./interface-token.js";
 
-export { CircularDependencyError, DisposalError } from "../core/errors.js";
 export type { DisposalFailure, DisposalOperation } from "../core/errors.js";
+export { CircularDependencyError, DisposalError } from "../core/errors.js";
 
 /** Stable identity token for resolving the current service provider. */
 export const ServiceProviderToken: unique symbol = Symbol("ServiceProvider");
