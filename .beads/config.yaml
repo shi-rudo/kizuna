@@ -47,6 +47,11 @@
 backup:
   git-push: false
 
+# .beads/issues.jsonl is only a local export. Do not import it after
+# git merges or pulls, because it can be older than the database.
+import:
+  auto: false
+
 # Integration settings (access with 'bd config get/set')
 # These are stored in the database, not in this file:
 # - jira.url
