@@ -1,16 +1,17 @@
+import type { ServiceContainerToken } from "../container.js";
 import type {
 	InterfaceToken,
 	InterfaceTokenService,
 	RegisteredInterfaceToken,
 } from "../interface-token.js";
-import type { ServiceProviderToken } from "../service-provider.js";
 
 /**
- * Type-safe ServiceLocator that provides compile-time safety and IDE autocompletion.
+ * Resolves registered services. The root container and every scope implement
+ * this interface, and factories receive it as their parameter.
  *
  * @template TRegistry - The service registry type mapping string keys to service types
  */
-export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
+export interface ServiceContainer<TRegistry extends Record<string, any>> {
 	/** Resolves a registered interface through its type-safe token. */
 	get<TToken extends InterfaceToken<unknown, string>>(
 		token: RegisteredInterfaceToken<TRegistry, TToken>,
@@ -28,10 +29,10 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	): TRegistry[K];
 
 	/**
-	 * Returns the current provider through its explicit infrastructure token.
+	 * Returns the current container or scope through its identity token.
 	 * Constructor values are not service keys.
 	 */
-	get(token: typeof ServiceProviderToken): TypeSafeServiceLocator<TRegistry>;
+	get(token: typeof ServiceContainerToken): ServiceContainer<TRegistry>;
 
 	/**
 	 * Resolves all implementations registered under a key as an array.
@@ -54,14 +55,14 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	/**
 	 * Creates a new scope with the same type safety.
 	 *
-	 * @returns A new TypeSafeServiceLocator instance with the same registry
+	 * @returns A new scope with the same registry
 	 */
-	startScope(): TypeSafeServiceLocator<TRegistry>;
+	startScope(): ServiceContainer<TRegistry>;
 
 	/**
 	 * Disposes of all services and cleans up resources.
 	 *
-	 * The provider invokes consumer cleanup before dependency cleanup.
+	 * The container invokes consumer cleanup before dependency cleanup.
 	 * It attempts all cleanup operations and then throws one `DisposalError`
 	 * with the original failures. It does not write cleanup errors to the
 	 * console. If cleanup needs a Promise, this method starts cleanup but cannot
@@ -75,7 +76,7 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
 	 *
 	 * Services can implement `[Symbol.asyncDispose]` or return a Promise from
 	 * `dispose()`. This method also waits for stored Promise values and cleans
-	 * their resolved values. The provider cleans consumers before dependencies.
+	 * their resolved values. The container cleans consumers before dependencies.
 	 * Independent handlers run in parallel. One rejection does not stop other
 	 * cleanup. This method then rejects with one `DisposalError`.
 	 */
@@ -98,9 +99,16 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
  * A root container that owns its local singleton registrations.
  *
  * `ContainerBuilder.build()` returns this type. `startScope()` returns a
- * `TypeSafeServiceLocator` that cannot lend singleton registrations.
+ * `ServiceContainer` scope that cannot lend singleton registrations.
  */
 export interface RootServiceContainer<TRegistry extends Record<string, any>>
-	extends TypeSafeServiceLocator<TRegistry> {
+	extends ServiceContainer<TRegistry> {
 	readonly [Symbol.toStringTag]: "KizunaRootServiceContainer";
 }
+
+/**
+ * @deprecated Use {@link ServiceContainer}. This alias will be removed in a
+ * future major version.
+ */
+export type TypeSafeServiceLocator<TRegistry extends Record<string, any>> =
+	ServiceContainer<TRegistry>;

@@ -159,8 +159,8 @@ const container = new ContainerBuilder()
   .registerSingleton('Logger', Logger)
   
   // Factory returning objects
-  .registerSingletonFactory('Config', (provider) => {
-    const logger = provider.get('Logger'); // Type: Logger ✨
+  .registerSingletonFactory('Config', (container) => {
+    const logger = container.get('Logger'); // Type: Logger ✨
     logger.log('Loading configuration...');
     
     return {
@@ -392,8 +392,8 @@ app.get('/users/:id', (req, res) => {
 // Register a scoped connection factory — each scope gets its own connection
 const container = new ContainerBuilder()
   .registerSingleton('Config', ConfigService)
-  .registerScopedFactory('Connection', (provider) => {
-    const config = provider.get('Config');
+  .registerScopedFactory('Connection', (container) => {
+    const config = container.get('Config');
     return createConnection(config.databaseUrl);
   }, 'Config')
   .registerScoped('UserRepository', UserRepository, 'Connection')
@@ -515,7 +515,7 @@ keys define validation edges and cleanup order.
 ```typescript
 .registerSingletonFactory(
   'UserRepository',
-  (provider) => new UserRepository(provider.get('DatabasePool')),
+  (container) => new UserRepository(container.get('DatabasePool')),
   'DatabasePool',
 )
 ```
@@ -706,8 +706,8 @@ const container = new ContainerBuilder()
     redis: { url: process.env.REDIS_URL }
   }))
   
-  .registerSingletonFactory('EmailService', (provider) => {
-    const config = provider.get('Config');
+  .registerSingletonFactory('EmailService', (container) => {
+    const config = container.get('Config');
     
     // Environment-specific implementations
     return config.environment === 'production'
@@ -715,8 +715,8 @@ const container = new ContainerBuilder()
       : new MockEmailService();
   }, 'Config')
   
-  .registerSingletonFactory('Cache', (provider) => {
-    const config = provider.get('Config');
+  .registerSingletonFactory('Cache', (container) => {
+    const config = container.get('Config');
     
     return config.redis.url
       ? new RedisCache(config.redis.url)
@@ -736,13 +736,25 @@ Read the examples in the [`examples/`](./examples) directory:
 
 ## 📖 API Reference
 
+### Terms
+
+- **Container**: an object that resolves registered services. The
+  `ServiceContainer` type describes it.
+- **Root container**: the container that `build()` returns. It owns its
+  singleton registrations and can lend them. Its type is `RootServiceContainer`.
+- **Scope**: a container that `startScope()` returns. It creates its own scoped
+  instances and uses the singletons of its root container.
+- **Factory**: a function that creates a service. It receives the container that
+  resolves the service.
+
 ### Package Exports
 
-The package root exports six runtime values:
+The package root exports seven runtime values:
 
 - `ContainerBuilder`
 - `interfaceToken`
-- `ServiceProviderToken`
+- `ServiceContainerToken`
+- `ServiceProviderToken` (deprecated alias of `ServiceContainerToken`)
 - `CircularDependencyError`
 - `ContainerValidationError`
 - `DisposalError`
@@ -750,7 +762,8 @@ The package root exports six runtime values:
 It also exports these public types:
 
 - `RootServiceContainer`
-- `TypeSafeServiceLocator`
+- `ServiceContainer`
+- `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`
@@ -786,17 +799,17 @@ The main class for configuring your dependency injection container.
 // Singleton lifecycle
 .registerSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerSingletonInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.registerSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (container: ServiceContainer<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 
 // Scoped lifecycle (one instance per scope)
 .registerScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerScopedInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.registerScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (container: ServiceContainer<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 
 // Transient lifecycle (new instance every time)
 .registerTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .registerTransientInterface<TToken extends InterfaceToken<unknown, string>, TCtor extends ServiceConstructor>(token: TToken, implementationType: InterfaceImplementationConstructor<InterfaceTokenService<TToken>, TCtor>, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.registerTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.registerTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (container: ServiceContainer<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 ```
 
 `LiteralServiceKey`, `InterfaceTokenService`, `InterfaceImplementationConstructor`, `ConstructorParameterTuples`, and `DependencyKeys` are internal types. The builder infers them from each call.
@@ -808,9 +821,9 @@ The main class for configuring your dependency injection container.
 .addSingleton<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .addScoped<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
 .addTransient<K, TCtor>(key: LiteralServiceKey<K>, serviceType: TCtor, ...dependencies: DependencyKeys<TRegistry, ConstructorParameterTuples<TCtor>>)
-.addSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
-.addScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
-.addTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (provider: TypeSafeServiceLocator<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addSingletonFactory<K, T>(key: LiteralServiceKey<K>, factory: (container: ServiceContainer<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addScopedFactory<K, T>(key: LiteralServiceKey<K>, factory: (container: ServiceContainer<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
+.addTransientFactory<K, T>(key: LiteralServiceKey<K>, factory: (container: ServiceContainer<TRegistry>) => T, ...dependencies: Array<keyof TRegistry & string>)
 ```
 
 #### Cross-Container Composition
@@ -833,20 +846,20 @@ Scopes and borrowers cannot lend a registration.
 .getRegisteredServiceNames(): string[]                 // List all registered keys
 ```
 
-### RootServiceContainer and TypeSafeServiceLocator
+### RootServiceContainer and ServiceContainer
 
 `build()` returns a `RootServiceContainer`. This type can lend owned singletons.
-`startScope()` returns a `TypeSafeServiceLocator`. A scope cannot lend services.
+`startScope()` returns a `ServiceContainer`. A scope cannot lend services.
 
 ```typescript
 interface RootServiceContainer<TRegistry>
-  extends TypeSafeServiceLocator<TRegistry> {}
+  extends ServiceContainer<TRegistry> {}
 
-interface TypeSafeServiceLocator<TRegistry> {
+interface ServiceContainer<TRegistry> {
   get<K extends keyof TRegistry>(key: K): TRegistry[K];      // Resolve service
-  get(token: typeof ServiceProviderToken): TypeSafeServiceLocator<TRegistry>; // Get current locator
+  get(token: typeof ServiceContainerToken): ServiceContainer<TRegistry>; // Get the current container
   getAll<K extends keyof TRegistry>(key: K): TRegistry[K][]; // Resolve all implementations as array
-  startScope(): TypeSafeServiceLocator<TRegistry>;            // Create new scope
+  startScope(): ServiceContainer<TRegistry>;                  // Create new scope
   dispose(): void;                                            // Synchronous cleanup
   disposeAsync(): Promise<void>;                              // Await async cleanup (DB pools, etc.)
   [Symbol.dispose](): void;                                   // TC39 `using` syntax
@@ -859,11 +872,16 @@ API throws one `DisposalError`. The async API rejects with one `DisposalError`
 after all cleanup operations settle. The resource-management symbols use the
 same behavior.
 
-`ServiceProviderToken` is an explicit infrastructure token. Calling
-`container.get(ServiceProviderToken)` returns the current root or scoped
-locator. This symbol token is separate from the string key `"ServiceProvider"`.
-That string remains available for normal user registrations. Other constructors
-are not resolution keys. Resolve registered services through their string keys.
+`ServiceContainerToken` is an explicit infrastructure token. Calling
+`container.get(ServiceContainerToken)` returns the current root container or
+scope. This symbol token is separate from string keys such as
+`"ServiceContainer"` or `"ServiceProvider"`. Those strings remain available for
+normal user registrations. Other constructors are not resolution keys. Resolve
+registered services through their string keys.
+
+`ServiceProviderToken` and `TypeSafeServiceLocator` are deprecated aliases of
+`ServiceContainerToken` and `ServiceContainer`. They keep existing code working.
+A future major version removes them.
 
 ### Promise Factory Values
 

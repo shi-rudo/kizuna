@@ -14,7 +14,7 @@ import {
 	type BorrowedSingletonReference,
 	borrowableSourceCapability,
 } from "./borrowed-singleton-capability.js";
-import type { TypeSafeServiceLocator } from "./contracts/interfaces.js";
+import type { ServiceContainer } from "./contracts/interfaces.js";
 import type { ServiceRegistry } from "./contracts/types.js";
 import type {
 	InterfaceToken,
@@ -25,19 +25,26 @@ import type {
 export type { DisposalFailure, DisposalOperation } from "../core/errors.js";
 export { CircularDependencyError, DisposalError } from "../core/errors.js";
 
-/** Stable identity token for resolving the current service provider. */
-export const ServiceProviderToken: unique symbol = Symbol("ServiceProvider");
+/** Stable identity token that resolves the current container or scope. */
+export const ServiceContainerToken: unique symbol = Symbol("ServiceContainer");
 
 /**
- * ServiceProvider that provides compile-time safety and IDE autocompletion.
+ * @deprecated Use {@link ServiceContainerToken}. This alias holds the same
+ * symbol and will be removed in a future major version.
+ */
+export const ServiceProviderToken: typeof ServiceContainerToken =
+	ServiceContainerToken;
+
+/**
+ * Runtime container that resolves registered services.
  *
- * This is the main service provider implementation that offers full type safety,
- * automatic type inference, and excellent IDE support for dependency injection.
+ * `ContainerBuilder.build()` creates the root container. `startScope()`
+ * creates a scope with the same registrations.
  *
  * @template TRegistry - The service registry type mapping string keys to service types
  */
-export class ServiceProvider<TRegistry extends ServiceRegistry>
-	implements TypeSafeServiceLocator<TRegistry>, BorrowableSingletonSource
+export class Container<TRegistry extends ServiceRegistry>
+	implements ServiceContainer<TRegistry>, BorrowableSingletonSource
 {
 	private readonly registrations: Map<string, ServiceWrapper>;
 	private readonly multiRegistrations: Map<string, ServiceWrapper[]>;
@@ -54,7 +61,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 	}
 
 	/**
-	 * Keys currently being resolved on this provider. Guards against
+	 * Keys currently being resolved on this container. Guards against
 	 * dependency cycles at resolve time (see {@link CircularDependencyError}).
 	 */
 	private readonly _resolutionStack: string[] = [];
@@ -93,17 +100,17 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 	get<K extends keyof TRegistry>(
 		key: K extends InterfaceToken<unknown, string> ? never : K,
 	): TRegistry[K];
-	get(token: typeof ServiceProviderToken): TypeSafeServiceLocator<TRegistry>;
-	get(keyOrType: keyof TRegistry | typeof ServiceProviderToken): unknown {
+	get(token: typeof ServiceContainerToken): ServiceContainer<TRegistry>;
+	get(keyOrType: keyof TRegistry | typeof ServiceContainerToken): unknown {
 		this.ensureNotDisposed();
 
-		if (keyOrType === ServiceProviderToken) {
+		if (keyOrType === ServiceContainerToken) {
 			return this;
 		}
 
 		if (typeof keyOrType !== "string") {
 			throw new TypeError(
-				"Service keys must be strings or ServiceProviderToken",
+				"Service keys must be strings or ServiceContainerToken",
 			);
 		}
 
@@ -170,7 +177,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 		throw new Error(`No service registered for key: ${String(typeName)}`);
 	}
 
-	startScope(): TypeSafeServiceLocator<TRegistry> {
+	startScope(): ServiceContainer<TRegistry> {
 		this.ensureNotDisposed();
 
 		const newRegistrations = new Map<string, ServiceWrapper>();
@@ -197,7 +204,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 			.map((resolver) => scopedResolvers.get(resolver))
 			.filter((resolver): resolver is ServiceWrapper => resolver !== undefined);
 
-		return new ServiceProvider<TRegistry>(
+		return new Container<TRegistry>(
 			newRegistrations,
 			newMultiRegistrations,
 			scopedRegistrationOrder,
@@ -281,7 +288,7 @@ export class ServiceProvider<TRegistry extends ServiceRegistry>
 	}
 
 	/**
-	 * Asynchronously disposes the provider and awaits all service-owned async
+	 * Asynchronously disposes the container and awaits all service-owned async
 	 * cleanup. This includes resolved values from singleton and scoped Promise
 	 * factories.
 	 *

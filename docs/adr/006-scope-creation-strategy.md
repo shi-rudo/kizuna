@@ -5,20 +5,20 @@
 Accepted.
 
 This ADR defines registration replication for `startScope()`. ADR-003 defines
-the public builder and locator types.
+the public builder and container types.
 
 ## Context
 
 A scoped service needs one value for each root container or child scope.
 Singleton values must stay shared. Transient values must remain untracked.
 
-The provider can implement scopes with parent lookup chains or with replicated
+The container can implement scopes with parent lookup chains or with replicated
 registrations. Parent chains make resolution and ownership depend on another
-provider.
+container.
 
 ## Decision
 
-`startScope()` creates an independent provider from the current provider
+`startScope()` creates an independent container from the current container
 registrations. Each scope gets a new wrapper for each registration.
 
 Scoped and transient lifecycles create new lifecycle instances. Singleton and
@@ -30,7 +30,7 @@ lifetime, and value-ownership metadata.
 A wrapper does not own a shared lifecycle. Therefore, scope disposal does not
 clean a singleton or borrowed singleton value.
 
-The new provider also copies the registration order. This order includes
+The new container also copies the registration order. This order includes
 single registrations and all entries in multi-registration groups.
 
 ## Runtime behavior
@@ -58,7 +58,7 @@ rules from its source scope.
 
 ## Ownership and disposal
 
-The provider does not track its child scopes. The application must dispose each
+The container does not track its child scopes. The application must dispose each
 child scope before it disposes the root container.
 
 Scope disposal cleans owned scoped values. It clears transient lifecycle
@@ -70,7 +70,7 @@ these values. A borrower never cleans a borrowed singleton.
 
 ## Consequences
 
-Resolution does not need a parent-provider lookup. Each scope has its own maps,
+Resolution does not need a parent-container lookup. Each scope has its own maps,
 wrappers, and registration order.
 
 Scope creation performs work for every registration. Its time and allocation

@@ -41,16 +41,16 @@ export class ServiceWrapper {
 
 	/**
 	 * Resolves the service instance with its dependencies.
-	 * @param serviceProvider The service provider for dependency resolution
+	 * @param container The container or scope that resolves dependencies
 	 * @returns The resolved service instance
 	 */
-	resolve(serviceProvider: ServiceResolver): any {
+	resolve(container: ServiceResolver): any {
 		if (!this._lifecycle) {
 			throw new Error(`Cannot resolve disposed service '${this._name}'`);
 		}
 
 		if (!this.isConstructorBased()) {
-			return this._lifecycle.getInstance(serviceProvider);
+			return this._lifecycle.getInstance(container);
 		}
 
 		if (this._dependencies.length === 0) {
@@ -58,9 +58,7 @@ export class ServiceWrapper {
 		}
 
 		return this._lifecycle.getInstance(
-			...this._dependencies.map((dependency) =>
-				serviceProvider.get(dependency),
-			),
+			...this._dependencies.map((dependency) => container.get(dependency)),
 		);
 	}
 

@@ -8,7 +8,7 @@ Later decisions amend parts of this ADR:
 
 - [ADR-001](./001-explicit-async-initialization-pattern.md) defines Promise
   values from factories.
-- [ADR-008](./008-self-registration-pattern.md) defines provider
+- [ADR-008](./008-self-registration-pattern.md) defines container
   self-resolution.
 - [ADR-009](./009-factory-function-signature.md) defines the typed factory
   parameter.
@@ -35,8 +35,8 @@ const container = new ContainerBuilder()
   .registerSingletonInterface(database, PostgreSQLDatabase, 'logger')
   .registerScopedInterface(cache, RedisCache, 'logger')
   .registerScoped('userService', UserService, database, 'logger')
-  .registerSingletonFactory('config', (provider) => {
-    const logger = provider.get('logger');
+  .registerSingletonFactory('config', (container) => {
+    const logger = container.get('logger');
     return createConfiguration(logger);
   }, 'logger')
   .build();
@@ -52,7 +52,7 @@ registry. Later registrations can use keys that already exist in this
 registry.
 
 `build()` returns a `RootServiceContainer<TRegistry>`. `startScope()` returns a
-`TypeSafeServiceLocator<TRegistry>`.
+`ServiceContainer<TRegistry>`.
 
 ## Registration contracts
 
@@ -79,13 +79,13 @@ checks as concrete constructor registrations.
 
 ### Factory registrations
 
-A factory receives a locator for the registry that exists before the factory
+A factory receives a container for the registry that exists before the factory
 registration. The factory return type becomes the service type for its key.
 
 Factory keys must be fixed string literals. A factory can declare dependency
 keys after its function. These keys define validation edges and cleanup order.
 
-An undeclared locator lookup does not create dependency metadata.
+An undeclared container lookup does not create dependency metadata.
 
 ADR-009 defines the factory type. ADR-001 defines Promise values from an
 `async` factory.
@@ -106,7 +106,7 @@ does not provide a custom lifecycle extension point.
 Registered services use their fixed string keys. An interface token carries
 its fixed string key and its interface type.
 
-`ServiceProviderToken` is the only non-string resolution token. It returns the
+`ServiceContainerToken` is the only non-string resolution token. It returns the
 current root container or scope. A user can register the string key
 `"ServiceProvider"` without a collision.
 

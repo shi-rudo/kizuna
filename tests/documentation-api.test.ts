@@ -175,7 +175,7 @@ describe("published TypeScript examples", () => {
 		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
 		const formalApi = readme.slice(
 			readme.indexOf("### ContainerBuilder"),
-			readme.indexOf("### RootServiceContainer and TypeSafeServiceLocator"),
+			readme.indexOf("### RootServiceContainer and ServiceContainer"),
 		);
 
 		expect(formalApi).toContain("#### Cross-Container Composition");
@@ -447,7 +447,7 @@ ${example}
 		);
 
 		expect(adr).toContain(
-			"TypeScript rejects an unregistered provider dependency during registration.",
+			"TypeScript rejects an unregistered container dependency during registration.",
 		);
 		expect(adr).not.toContain("would lead to a resolution error");
 	});
@@ -489,6 +489,7 @@ describe("published feature evidence", () => {
 		const runtimeExports = [
 			"ContainerBuilder",
 			"interfaceToken",
+			"ServiceContainerToken",
 			"ServiceProviderToken",
 			"CircularDependencyError",
 			"ContainerValidationError",
@@ -496,6 +497,7 @@ describe("published feature evidence", () => {
 		];
 		const typeExports = [
 			"RootServiceContainer",
+			"ServiceContainer",
 			"TypeSafeServiceLocator",
 			"InterfaceToken",
 			"DisposalFailure",

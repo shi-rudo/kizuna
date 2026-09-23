@@ -1,4 +1,4 @@
-import type { TypeSafeServiceLocator } from "./interfaces.js";
+import type { ServiceContainer } from "./interfaces.js";
 
 /**
  * Factory function type for creating service instances.
@@ -23,7 +23,7 @@ import type { TypeSafeServiceLocator } from "./interfaces.js";
  *
  * @template TRegistry - The registry available when the factory is registered
  * @template T - The type of service the factory creates
- * @param serviceProvider - The typed service locator for resolving dependencies
+ * @param container - The container or scope that resolves dependencies
  * @returns An instance of type T
  *
  * Registration methods accept optional dependency keys after this function.
@@ -33,7 +33,7 @@ import type { TypeSafeServiceLocator } from "./interfaces.js";
  * the package-root API. Consumers should let registration methods infer it.
  */
 export type Factory<TRegistry extends ServiceRegistry, T> = (
-	serviceProvider: TypeSafeServiceLocator<TRegistry>,
+	container: ServiceContainer<TRegistry>,
 ) => T;
 
 /**

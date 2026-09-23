@@ -11,6 +11,7 @@ import {
 	borrowableSourceCapability,
 	isBorrowedSingletonReference,
 } from "./borrowed-singleton-capability.js";
+import { Container } from "./container.js";
 import type { RootServiceContainer } from "./contracts/interfaces.js";
 import type {
 	AddToRegistry,
@@ -26,7 +27,6 @@ import type {
 	RegisteredInterfaceToken,
 } from "./interface-token.js";
 import type { LiteralServiceKey } from "./literal-service-key.js";
-import { ServiceProvider } from "./service-provider.js";
 import {
 	type ContainerBuildOptions,
 	ContainerValidationError,
@@ -109,7 +109,7 @@ type FactoryDependencyKey<TRegistry> = Extract<keyof TRegistry, string>;
  * - **Full type safety**: Compile-time type checking with automatic type inference
  * - **Multiple registration patterns**: Constructor-based, interface-based, and factory-based
  * - **All lifecycles**: Singleton, scoped, and transient service lifetimes
- * - **Factory functions**: Support for complex service initialization with type-safe providers
+ * - **Factory functions**: Support for complex service initialization with type-safe container access
  * - **Interface registration**: Type-safe interface-to-implementation mapping
  * - **Singleton borrowing**: Selective, non-owning imports from another container
  * - **Dependency injection**: Automatic resolution of service dependencies
@@ -132,8 +132,8 @@ type FactoryDependencyKey<TRegistry> = Extract<keyof TRegistry, string>;
  *   .registerScopedInterface(Cache, RedisCache, 'Logger')
  *
  *   // Factory-based registration
- *   .registerSingletonFactory('Config', (provider) => {
- *     const logger = provider.get('Logger'); // Type: ConsoleLogger
+ *   .registerSingletonFactory('Config', (container) => {
+ *     const logger = container.get('Logger'); // Type: ConsoleLogger
  *     return { env: 'production', debug: false };
  *   }, 'Logger')
  *   .registerScopedFactory('RequestId', () => crypto.randomUUID())
@@ -443,8 +443,8 @@ export class ContainerBuilder<
 	 * @template K - The string key for the service
 	 * @template T - The service type (inferred from factory return)
 	 * @param key - The string key used to identify the service
-	 * @param factory - Factory function that creates the service with type-safe provider access
-	 * @param dependencies - Existing keys that the factory resolves through its provider
+	 * @param factory - Factory function that creates the service with type-safe container access
+	 * @param dependencies - Existing keys that the factory resolves through its container
 	 * @returns A new ContainerBuilder with the updated registry type
 	 */
 	registerSingletonFactory<K extends string, T>(
@@ -468,8 +468,8 @@ export class ContainerBuilder<
 	 * @template K - The string key for the service
 	 * @template T - The service type (inferred from factory return)
 	 * @param key - The string key used to identify the service
-	 * @param factory - Factory function that creates the service with type-safe provider access
-	 * @param dependencies - Existing keys that the factory resolves through its provider
+	 * @param factory - Factory function that creates the service with type-safe container access
+	 * @param dependencies - Existing keys that the factory resolves through its container
 	 * @returns A new ContainerBuilder with the updated registry type
 	 */
 	registerScopedFactory<K extends string, T>(
@@ -493,8 +493,8 @@ export class ContainerBuilder<
 	 * @template K - The string key for the service
 	 * @template T - The service type (inferred from factory return)
 	 * @param key - The string key used to identify the service
-	 * @param factory - Factory function that creates the service with type-safe provider access
-	 * @param dependencies - Existing keys that the factory resolves through its provider
+	 * @param factory - Factory function that creates the service with type-safe container access
+	 * @param dependencies - Existing keys that the factory resolves through its container
 	 * @returns A new ContainerBuilder with the updated registry type
 	 */
 	registerTransientFactory<K extends string, T>(
@@ -607,8 +607,8 @@ export class ContainerBuilder<
 	 * @template K - The string key for the multi-registration
 	 * @template T - The service type (inferred from factory return)
 	 * @param key - The shared key for this group of services
-	 * @param factory - Factory function that creates the service with type-safe provider access
-	 * @param dependencies - Existing keys that the factory resolves through its provider
+	 * @param factory - Factory function that creates the service with type-safe container access
+	 * @param dependencies - Existing keys that the factory resolves through its container
 	 * @returns A new ContainerBuilder with the updated registry type
 	 */
 	addSingletonFactory<K extends string, T>(
@@ -632,8 +632,8 @@ export class ContainerBuilder<
 	 * @template K - The string key for the multi-registration
 	 * @template T - The service type (inferred from factory return)
 	 * @param key - The shared key for this group of services
-	 * @param factory - Factory function that creates the service with type-safe provider access
-	 * @param dependencies - Existing keys that the factory resolves through its provider
+	 * @param factory - Factory function that creates the service with type-safe container access
+	 * @param dependencies - Existing keys that the factory resolves through its container
 	 * @returns A new ContainerBuilder with the updated registry type
 	 */
 	addScopedFactory<K extends string, T>(
@@ -657,8 +657,8 @@ export class ContainerBuilder<
 	 * @template K - The string key for the multi-registration
 	 * @template T - The service type (inferred from factory return)
 	 * @param key - The shared key for this group of services
-	 * @param factory - Factory function that creates the service with type-safe provider access
-	 * @param dependencies - Existing keys that the factory resolves through its provider
+	 * @param factory - Factory function that creates the service with type-safe container access
+	 * @param dependencies - Existing keys that the factory resolves through its container
 	 * @returns A new ContainerBuilder with the updated registry type
 	 */
 	addTransientFactory<K extends string, T>(
@@ -709,7 +709,7 @@ export class ContainerBuilder<
 
 		this.markAsBuilt();
 
-		return new ServiceProvider<TRegistry>(
+		return new Container<TRegistry>(
 			this.registrations,
 			this.multiRegistrations,
 			this.registrationOrder,

@@ -104,7 +104,7 @@ console.log("=== UNIFIED CONTAINER BUILDER EXAMPLE ===\n");
 // THE ULTIMATE CONTAINER
 // =================
 
-const container = new ContainerBuilder()
+const rootContainer = new ContainerBuilder()
 	// 🏗️ Constructor-based registration
 	.registerSingleton("Logger", Logger)
 
@@ -116,8 +116,8 @@ const container = new ContainerBuilder()
 	// 🏭 Factory-based registration
 	.registerSingletonFactory(
 		"AppConfig",
-		(provider) => {
-			const logger = provider.get("Logger"); // Type: Logger ✅
+		(container) => {
+			const logger = container.get("Logger"); // Type: Logger ✅
 			logger.log("Initializing application configuration");
 
 			return {
@@ -142,8 +142,8 @@ const container = new ContainerBuilder()
 
 	.registerScopedFactory(
 		"RequestContext",
-		(provider) => {
-			const logger = provider.get("Logger");
+		(container) => {
+			const logger = container.get("Logger");
 			const requestId = crypto.randomUUID();
 			logger.log(`Creating request context: ${requestId}`);
 
@@ -214,8 +214,8 @@ const container = new ContainerBuilder()
 	// Function returning different types
 	.registerSingletonFactory(
 		"EnvironmentConfig",
-		(provider) => {
-			const config = provider.get("AppConfig");
+		(container) => {
+			const config = container.get("AppConfig");
 
 			// Return different configurations based on environment
 			switch (config.environment) {
@@ -265,17 +265,17 @@ console.log("✅ Unified container built successfully!\n");
 console.log("🎯 Demonstrating type-safe service resolution:\n");
 
 // All services are fully typed!
-const resolvedLogger = container.get("Logger"); // Type: Logger
-const userService = container.get("UserService"); // Type: UserService
-const resolvedDatabase = container.get(Database); // Type: IDatabase
-const resolvedCache = container.get(Cache); // Type: ICache
-const config = container.get("AppConfig"); // Type: inferred from factory!
+const resolvedLogger = rootContainer.get("Logger"); // Type: Logger
+const userService = rootContainer.get("UserService"); // Type: UserService
+const resolvedDatabase = rootContainer.get(Database); // Type: IDatabase
+const resolvedCache = rootContainer.get(Cache); // Type: ICache
+const config = rootContainer.get("AppConfig"); // Type: inferred from factory!
 
 // Advanced function-based services are also fully typed!
-const validators = container.get("ValidationRules"); // Type: validation functions object
-const eventBus = container.get("EventBus"); // Type: event bus interface
-const maxRetries = container.get("MaxRetryAttempts"); // Type: number
-const languages = container.get("SupportedLanguages"); // Type: string[]
+const validators = rootContainer.get("ValidationRules"); // Type: validation functions object
+const eventBus = rootContainer.get("EventBus"); // Type: event bus interface
+const maxRetries = rootContainer.get("MaxRetryAttempts"); // Type: number
+const languages = rootContainer.get("SupportedLanguages"); // Type: string[]
 
 console.log("Service types resolved:");
 console.log(`- Logger: ${resolvedLogger.constructor.name}`);
@@ -307,8 +307,8 @@ eventBus.emit("user-registered", { name: "Alice", id: 1 });
 
 console.log("\n🔄 Testing scoped services:\n");
 
-const scope1 = container.startScope();
-const scope2 = container.startScope();
+const scope1 = rootContainer.startScope();
+const scope2 = rootContainer.startScope();
 
 const userSvc1 = scope1.get("UserService");
 const userSvc2 = scope2.get("UserService");
@@ -340,10 +340,10 @@ userService.getUser(123).then(() => {
 	console.log("✅ Registry type inference for fixed service keys");
 	console.log("✅ Constructor, interface, and factory registration");
 	console.log("✅ All service lifecycles supported");
-	console.log("✅ Type-safe factory functions with provider access");
+	console.log("✅ Type-safe factory functions with container access");
 	console.log("✅ Compile-time errors for invalid registrations");
 	console.log("✅ Zero runtime configuration needed");
 	console.log("✅ TypeScript checks for registered keys");
 });
 
-export { container };
+export { rootContainer as container };

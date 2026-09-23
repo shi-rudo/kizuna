@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { CircularDependencyError } from "../src/api/container";
 import { ContainerBuilder } from "../src/api/container-builder";
-import { CircularDependencyError } from "../src/api/service-provider";
 
 class A {
 	constructor(public b: unknown) {}

@@ -7,7 +7,7 @@ description: >
   addScoped, addTransient, addSingletonFactory, addScopedFactory,
   addTransientFactory, borrowSingletonFrom, build(), validate(), get(), getAll(), startScope(),
   dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose,
-  getRegisteredServiceNames(), TypeSafeServiceLocator,
+  getRegisteredServiceNames(), ServiceContainer,
   ContainerValidationError, CircularDependencyError.
   Activate when registering services, choosing lifecycles, managing request
   scopes, registering multiple implementations under one key, debugging
@@ -20,7 +20,7 @@ library_version: "1.0.0-rc.9"
 sources:
   - "shi-rudo/kizuna:src/api/container-builder.ts"
   - "shi-rudo/kizuna:src/api/base-container-builder.ts"
-  - "shi-rudo/kizuna:src/api/service-provider.ts"
+  - "shi-rudo/kizuna:src/api/container.ts"
   - "shi-rudo/kizuna:src/api/contracts/interfaces.ts"
   - "shi-rudo/kizuna:src/api/contracts/types.ts"
   - "shi-rudo/kizuna:src/core/scopes/singleton.ts"
@@ -91,7 +91,7 @@ const email = container.get(EmailService); // Type: IEmailService
 
 ### Register a factory for config or conditional logic
 
-Use factories when construction needs runtime logic, returns primitives, or requires the service provider.
+Use factories when construction needs runtime logic, returns primitives, or requires the container.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -101,8 +101,8 @@ const container = new ContainerBuilder()
     dbUrl: process.env.DATABASE_URL ?? 'postgres://localhost:5432/dev',
     port: parseInt(process.env.PORT ?? '3000', 10),
   }))
-  .registerSingletonFactory('database', (provider) => {
-    const config = provider.get('config'); // Type: { dbUrl: string; port: number }
+  .registerSingletonFactory('database', (container) => {
+    const config = container.get('config'); // Type: { dbUrl: string; port: number }
     return new DatabaseConnection(config.dbUrl);
   }, 'config')
   .build();
@@ -221,7 +221,7 @@ app.get('/users/:id', (req, res) => {
 ### Build validation
 
 `build()` rejects missing, circular, and captive dependencies by default.
-`validate()` returns the same immutable issue list without building a provider.
+`validate()` returns the same immutable issue list without building a container.
 
 ```typescript
 import {
@@ -301,12 +301,12 @@ validation edges and cleanup order.
 ```typescript
 .registerSingletonFactory(
   'userRepository',
-  (provider) => new UserRepository(provider.get('database')),
+  (container) => new UserRepository(container.get('database')),
   'database',
 )
 ```
 
-An undeclared locator lookup stays invisible to graph validation.
+An undeclared container lookup stays invisible to graph validation.
 
 Both APIs attempt all cleanup operations. They report all failures in one
 `DisposalError`. The `errors` property contains the original errors. The
@@ -407,7 +407,7 @@ for missing, circular, and captive dependencies.
 An undeclared factory cycle stays dynamic. Its first resolution throws
 `CircularDependencyError` with the full path.
 
-Source: container-builder.ts, service-provider.ts
+Source: container-builder.ts, container.ts
 
 ### CRITICAL Captive dependency — singleton holds scoped service
 
@@ -439,9 +439,9 @@ Source: base-container-builder.ts validate()
 Wrong:
 
 ```typescript
-.registerSingletonFactory('userService', (provider) => {
-  const db = provider.get('database');
-  const logger = provider.get('logger');
+.registerSingletonFactory('userService', (container) => {
+  const db = container.get('database');
+  const logger = container.get('logger');
   return new UserService(db, logger);
 })
 ```
@@ -573,8 +573,8 @@ Wrong:
 ```typescript
 new ContainerBuilder()
   .registerSingleton('database', DatabaseConnection)
-  .registerSingletonFactory('userService', (provider) =>
-    new UserService(provider.get('database')),
+  .registerSingletonFactory('userService', (container) =>
+    new UserService(container.get('database')),
   )
 ```
 
@@ -585,7 +585,7 @@ new ContainerBuilder()
   .registerSingleton('database', DatabaseConnection)
   .registerSingletonFactory(
     'userService',
-    (provider) => new UserService(provider.get('database')),
+    (container) => new UserService(container.get('database')),
     'database',
   )
 ```
@@ -601,8 +601,8 @@ Wrong:
 
 ```typescript
 import { Factory } from '@shirudo/kizuna';
-const myFactory: Factory<UserService> = (provider) => {
-  return new UserService(provider.get('database'));
+const myFactory: Factory<UserService> = (container) => {
+  return new UserService(container.get('database'));
 };
 ```
 
@@ -610,14 +610,14 @@ Correct:
 
 ```typescript
 // Let TypeScript infer the factory type from the registration method
-.registerSingletonFactory('userService', (provider) => {
-  const db = provider.get('database'); // Type-safe!
+.registerSingletonFactory('userService', (container) => {
+  const db = container.get('database'); // Type-safe!
   return new UserService(db);
 }, 'database')
 ```
 
 The package root does not export `Factory`. Let TypeScript infer the type from
-the registration method. The inferred provider uses the current typed registry.
+the registration method. The inferred container uses the current typed registry.
 
 Source: types.ts vs container-builder.ts factory signatures
 
@@ -630,7 +630,7 @@ Wrong:
 .registerInterface<IDatabase>('db', PostgresDatabase, 'logger')
 .registerFactory('config', () => ({ port: 3000 }))
 
-// These methods do not exist on TypeSafeServiceLocator
+// These methods do not exist on ServiceContainer
 scope.registerInstance('requestId', id);
 scope.reset();
 ```
@@ -675,7 +675,7 @@ const validators = container.getAll('validators');
 
 `get()` on a multi-registration key returns the array (same as `getAll()`), but `getAll()` communicates intent. For single-registration keys, `getAll()` wraps the result in a single-element array.
 
-Source: service-provider.ts:40-62
+Source: container.ts (`get()` and `getAll()`)
 
 ## References
 

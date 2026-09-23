@@ -44,7 +44,7 @@ Coordinate shutdown with request admission and in-flight work. Start disposal
 only after the application stops new resolution work.
 
 If owned values have asynchronous cleanup, use `disposeAsync()`. Disposal marks
-the provider as disposed before cleanup starts.
+the container as disposed before cleanup starts.
 
 ## Example
 

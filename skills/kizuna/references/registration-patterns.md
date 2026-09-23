@@ -8,7 +8,7 @@ Kizuna has two registration modes: **single-registration** (`register*`) and **m
 | --- | --- | --- |
 | Class with constructor dependencies | Constructor | `registerSingleton('svc', Svc, 'dep1', 'dep2')` |
 | Resolved type must be an interface or abstraction | Interface | `registerSingletonInterface(Foo, FooImpl, 'dep')` |
-| Needs runtime logic, returns primitive, or needs provider | Factory | `registerSingletonFactory('cfg', (p) => ({ ... }))` |
+| Needs runtime logic, returns primitive, or needs the container | Factory | `registerSingletonFactory('cfg', (p) => ({ ... }))` |
 | Multiple implementations under one key | Multi-reg | `addSingleton('plugins', PluginA)` then `addSingleton('plugins', PluginB)` |
 | Singleton owned by another container | Borrow | `borrowSingletonFrom(shared, 'logger')` |
 | Default choice when unsure | Constructor | Short, explicit dependencies, and full graph validation |
@@ -70,7 +70,7 @@ Use this only when you want the container to return an interface type. If the re
 
 ## Factory registration
 
-Factories receive a `TypeSafeServiceLocator<TRegistry>` with full type inference on `provider.get()`.
+Factories receive a `ServiceContainer<TRegistry>` with full type inference on `container.get()`.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';
@@ -81,9 +81,9 @@ const container = new ContainerBuilder()
     dbUrl: process.env.DATABASE_URL ?? 'postgres://localhost/dev',
     debug: process.env.NODE_ENV !== 'production',
   }))
-  .registerSingletonFactory('database', (provider) => {
-    const config = provider.get('config');
-    const logger = provider.get('logger');
+  .registerSingletonFactory('database', (container) => {
+    const config = container.get('config');
+    const logger = container.get('logger');
     logger.log(`Connecting to ${config.dbUrl}`);
     return new DatabaseConnection(config.dbUrl);
   }, 'config', 'logger')
@@ -91,7 +91,7 @@ const container = new ContainerBuilder()
 ```
 
 The final keys declare the factory lookups. Validation and cleanup order use
-these graph edges. An undeclared locator lookup stays invisible.
+these graph edges. An undeclared container lookup stays invisible.
 
 ## Borrowed singleton
 
@@ -187,5 +187,5 @@ All methods return a new `ContainerBuilder` with an updated type registry, enabl
 ## Factory types are inferred
 
 The package root does not export a factory helper type. Let TypeScript infer the
-type from the registration method. The provider parameter uses the registry that
+type from the registration method. The container parameter uses the registry that
 exists at that point in the builder chain.

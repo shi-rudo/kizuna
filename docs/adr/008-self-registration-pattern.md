@@ -7,58 +7,58 @@ string key.
 
 ## Context
 
-Factories and infrastructure code sometimes need the current service provider.
+Factories and infrastructure code sometimes need the current container.
 An automatic string registration made that dependency look like a normal
 application service. It also reserved a user-facing key.
 
-The provider needs one stable identity that cannot collide with a user key.
+The container needs one stable identity that cannot collide with a user key.
 Normal services still need explicit constructor dependencies.
 
 ## Decision
 
-The provider is not part of the string-key registry. Kizuna does not create a
-hidden provider registration.
+The container is not part of the string-key registry. Kizuna does not create a
+hidden container registration.
 
-`get(ServiceProviderToken)` returns the current provider. A root call returns
+`get(ServiceContainerToken)` returns the current container. A root call returns
 the root container. A scope call returns that scope.
 
-`ServiceProviderToken` is an exported unique symbol. It cannot collide with the
+`ServiceContainerToken` is an exported unique symbol. It cannot collide with the
 string key `"ServiceProvider"`.
 
-A factory receives the current `TypeSafeServiceLocator` as its parameter.
+A factory receives the current `ServiceContainer` as its parameter.
 ADR-009 defines this factory contract.
 
 Constructor dependencies still use registered service keys. They cannot use
-`ServiceProviderToken` as a dependency key. Arbitrary constructors are also not
+`ServiceContainerToken` as a dependency key. Arbitrary constructors are also not
 resolution tokens.
 
 ## Type-safety boundary
 
-TypeScript rejects an unregistered provider dependency during registration.
+TypeScript rejects an unregistered container dependency during registration.
 JavaScript callers and unsafe casts can defer this error to validation or
 resolution.
 
-The token gives infrastructure code explicit access to the current provider.
-It does not make the provider a normal registered dependency.
+The token gives infrastructure code explicit access to the current container.
+It does not make the container a normal registered dependency.
 
 ## Factory example
 
 ```typescript
 const container = new ContainerBuilder()
   .registerSingleton('logger', Logger)
-  .registerSingletonFactory('diagnostics', (provider) => {
-    const logger = provider.get('logger');
+  .registerSingletonFactory('diagnostics', (container) => {
+    const logger = container.get('logger');
     return new Diagnostics(logger);
   }, 'logger')
   .build();
 ```
 
-The factory parameter is the preferred provider access for factory code.
+The factory parameter is the preferred container access for factory code.
 
 ## Explicit infrastructure lookup
 
 ```typescript
-import { ContainerBuilder, ServiceProviderToken } from '@shirudo/kizuna';
+import { ContainerBuilder, ServiceContainerToken } from '@shirudo/kizuna';
 
 class DiagnosticService {}
 
@@ -66,7 +66,7 @@ const container = new ContainerBuilder()
   .registerSingleton('ServiceProvider', DiagnosticService)
   .build();
 
-container.get(ServiceProviderToken); // The current provider
+container.get(ServiceContainerToken); // The current container
 container.get('ServiceProvider'); // DiagnosticService
 ```
 
@@ -78,7 +78,7 @@ The container does not reserve a string key for itself. User registrations can
 use the text `"ServiceProvider"`.
 
 Constructor signatures continue to show normal service dependencies. Dynamic
-provider access remains explicit in factories and infrastructure code.
+container access remains explicit in factories and infrastructure code.
 
 The API cannot prevent service-locator use inside a factory. Code review and
 application architecture must control that use.

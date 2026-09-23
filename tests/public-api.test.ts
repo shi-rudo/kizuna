@@ -8,6 +8,7 @@ describe("public package API", () => {
 			"ContainerBuilder",
 			"ContainerValidationError",
 			"DisposalError",
+			"ServiceContainerToken",
 			"ServiceProviderToken",
 			"interfaceToken",
 		]);
