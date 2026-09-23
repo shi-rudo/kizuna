@@ -3,7 +3,7 @@ import {
 	ContainerBuilder,
 	interfaceToken,
 	type RootServiceContainer,
-	type TypeSafeServiceLocator,
+	type ServiceContainer,
 } from "../src";
 
 test("borrowSingletonFrom preserves string-key service types", () => {
@@ -26,7 +26,7 @@ test("borrowSingletonFrom preserves string-key service types", () => {
 		RootServiceContainer<{ Logger: Logger }>
 	>();
 	expectTypeOf(sourceScope).toEqualTypeOf<
-		TypeSafeServiceLocator<{ Logger: Logger }>
+		ServiceContainer<{ Logger: Logger }>
 	>();
 	expectTypeOf(borrower.get("Logger")).toEqualTypeOf<Logger>();
 	expectTypeOf(borrower.get("Consumer")).toEqualTypeOf<Consumer>();

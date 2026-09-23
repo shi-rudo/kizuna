@@ -84,7 +84,7 @@ export interface BenchmarkContainer {
 	disposeAsync(): Promise<void>;
 }
 
-type BenchmarkFactory = (provider: BenchmarkContainer) => unknown;
+type BenchmarkFactory = (container: BenchmarkContainer) => unknown;
 
 export interface BenchmarkBuilder {
 	registerSingletonFactory(
@@ -176,8 +176,8 @@ const createDependencyChain = (
 		const key = `node-${index}`;
 		const dependencyKey = index + 1 < depth ? `node-${index + 1}` : undefined;
 		const factory: BenchmarkFactory = dependencyKey
-			? (provider) => {
-					const dependency = provider.get(dependencyKey) as { depth: number };
+			? (container) => {
+					const dependency = container.get(dependencyKey) as { depth: number };
 					return { depth: dependency.depth + 1 };
 				}
 			: () => ({ depth: 1 });

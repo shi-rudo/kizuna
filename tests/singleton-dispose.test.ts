@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { ServiceContainerToken } from "../src/api/container";
 import { ContainerBuilder } from "../src/api/container-builder";
-import { ServiceProviderToken } from "../src/api/service-provider";
 
 class DisposableService {
 	disposed = false;
@@ -133,7 +133,7 @@ describe("Post-dispose behavior", () => {
 
 		container.dispose();
 
-		// Child scope is independent — its own ServiceProvider with _disposed=false
+		// Child scope is independent — its own Container with _disposed=false
 		expect(() => scope.get("scoped")).not.toThrow();
 		expect(scope.get("scoped")).toBe(scopedBefore); // Same scoped instance
 	});
@@ -143,7 +143,7 @@ describe("Post-dispose behavior", () => {
 			.registerSingleton("service", NonDisposableService)
 			.build();
 
-		const self = container.get(ServiceProviderToken);
+		const self = container.get(ServiceContainerToken);
 		expect(self).toBe(container);
 	});
 
@@ -153,7 +153,7 @@ describe("Post-dispose behavior", () => {
 			.build();
 
 		const scope = container.startScope();
-		const self = scope.get(ServiceProviderToken);
+		const self = scope.get(ServiceContainerToken);
 		expect(self).toBe(scope);
 	});
 

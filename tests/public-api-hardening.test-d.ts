@@ -7,8 +7,10 @@ class TaggedPromise<T> extends Promise<T> {
 	readonly tag = "factory-promise";
 }
 
-test("the package root does not expose provider construction or internals", () => {
-	// @ts-expect-error ServiceProvider construction is internal to ContainerBuilder.
+test("the package root does not expose container construction or internals", () => {
+	// @ts-expect-error Container construction is internal to ContainerBuilder.
+	new Kizuna.Container<{ ghost: Logger }>({});
+	// @ts-expect-error The former internal class name is not public API either.
 	new Kizuna.ServiceProvider<{ ghost: Logger }>({});
 	// @ts-expect-error Lifecycle implementations are not public API.
 	Kizuna.SingletonLifecycle;

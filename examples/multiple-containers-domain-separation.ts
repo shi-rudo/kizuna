@@ -409,9 +409,9 @@ function createSharedContainer() {
 			// Configuration factory with environment-specific logic
 			.registerSingletonFactory(
 				"AppSettings",
-				(provider) => {
-					const config = provider.get(Config);
-					const logger = provider.get("Logger");
+				(container) => {
+					const config = container.get(Config);
+					const logger = container.get("Logger");
 
 					logger.log(
 						`Initializing app settings for ${config.getEnvironment()}`,
@@ -795,9 +795,9 @@ async function demonstrateTestingWithTypeSafety(): Promise<void> {
 		.registerSingletonInterface(Metrics, TestMetrics)
 		.registerSingletonFactory(
 			"AppSettings",
-			(provider) => {
-				const config = provider.get(Config);
-				const logger = provider.get("Logger");
+			(container) => {
+				const config = container.get(Config);
+				const logger = container.get("Logger");
 
 				logger.log("Initializing test app settings");
 

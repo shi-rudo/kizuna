@@ -11,6 +11,8 @@ const borrower = new Kizuna.ContainerBuilder()
 	.build();
 
 container.get("Logger");
+container.get(Kizuna.ServiceContainerToken);
+// The deprecated alias still resolves the container.
 container.get(Kizuna.ServiceProviderToken);
 borrower.get("Logger");
 
@@ -26,7 +28,9 @@ void readMissingDependency;
 borrower.dispose();
 container.dispose();
 
-// @ts-expect-error The concrete provider is not public API.
+// @ts-expect-error The concrete container class is not public API.
+Kizuna.Container;
+// @ts-expect-error The former internal class name is not public API either.
 Kizuna.ServiceProvider;
 // @ts-expect-error Lifecycle implementations are not public API.
 Kizuna.SingletonLifecycle;

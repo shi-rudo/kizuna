@@ -1,32 +1,48 @@
 import { expectTypeOf, test } from "vitest";
-import { ContainerBuilder } from "../src/api/container-builder";
+import type { ServiceContainer, TypeSafeServiceLocator } from "../src";
 import {
-	ServiceProvider,
+	Container,
+	ServiceContainerToken,
 	ServiceProviderToken,
-} from "../src/api/service-provider";
+} from "../src/api/container";
+import { ContainerBuilder } from "../src/api/container-builder";
 
 class DiagnosticService {}
 
-class DerivedProvider<
+class DerivedContainer<
 	TRegistry extends Record<string, unknown>,
-> extends ServiceProvider<TRegistry> {}
+> extends Container<TRegistry> {}
 
 test("self-resolution is available without weakening the public types", () => {
-	const provider = new ContainerBuilder()
+	const container = new ContainerBuilder()
 		.registerSingleton("ServiceProvider", DiagnosticService)
 		.build();
 
 	expectTypeOf(
-		provider.get("ServiceProvider"),
+		container.get("ServiceProvider"),
 	).toEqualTypeOf<DiagnosticService>();
 
-	const currentProvider = provider.get(ServiceProviderToken);
-	expectTypeOf(currentProvider).not.toBeAny();
-	expectTypeOf(currentProvider).toMatchTypeOf<{ startScope(): unknown }>();
+	const currentContainer = container.get(ServiceContainerToken);
+	expectTypeOf(currentContainer).not.toBeAny();
+	expectTypeOf(currentContainer).toMatchTypeOf<{ startScope(): unknown }>();
 
 	// @ts-expect-error Registered services must be resolved through their registry key.
-	provider.get(DiagnosticService);
+	container.get(DiagnosticService);
 
-	// @ts-expect-error A provider subclass is not the explicit identity token.
-	provider.get(DerivedProvider);
+	// @ts-expect-error A container subclass is not the explicit identity token.
+	container.get(DerivedContainer);
+});
+
+test("deprecated names stay compatible with the new names", () => {
+	expectTypeOf<TypeSafeServiceLocator<{ answer: number }>>().toEqualTypeOf<
+		ServiceContainer<{ answer: number }>
+	>();
+
+	const container = new ContainerBuilder()
+		.registerSingletonFactory("answer", () => 42)
+		.build();
+
+	expectTypeOf(container.get(ServiceProviderToken)).toEqualTypeOf<
+		ServiceContainer<{ answer: number }>
+	>();
 });

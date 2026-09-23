@@ -22,8 +22,8 @@
  *   .registerSingletonInterface(Database, DatabaseService, 'Logger')
  *
  *   // Factory-based
- *   .registerSingletonFactory('Config', (provider) => {
- *     const logger = provider.get('Logger'); // Type: ConsoleLogger
+ *   .registerSingletonFactory('Config', (container) => {
+ *     const logger = container.get('Logger'); // Type: ConsoleLogger
  *     return { env: 'production', debug: false };
  *   }, 'Logger')
  *   .build();
@@ -36,19 +36,21 @@
  * @packageDocumentation
  */
 
+export type { DisposalFailure, DisposalOperation } from "./container.js";
+export {
+	CircularDependencyError,
+	DisposalError,
+	ServiceContainerToken,
+	ServiceProviderToken,
+} from "./container.js";
 export { ContainerBuilder } from "./container-builder.js";
 export type {
 	RootServiceContainer,
+	ServiceContainer,
 	TypeSafeServiceLocator,
 } from "./contracts/interfaces.js";
 export type { InterfaceToken } from "./interface-token.js";
 export { interfaceToken } from "./interface-token.js";
-export type { DisposalFailure, DisposalOperation } from "./service-provider.js";
-export {
-	CircularDependencyError,
-	DisposalError,
-	ServiceProviderToken,
-} from "./service-provider.js";
 export type {
 	ContainerBuildOptions,
 	ValidationIssue,
