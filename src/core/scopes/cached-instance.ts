@@ -29,11 +29,6 @@ export class CachedInstance {
 		this._lifetime = lifetime;
 	}
 
-	/** The configured factory, or null before configuration and after disposal. */
-	public get factory(): ((...args: any[]) => any) | null {
-		return this._factory;
-	}
-
 	public get isDisposed(): boolean {
 		return this._isDisposed;
 	}
@@ -50,7 +45,26 @@ export class CachedInstance {
 		this._factory = factory;
 	}
 
-	public getInstance<T>(...args: any[]): T {
+	/**
+	 * Returns the factory for the lifecycle of a new scope.
+	 * @throws {Error} If this lifecycle is disposed or has no factory
+	 */
+	public factoryForNewScope(): (...args: any[]) => any {
+		if (this._isDisposed) {
+			throw new Error("Cannot create new scope from disposed lifecycle");
+		}
+		if (!this._factory) {
+			throw new Error("No factory available to create new scope");
+		}
+		return this._factory;
+	}
+
+	/**
+	 * Returns the cached value, or creates it with the factory arguments on the
+	 * first request. The caller passes the arguments as one array, so a cache
+	 * hit does not copy them again.
+	 */
+	public getInstance<T>(args: readonly unknown[]): T {
 		if (this._isDisposed) {
 			throw new Error(
 				`Cannot resolve from a disposed ${this._lifetime} lifecycle`,
@@ -63,8 +77,7 @@ export class CachedInstance {
 		if (!this._initialized) {
 			try {
 				const factoryValue = this._factory(...args);
-				let instance: any;
-				instance = observePromiseRejection(factoryValue, () => {
+				const instance = observePromiseRejection(factoryValue, () => {
 					if (!this._isDisposed && this._instance === instance) {
 						this._instance = undefined;
 						this._initialized = false;

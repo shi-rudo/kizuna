@@ -48,7 +48,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * The factory, the cached instance, and the disposal state.
 	 * @private
 	 */
-	private readonly _cache = new CachedInstance("singleton");
+	private readonly _cache = new CachedInstance(this.lifetime);
 
 	/**
 	 * Sets the factory function that will be used to create the singleton instance.
@@ -101,7 +101,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public getInstance<T>(...args: any[]): T {
-		return this._cache.getInstance<T>(...args);
+		return this._cache.getInstance<T>(args);
 	}
 
 	/**

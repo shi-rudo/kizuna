@@ -54,7 +54,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * The factory, the instance of this scope, and the disposal state.
 	 * @private
 	 */
-	private readonly _cache = new CachedInstance("scoped");
+	private readonly _cache = new CachedInstance(this.lifetime);
 
 	/**
 	 * Sets the factory function that will be used to create instances within this scope.
@@ -111,7 +111,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public getInstance<T>(...args: any[]): T {
-		return this._cache.getInstance<T>(...args);
+		return this._cache.getInstance<T>(args);
 	}
 
 	/**
@@ -146,13 +146,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public createScope(): ScopedLifecycle {
-		if (this._cache.isDisposed) {
-			throw new Error("Cannot create new scope from disposed lifecycle");
-		}
-		const factory = this._cache.factory;
-		if (!factory) {
-			throw new Error("No factory available to create new scope");
-		}
+		const factory = this._cache.factoryForNewScope();
 		const lifecycle = new ScopedLifecycle();
 		lifecycle.setFactory(factory);
 		return lifecycle;
