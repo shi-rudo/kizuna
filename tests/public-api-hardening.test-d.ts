@@ -84,7 +84,9 @@ test("cached Promise factories expose their normalized observer type", () => {
 	expectTypeOf(provider.get("singleton")).toEqualTypeOf<Promise<string>>();
 	expectTypeOf(provider.get("scoped")).toEqualTypeOf<Promise<string>>();
 	expectTypeOf(provider.getAll("cached")).toEqualTypeOf<Promise<string>[]>();
-	expectTypeOf(provider.get("transient")).toEqualTypeOf<TaggedPromise<string>>();
+	expectTypeOf(provider.get("transient")).toEqualTypeOf<
+		TaggedPromise<string>
+	>();
 	expectTypeOf(provider.getAll("transient-group")).toEqualTypeOf<
 		TaggedPromise<string>[]
 	>();

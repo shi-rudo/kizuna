@@ -43,9 +43,8 @@ export type Factory<TRegistry extends ServiceRegistry, T> = (
  *
  * @internal
  */
-export type ObservedFactoryValue<T> = T extends PromiseLike<unknown>
-	? Promise<Awaited<T>>
-	: T;
+export type ObservedFactoryValue<T> =
+	T extends PromiseLike<unknown> ? Promise<Awaited<T>> : T;
 
 /**
  * Represents a service registry mapping string keys to their service types.

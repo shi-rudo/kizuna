@@ -13,126 +13,130 @@
  * Deliberately runs without `nodejs_compat` so that any Node-API access in the
  * library would fail module-load — exactly what we want to catch.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Miniflare } from 'miniflare';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { Miniflare } from "miniflare";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const kizunaBundle = resolve(__dirname, '..', 'dist', 'index.mjs');
-const workerFixture = resolve(__dirname, 'fixtures', 'edge-worker.mjs');
+const kizunaBundle = resolve(__dirname, "..", "dist", "index.mjs");
+const workerFixture = resolve(__dirname, "fixtures", "edge-worker.mjs");
 
 // workerd compat date: this is the date the test was written against. Update
 // alongside intentional behavior changes after re-running locally.
-const COMPATIBILITY_DATE = '2024-10-01';
+const COMPATIBILITY_DATE = "2024-10-01";
 
 let mf: Miniflare;
 
 beforeAll(async () => {
-    if (!existsSync(kizunaBundle)) {
-        throw new Error(
-            `dist/index.mjs not found. Run \`pnpm build\` before running the edge-compat tests, ` +
-            `or run \`pnpm test\` from CI where build runs first.`,
-        );
-    }
+	if (!existsSync(kizunaBundle)) {
+		throw new Error(
+			`dist/index.mjs not found. Run \`pnpm build\` before running the edge-compat tests, ` +
+				`or run \`pnpm test\` from CI where build runs first.`,
+		);
+	}
 
-    const kizunaSrc = readFileSync(kizunaBundle, 'utf-8');
-    const workerSrc = readFileSync(workerFixture, 'utf-8');
+	const kizunaSrc = readFileSync(kizunaBundle, "utf-8");
+	const workerSrc = readFileSync(workerFixture, "utf-8");
 
-    mf = new Miniflare({
-        modules: [
-            { type: 'ESModule', path: 'index.mjs', contents: workerSrc },
-            { type: 'ESModule', path: 'kizuna.mjs', contents: kizunaSrc },
-        ],
-        compatibilityDate: COMPATIBILITY_DATE,
-        // NOTE: nodejs_compat is intentionally NOT enabled. The whole point of
-        // these tests is to verify kizuna works in workerd's stock environment
-        // without Node polyfills.
-    });
+	mf = new Miniflare({
+		modules: [
+			{ type: "ESModule", path: "index.mjs", contents: workerSrc },
+			{ type: "ESModule", path: "kizuna.mjs", contents: kizunaSrc },
+		],
+		compatibilityDate: COMPATIBILITY_DATE,
+		// NOTE: nodejs_compat is intentionally NOT enabled. The whole point of
+		// these tests is to verify kizuna works in workerd's stock environment
+		// without Node polyfills.
+	});
 
-    // Force isolate spin-up before the test suite starts so the module-load
-    // path is exercised — this is what catches accidental Node-API leakage.
-    await mf.ready;
+	// Force isolate spin-up before the test suite starts so the module-load
+	// path is exercised — this is what catches accidental Node-API leakage.
+	await mf.ready;
 }, 30_000);
 
 afterAll(async () => {
-    await mf?.dispose();
+	await mf?.dispose();
 });
 
-describe('Workers compatibility (workerd via miniflare)', () => {
-    it('builds the container at module-load without Node-API errors', async () => {
-        // If module-load failed (Node-only imports, ungated process.X), the
-        // isolate would refuse to start and dispatchFetch would throw or 500.
-        const res = await mf.dispatchFetch('http://localhost/scope-id');
-        expect(res.status).toBe(200);
-    });
+describe("Workers compatibility (workerd via miniflare)", () => {
+	it("builds the container at module-load without Node-API errors", async () => {
+		// If module-load failed (Node-only imports, ungated process.X), the
+		// isolate would refuse to start and dispatchFetch would throw or 500.
+		const res = await mf.dispatchFetch("http://localhost/scope-id");
+		expect(res.status).toBe(200);
+	});
 
-    it('isolates request scopes across requests', async () => {
-        const a = await (await mf.dispatchFetch('http://localhost/scope-id')).text();
-        const b = await (await mf.dispatchFetch('http://localhost/scope-id')).text();
-        expect(a).toMatch(/^[0-9a-f-]{36}$/);
-        expect(b).toMatch(/^[0-9a-f-]{36}$/);
-        expect(a).not.toBe(b);
-    });
+	it("isolates request scopes across requests", async () => {
+		const a = await (
+			await mf.dispatchFetch("http://localhost/scope-id")
+		).text();
+		const b = await (
+			await mf.dispatchFetch("http://localhost/scope-id")
+		).text();
+		expect(a).toMatch(/^[0-9a-f-]{36}$/);
+		expect(b).toMatch(/^[0-9a-f-]{36}$/);
+		expect(a).not.toBe(b);
+	});
 
-    it('supports `await using` via Symbol.asyncDispose under workerd', async () => {
-        const res = await mf.dispatchFetch('http://localhost/await-using');
-        expect(res.status).toBe(200);
-        expect(await res.text()).toMatch(/^[0-9a-f-]{36}$/);
-    });
+	it("supports `await using` via Symbol.asyncDispose under workerd", async () => {
+		const res = await mf.dispatchFetch("http://localhost/await-using");
+		expect(res.status).toBe(200);
+		expect(await res.text()).toMatch(/^[0-9a-f-]{36}$/);
+	});
 
-    it('returns structured validation issues when process is undefined', async () => {
-        const res = await mf.dispatchFetch('http://localhost/validate');
-        const body = (await res.json()) as {
-            issues: Array<{
-                code: string;
-                dependencyKey?: string;
-                path: string[];
-                serviceKey: string;
-            }>;
-            processIsUndefined: boolean;
-        };
+	it("returns structured validation issues when process is undefined", async () => {
+		const res = await mf.dispatchFetch("http://localhost/validate");
+		const body = (await res.json()) as {
+			issues: Array<{
+				code: string;
+				dependencyKey?: string;
+				path: string[];
+				serviceKey: string;
+			}>;
+			processIsUndefined: boolean;
+		};
 
-        expect(body.processIsUndefined).toBe(true);
-        expect(body.issues).toEqual([
-            expect.objectContaining({
-                code: 'MISSING_DEPENDENCY',
-                dependencyKey: 'Logger',
-                path: ['UserService', 'Logger'],
-                serviceKey: 'UserService',
-            }),
-        ]);
-    });
+		expect(body.processIsUndefined).toBe(true);
+		expect(body.issues).toEqual([
+			expect.objectContaining({
+				code: "MISSING_DEPENDENCY",
+				dependencyKey: "Logger",
+				path: ["UserService", "Logger"],
+				serviceKey: "UserService",
+			}),
+		]);
+	});
 
-    it('awaits service-owned async dispose via disposeAsync()', async () => {
-        const res = await mf.dispatchFetch('http://localhost/dispose-async');
-        const body = (await res.json()) as {
-            disposeCountBefore: number;
-            disposeCountAfter: number;
-        };
-        expect(body.disposeCountAfter).toBe(body.disposeCountBefore + 1);
-    });
+	it("awaits service-owned async dispose via disposeAsync()", async () => {
+		const res = await mf.dispatchFetch("http://localhost/dispose-async");
+		const body = (await res.json()) as {
+			disposeCountBefore: number;
+			disposeCountAfter: number;
+		};
+		expect(body.disposeCountAfter).toBe(body.disposeCountBefore + 1);
+	});
 
-    it('exercises every public API surface in workerd without throwing', async () => {
-        // Smoke test for paths the documented patterns don't hit: sync dispose,
-        // getAll, multi-registration, builder inspection (count/isRegistered/
-        // getRegisteredServiceNames), and the sync Symbol.dispose
-        // hook used by TC39 `using`. Catches Node-API leaks in these paths.
-        const res = await mf.dispatchFetch('http://localhost/exercise-all');
-        expect(res.status).toBe(200);
-        const body = (await res.json()) as {
-            ok: boolean;
-            registrationCount: number;
-            wasRegistered: boolean;
-            namesLength: number;
-            allPluginsLength: number;
-            usingScopeIdShape: string;
-        };
-        expect(body.ok).toBe(true);
-        expect(body.wasRegistered).toBe(true);
-        expect(body.registrationCount).toBe(3);
-        expect(body.allPluginsLength).toBe(2);
-        expect(body.usingScopeIdShape).toBe('string');
-    });
+	it("exercises every public API surface in workerd without throwing", async () => {
+		// Smoke test for paths the documented patterns don't hit: sync dispose,
+		// getAll, multi-registration, builder inspection (count/isRegistered/
+		// getRegisteredServiceNames), and the sync Symbol.dispose
+		// hook used by TC39 `using`. Catches Node-API leaks in these paths.
+		const res = await mf.dispatchFetch("http://localhost/exercise-all");
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			ok: boolean;
+			registrationCount: number;
+			wasRegistered: boolean;
+			namesLength: number;
+			allPluginsLength: number;
+			usingScopeIdShape: string;
+		};
+		expect(body.ok).toBe(true);
+		expect(body.wasRegistered).toBe(true);
+		expect(body.registrationCount).toBe(3);
+		expect(body.allPluginsLength).toBe(2);
+		expect(body.usingScopeIdShape).toBe("string");
+	});
 });

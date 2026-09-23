@@ -73,11 +73,8 @@ export const scenarioCases = <TScenario extends BenchmarkScenario>(
 	scenario: TScenario,
 ): (typeof benchmarkScenarios)[TScenario] => benchmarkScenarios[scenario];
 
-export const benchmarkName = (
-	benchmarkCase: BenchmarkCase,
-	unit: string,
-): string =>
-	`${benchmarkCase.size} ${unit} × ${benchmarkCase.operationsPerSample} operations/sample`;
+export const benchmarkName = (sample: BenchmarkCase, unit: string): string =>
+	`${sample.size} ${unit} × ${sample.operationsPerSample} operations/sample`;
 
 export interface BenchmarkContainer {
 	get(key: string): unknown;

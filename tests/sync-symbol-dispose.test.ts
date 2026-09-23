@@ -1,95 +1,95 @@
-import { describe, expect, it } from 'vitest';
-import { ContainerBuilder, DisposalError } from '../src';
+import { describe, expect, it } from "vitest";
+import { ContainerBuilder, DisposalError } from "../src";
 
-describe('Sync dispose() honors TC39 dispose symbols', () => {
-    it('disposes a singleton implementing only [Symbol.dispose]', () => {
-        let disposed = false;
-        class Resource {
-            [Symbol.dispose]() {
-                disposed = true;
-            }
-        }
-        const container = new ContainerBuilder()
-            .registerSingleton('res', Resource)
-            .build();
+describe("Sync dispose() honors TC39 dispose symbols", () => {
+	it("disposes a singleton implementing only [Symbol.dispose]", () => {
+		let disposed = false;
+		class Resource {
+			[Symbol.dispose]() {
+				disposed = true;
+			}
+		}
+		const container = new ContainerBuilder()
+			.registerSingleton("res", Resource)
+			.build();
 
-        container.get('res');
-        container.dispose();
+		container.get("res");
+		container.dispose();
 
-        expect(disposed).toBe(true);
-    });
+		expect(disposed).toBe(true);
+	});
 
-    it('disposes a scoped service implementing only [Symbol.dispose] when its scope is disposed', () => {
-        let disposed = false;
-        class Resource {
-            [Symbol.dispose]() {
-                disposed = true;
-            }
-        }
-        const container = new ContainerBuilder()
-            .registerScoped('res', Resource)
-            .build();
+	it("disposes a scoped service implementing only [Symbol.dispose] when its scope is disposed", () => {
+		let disposed = false;
+		class Resource {
+			[Symbol.dispose]() {
+				disposed = true;
+			}
+		}
+		const container = new ContainerBuilder()
+			.registerScoped("res", Resource)
+			.build();
 
-        const scope = container.startScope();
-        scope.get('res');
-        scope.dispose();
+		const scope = container.startScope();
+		scope.get("res");
+		scope.dispose();
 
-        expect(disposed).toBe(true);
-    });
+		expect(disposed).toBe(true);
+	});
 
-    it('prefers [Symbol.dispose] over a plain dispose() method and calls only one hook', () => {
-        let symbolCalls = 0;
-        let plainCalls = 0;
-        class Resource {
-            [Symbol.dispose]() {
-                symbolCalls++;
-            }
-            dispose() {
-                plainCalls++;
-            }
-        }
-        const container = new ContainerBuilder()
-            .registerSingleton('res', Resource)
-            .build();
+	it("prefers [Symbol.dispose] over a plain dispose() method and calls only one hook", () => {
+		let symbolCalls = 0;
+		let plainCalls = 0;
+		class Resource {
+			[Symbol.dispose]() {
+				symbolCalls++;
+			}
+			dispose() {
+				plainCalls++;
+			}
+		}
+		const container = new ContainerBuilder()
+			.registerSingleton("res", Resource)
+			.build();
 
-        container.get('res');
-        container.dispose();
+		container.get("res");
+		container.dispose();
 
-        expect(symbolCalls).toBe(1);
-        expect(plainCalls).toBe(0);
-    });
+		expect(symbolCalls).toBe(1);
+		expect(plainCalls).toBe(0);
+	});
 
-    it('reports [Symbol.asyncDispose] as asynchronous on the sync path', () => {
-        let started = false;
-        class Resource {
-            async [Symbol.asyncDispose]() {
-                started = true;
-            }
-        }
-        const container = new ContainerBuilder()
-            .registerSingleton('res', Resource)
-            .build();
+	it("reports [Symbol.asyncDispose] as asynchronous on the sync path", () => {
+		let started = false;
+		class Resource {
+			async [Symbol.asyncDispose]() {
+				started = true;
+			}
+		}
+		const container = new ContainerBuilder()
+			.registerSingleton("res", Resource)
+			.build();
 
-        container.get('res');
-        expect(() => container.dispose()).toThrow(DisposalError);
+		container.get("res");
+		expect(() => container.dispose()).toThrow(DisposalError);
 
-        expect(started).toBe(true);
-    });
+		expect(started).toBe(true);
+	});
 
-    it('still supports the plain dispose() method', () => {
-        let disposed = false;
-        class Resource {
-            dispose() {
-                disposed = true;
-            }
-        }
-        const container = new ContainerBuilder()
-            .registerSingleton('res', Resource)
-            .build();
+	it("still supports the plain dispose() method", () => {
+		let disposed = false;
+		class Resource {
+			dispose() {
+				disposed = true;
+			}
+		}
+		const container = new ContainerBuilder()
+			.registerSingleton("res", Resource)
+			.build();
 
-        container.get('res');
-        container.dispose();
+		container.get("res");
+		container.dispose();
 
-        expect(disposed).toBe(true);
-    });
+		expect(disposed).toBe(true);
+	});
 });

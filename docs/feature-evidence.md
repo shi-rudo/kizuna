@@ -38,6 +38,10 @@ The [CI workflow](../.github/workflows/ci.yml) runs these commands on Node.js
 - `pnpm test:types`
 - `pnpm test:examples`
 
+A separate CI job runs `pnpm check` once on Node.js `24.x`. It fails when
+formatting, import order, or lint rules report an error. Unused imports and
+shadowed variables count as errors.
+
 The [package E2E workflow](../.github/workflows/e2e.yml) creates the package
 tarball. It installs that tarball in a Vite React TypeScript project.
 

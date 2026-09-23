@@ -35,6 +35,8 @@
 		"benchmark": "vitest bench --run --no-file-parallelism",
 		"build": "tsup && tsc -p tsconfig.json --emitDeclarationOnly",
 		"changeset": "changeset",
+		"check": "biome ci",
+		"check:fix": "biome check --write",
 		"test": "vitest",
 		"test:examples": "tsc -p tsconfig.examples.json",
 		"test:types": "tsc -p tsconfig.type-tests.json",

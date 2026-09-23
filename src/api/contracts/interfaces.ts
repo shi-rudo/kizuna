@@ -100,8 +100,7 @@ export interface TypeSafeServiceLocator<TRegistry extends Record<string, any>> {
  * `ContainerBuilder.build()` returns this type. `startScope()` returns a
  * `TypeSafeServiceLocator` that cannot lend singleton registrations.
  */
-export interface RootServiceContainer<
-	TRegistry extends Record<string, any>,
-> extends TypeSafeServiceLocator<TRegistry> {
+export interface RootServiceContainer<TRegistry extends Record<string, any>>
+	extends TypeSafeServiceLocator<TRegistry> {
 	readonly [Symbol.toStringTag]: "KizunaRootServiceContainer";
 }

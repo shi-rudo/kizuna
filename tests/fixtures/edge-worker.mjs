@@ -9,118 +9,123 @@
 import { ContainerBuilder } from "./kizuna.mjs";
 
 class Logger {
-    log(msg) { return msg; }
+	log(msg) {
+		return msg;
+	}
 }
 
 class RequestContext {
-    constructor() {
-        this.id = crypto.randomUUID();
-    }
+	constructor() {
+		this.id = crypto.randomUUID();
+	}
 }
 
 // The /validate route uses this class to validate a missing graph edge.
 class UserService {
-    constructor(logger) {
-        this.logger = logger;
-    }
+	constructor(logger) {
+		this.logger = logger;
+	}
 }
 
 let disposeCount = 0;
 
 const container = new ContainerBuilder()
-    .registerSingleton("Logger", Logger)
-    .registerScoped("RequestContext", RequestContext)
-    .registerScopedFactory("AsyncResource", () => ({
-        async dispose() {
-            await new Promise(r => setTimeout(r, 5));
-            disposeCount++;
-        },
-    }))
-    .build();
+	.registerSingleton("Logger", Logger)
+	.registerScoped("RequestContext", RequestContext)
+	.registerScopedFactory("AsyncResource", () => ({
+		async dispose() {
+			await new Promise((r) => setTimeout(r, 5));
+			disposeCount++;
+		},
+	}))
+	.build();
 
 export default {
-    async fetch(req, _env, ctx) {
-        const url = new URL(req.url);
+	async fetch(req, _env, ctx) {
+		const url = new URL(req.url);
 
-        if (url.pathname === "/scope-id") {
-            const scope = container.startScope();
-            try {
-                return new Response(scope.get("RequestContext").id);
-            } finally {
-                ctx.waitUntil(scope.disposeAsync());
-            }
-        }
+		if (url.pathname === "/scope-id") {
+			const scope = container.startScope();
+			try {
+				return new Response(scope.get("RequestContext").id);
+			} finally {
+				ctx.waitUntil(scope.disposeAsync());
+			}
+		}
 
-        if (url.pathname === "/await-using") {
-            // Exercise TC39 Symbol.asyncDispose path under workerd V8
-            let resolvedId;
-            {
-                await using scope = container.startScope();
-                resolvedId = scope.get("RequestContext").id;
-            }
-            return new Response(resolvedId);
-        }
+		if (url.pathname === "/await-using") {
+			// Exercise TC39 Symbol.asyncDispose path under workerd V8
+			let resolvedId;
+			{
+				await using scope = container.startScope();
+				resolvedId = scope.get("RequestContext").id;
+			}
+			return new Response(resolvedId);
+		}
 
-        if (url.pathname === "/validate") {
-            const b = new ContainerBuilder().registerSingleton(
-                "UserService",
-                UserService,
-                "Logger",
-            );
-            const issues = b.validate();
-            return Response.json({
-                issues,
-                processIsUndefined: typeof process === "undefined",
-            });
-        }
+		if (url.pathname === "/validate") {
+			const b = new ContainerBuilder().registerSingleton(
+				"UserService",
+				UserService,
+				"Logger",
+			);
+			const issues = b.validate();
+			return Response.json({
+				issues,
+				processIsUndefined: typeof process === "undefined",
+			});
+		}
 
-        if (url.pathname === "/dispose-async") {
-            const scope = container.startScope();
-            scope.get("AsyncResource"); // instantiate so dispose runs
-            const before = disposeCount;
-            await scope.disposeAsync();
-            return Response.json({ disposeCountBefore: before, disposeCountAfter: disposeCount });
-        }
+		if (url.pathname === "/dispose-async") {
+			const scope = container.startScope();
+			scope.get("AsyncResource"); // instantiate so dispose runs
+			const before = disposeCount;
+			await scope.disposeAsync();
+			return Response.json({
+				disposeCountBefore: before,
+				disposeCountAfter: disposeCount,
+			});
+		}
 
-        if (url.pathname === "/exercise-all") {
-            // Touches every public API surface that the other routes don't exercise.
-            // The assertion is just "no throw" — semantics live in the unit tests.
-            // This catches Node-API leakage in code paths the documented patterns
-            // never hit (sync dispose, getAll, builder inspection, Symbol.dispose).
-            const b = new ContainerBuilder()
-                .registerSingleton("Logger", Logger)
-                .registerTransient("RequestContext", RequestContext)
-                .addSingleton("plugins", Logger)
-                .addSingleton("plugins", Logger);
+		if (url.pathname === "/exercise-all") {
+			// Touches every public API surface that the other routes don't exercise.
+			// The assertion is just "no throw" — semantics live in the unit tests.
+			// This catches Node-API leakage in code paths the documented patterns
+			// never hit (sync dispose, getAll, builder inspection, Symbol.dispose).
+			const b = new ContainerBuilder()
+				.registerSingleton("Logger", Logger)
+				.registerTransient("RequestContext", RequestContext)
+				.addSingleton("plugins", Logger)
+				.addSingleton("plugins", Logger);
 
-            const registrationCount = b.count;
-            const wasRegistered = b.isRegistered("Logger");
-            const names = b.getRegisteredServiceNames();
+			const registrationCount = b.count;
+			const wasRegistered = b.isRegistered("Logger");
+			const names = b.getRegisteredServiceNames();
 
-            const c = b.build();
-            const all = c.getAll("plugins");
-            const sync = c.startScope();
-            sync.dispose(); // sync dispose path
+			const c = b.build();
+			const all = c.getAll("plugins");
+			const sync = c.startScope();
+			sync.dispose(); // sync dispose path
 
-            // TC39 sync `using` hook
-            let usingScopeId;
-            {
-                using scope = c.startScope();
-                usingScopeId = scope.get("RequestContext").id;
-            }
+			// TC39 sync `using` hook
+			let usingScopeId;
+			{
+				using scope = c.startScope();
+				usingScopeId = scope.get("RequestContext").id;
+			}
 
-            c.dispose();
+			c.dispose();
 
-            return Response.json({
-                ok: true,
-                registrationCount,
-                wasRegistered,
-                namesLength: names.length,
-                allPluginsLength: all.length,
-                usingScopeIdShape: typeof usingScopeId,
-            });
-        }
+			return Response.json({
+				ok: true,
+				registrationCount,
+				wasRegistered,
+				namesLength: names.length,
+				allPluginsLength: all.length,
+				usingScopeIdShape: typeof usingScopeId,
+			});
+		}
 
-        return new Response("not found", { status: 404 });
-    },
+		return new Response("not found", { status: 404 });
+	},
 };

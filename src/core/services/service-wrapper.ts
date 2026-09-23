@@ -1,148 +1,160 @@
 import type {
-    ServiceLifecycle,
-    ServiceLifetime,
-    ServiceValueOwnership,
-} from '../contracts.js';
+	ServiceLifecycle,
+	ServiceLifetime,
+	ServiceValueOwnership,
+} from "../contracts.js";
 
 /** Minimal contract for dependency resolution within ServiceWrapper. */
 interface ServiceResolver {
-    get(key: string): any;
+	get(key: string): any;
 }
 
 /**
  * Wraps a service with its scope, dependencies, and lifecycle management.
  */
 export class ServiceWrapper {
-    private readonly _name: string;
-    private _lifecycle: ServiceLifecycle | null;
-    private _dependencies: readonly string[];
-    private _constructorFn?: new (...args: any[]) => any;
-    private _ownsLifecycle: boolean;
-    private readonly _lifetime: ServiceLifetime;
-    private readonly _valueOwnership: ServiceValueOwnership;
+	private readonly _name: string;
+	private _lifecycle: ServiceLifecycle | null;
+	private _dependencies: readonly string[];
+	private _constructorFn?: new (
+		...args: any[]
+	) => any;
+	private _ownsLifecycle: boolean;
+	private readonly _lifetime: ServiceLifetime;
+	private readonly _valueOwnership: ServiceValueOwnership;
 
-    constructor(name: string, lifecycle: ServiceLifecycle, dependencies: string[], constructorFn?: new (...args: any[]) => any, ownsLifecycle = true) {
-        this._name = name;
-        this._lifecycle = lifecycle;
-        this._dependencies = Object.freeze([...dependencies]); // Immutable copy
-        this._constructorFn = constructorFn;
-        this._ownsLifecycle = ownsLifecycle;
-        this._lifetime = lifecycle.lifetime;
-        this._valueOwnership = lifecycle.valueOwnership;
-    }
+	constructor(
+		name: string,
+		lifecycle: ServiceLifecycle,
+		dependencies: string[],
+		constructorFn?: new (...args: any[]) => any,
+		ownsLifecycle = true,
+	) {
+		this._name = name;
+		this._lifecycle = lifecycle;
+		this._dependencies = Object.freeze([...dependencies]); // Immutable copy
+		this._constructorFn = constructorFn;
+		this._ownsLifecycle = ownsLifecycle;
+		this._lifetime = lifecycle.lifetime;
+		this._valueOwnership = lifecycle.valueOwnership;
+	}
 
-    /**
-     * Resolves the service instance with its dependencies.
-     * @param serviceProvider The service provider for dependency resolution
-     * @returns The resolved service instance
-     */
-    resolve(serviceProvider: ServiceResolver): any {
-        if (!this._lifecycle) {
-            throw new Error(`Cannot resolve disposed service '${this._name}'`);
-        }
+	/**
+	 * Resolves the service instance with its dependencies.
+	 * @param serviceProvider The service provider for dependency resolution
+	 * @returns The resolved service instance
+	 */
+	resolve(serviceProvider: ServiceResolver): any {
+		if (!this._lifecycle) {
+			throw new Error(`Cannot resolve disposed service '${this._name}'`);
+		}
 
-        if (!this.isConstructorBased()) {
-            return this._lifecycle.getInstance(serviceProvider);
-        }
+		if (!this.isConstructorBased()) {
+			return this._lifecycle.getInstance(serviceProvider);
+		}
 
-        if (this._dependencies.length === 0) {
-            return this._lifecycle.getInstance();
-        }
+		if (this._dependencies.length === 0) {
+			return this._lifecycle.getInstance();
+		}
 
-        return this._lifecycle.getInstance(
-            ...this._dependencies.map(dependency => serviceProvider.get(dependency))
-        );
-    }
+		return this._lifecycle.getInstance(
+			...this._dependencies.map((dependency) =>
+				serviceProvider.get(dependency),
+			),
+		);
+	}
 
-    /**
-     * Gets the service name.
-     * @returns The service name
-     */
-    getName(): string {
-        return this._name;
-    }
+	/**
+	 * Gets the service name.
+	 * @returns The service name
+	 */
+	getName(): string {
+		return this._name;
+	}
 
-    /**
-     * Gets the service dependencies.
-     * @returns Array of dependency names (readonly)
-     */
-    getDependencies(): readonly string[] {
-        return this._dependencies;
-    }
+	/**
+	 * Gets the service dependencies.
+	 * @returns Array of dependency names (readonly)
+	 */
+	getDependencies(): readonly string[] {
+		return this._dependencies;
+	}
 
-    /**
-     * Creates a new scope for scoped services.
-     * @returns A new ServiceWrapper instance for the new scope
-     */
-    createScope(): ServiceWrapper {
-        if (!this._lifecycle) {
-            throw new Error(`Cannot create new scope for disposed service '${this._name}'`);
-        }
+	/**
+	 * Creates a new scope for scoped services.
+	 * @returns A new ServiceWrapper instance for the new scope
+	 */
+	createScope(): ServiceWrapper {
+		if (!this._lifecycle) {
+			throw new Error(
+				`Cannot create new scope for disposed service '${this._name}'`,
+			);
+		}
 
-        const scopedLifecycle = this._lifecycle.createScope();
-        const isShared = scopedLifecycle === this._lifecycle;
+		const scopedLifecycle = this._lifecycle.createScope();
+		const isShared = scopedLifecycle === this._lifecycle;
 
-        return new ServiceWrapper(
-            this._name,
-            scopedLifecycle,
-            [...this._dependencies],
-            this._constructorFn,
-            !isShared
-        );
-    }
+		return new ServiceWrapper(
+			this._name,
+			scopedLifecycle,
+			[...this._dependencies],
+			this._constructorFn,
+			!isShared,
+		);
+	}
 
-    /**
-     * Disposes the resolver and its lifecycle.
-     */
-    dispose(): void {
-        if (this._lifecycle && this._ownsLifecycle) {
-            const lifecycle = this._lifecycle;
-            this._lifecycle = null;
-            lifecycle.dispose();
-        }
-    }
+	/**
+	 * Disposes the resolver and its lifecycle.
+	 */
+	dispose(): void {
+		if (this._lifecycle && this._ownsLifecycle) {
+			const lifecycle = this._lifecycle;
+			this._lifecycle = null;
+			lifecycle.dispose();
+		}
+	}
 
-    /**
-     * Asynchronously disposes the resolver and awaits its lifecycle's async dispose.
-     */
-    async disposeAsync(): Promise<void> {
-        if (this._lifecycle && this._ownsLifecycle) {
-            const lifecycle = this._lifecycle;
-            this._lifecycle = null;
-            await lifecycle.disposeAsync();
-        }
-    }
+	/**
+	 * Asynchronously disposes the resolver and awaits its lifecycle's async dispose.
+	 */
+	async disposeAsync(): Promise<void> {
+		if (this._lifecycle && this._ownsLifecycle) {
+			const lifecycle = this._lifecycle;
+			this._lifecycle = null;
+			await lifecycle.disposeAsync();
+		}
+	}
 
-    /**
-     * Checks if the resolver has been disposed.
-     * @returns true if disposed, false otherwise
-     */
-    isDisposed(): boolean {
-        return this._lifecycle === null;
-    }
+	/**
+	 * Checks if the resolver has been disposed.
+	 * @returns true if disposed, false otherwise
+	 */
+	isDisposed(): boolean {
+		return this._lifecycle === null;
+	}
 
-    /**
-     * Checks if this is a constructor-based registration.
-     * @returns true if constructor-based, false otherwise
-     */
-    isConstructorBased(): boolean {
-        return this._constructorFn !== undefined;
-    }
+	/**
+	 * Checks if this is a constructor-based registration.
+	 * @returns true if constructor-based, false otherwise
+	 */
+	isConstructorBased(): boolean {
+		return this._constructorFn !== undefined;
+	}
 
-    /**
-     * Gets the declared lifetime of the lifecycle manager.
-     * @returns The lifetime classification
-     */
-    getLifetime(): ServiceLifetime {
-        return this._lifetime;
-    }
+	/**
+	 * Gets the declared lifetime of the lifecycle manager.
+	 * @returns The lifetime classification
+	 */
+	getLifetime(): ServiceLifetime {
+		return this._lifetime;
+	}
 
-    /** Returns true only when this wrapper owns one local singleton value. */
-    ownsSingletonValue(): boolean {
-        return (
-            this._ownsLifecycle &&
-            this._lifetime === 'singleton' &&
-            this._valueOwnership === 'owned'
-        );
-    }
+	/** Returns true only when this wrapper owns one local singleton value. */
+	ownsSingletonValue(): boolean {
+		return (
+			this._ownsLifecycle &&
+			this._lifetime === "singleton" &&
+			this._valueOwnership === "owned"
+		);
+	}
 }

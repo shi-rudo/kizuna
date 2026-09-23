@@ -11,9 +11,7 @@ function createSource(ContainerBuilder, marker) {
 }
 
 function borrowWith(ContainerBuilder, source) {
-	return new ContainerBuilder()
-		.borrowSingletonFrom(source, "shared")
-		.build();
+	return new ContainerBuilder().borrowSingletonFrom(source, "shared").build();
 }
 
 const cjsSource = createSource(CjsContainerBuilder, "cjs");
@@ -30,10 +28,15 @@ if (cjsBorrower.get("shared") !== esmSource.get("shared")) {
 
 const packageEntry = import.meta.resolve("@shirudo/kizuna");
 const duplicatePackage = await import(`${packageEntry}?duplicate=1`);
-const duplicateSource = createSource(duplicatePackage.ContainerBuilder, "duplicate");
+const duplicateSource = createSource(
+	duplicatePackage.ContainerBuilder,
+	"duplicate",
+);
 const duplicateBorrower = borrowWith(EsmContainerBuilder, duplicateSource);
 if (duplicateBorrower.get("shared") !== duplicateSource.get("shared")) {
-	throw new Error("The borrower did not resolve the duplicate-package singleton");
+	throw new Error(
+		"The borrower did not resolve the duplicate-package singleton",
+	);
 }
 
 duplicateBorrower.dispose();
