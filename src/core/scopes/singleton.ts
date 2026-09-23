@@ -1,11 +1,5 @@
 import type { ConfigurableServiceLifecycle } from "../contracts.js";
-import { CircularDependencyError } from "../errors.js";
-import {
-	invokeAsyncDispose,
-	invokeSyncDispose,
-	requireSynchronousDispose,
-} from "../services/async-dispose.js";
-import { observePromiseRejection } from "../services/promise-value.js";
+import { CachedInstance } from "./cached-instance.js";
 
 /**
  * Singleton lifecycle implementation that maintains one instance for the entire application lifetime.
@@ -51,28 +45,10 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	public readonly lifetime = "singleton" as const;
 	public readonly valueOwnership = "owned" as const;
 	/**
-	 * The singleton instance.
+	 * The factory, the cached instance, and the disposal state.
 	 * @private
 	 */
-	private _instance: any;
-
-	/**
-	 * Whether the instance has been created.
-	 * @private
-	 */
-	private _initialized = false;
-
-	/**
-	 * The factory function used to create the singleton instance.
-	 * @private
-	 */
-	private _factory: ((...args: any[]) => any) | null = null;
-
-	/**
-	 * Whether this lifecycle has been disposed.
-	 * @private
-	 */
-	private _isDisposed = false;
+	private readonly _cache = new CachedInstance(this.lifetime);
 
 	/**
 	 * Sets the factory function that will be used to create the singleton instance.
@@ -91,13 +67,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public setFactory(factory: (...args: any[]) => any): void {
-		if (this._isDisposed) {
-			throw new Error("Cannot set factory on a disposed singleton lifecycle");
-		}
-		if (!factory || typeof factory !== "function") {
-			throw new Error("Factory must be a valid function");
-		}
-		this._factory = factory;
+		this._cache.setFactory(factory);
 	}
 
 	/**
@@ -131,37 +101,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public getInstance<T>(...args: any[]): T {
-		if (this._isDisposed) {
-			throw new Error("Cannot resolve from a disposed singleton lifecycle");
-		}
-		if (!this._factory) {
-			throw new Error("No factory registered for this lifecycle");
-		}
-
-		if (!this._initialized) {
-			try {
-				const factoryValue = this._factory(...args);
-				let instance: any;
-				instance = observePromiseRejection(factoryValue, () => {
-					if (!this._isDisposed && this._instance === instance) {
-						this._instance = undefined;
-						this._initialized = false;
-					}
-				});
-				this._instance = instance;
-				this._initialized = true;
-			} catch (error) {
-				if (error instanceof CircularDependencyError) {
-					throw error;
-				}
-				throw new Error(
-					`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`,
-					{ cause: error },
-				);
-			}
-		}
-
-		return this._instance as T;
+		return this._cache.getInstance<T>(args);
 	}
 
 	/**
@@ -208,21 +148,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * `ServiceWrapper` sets `ownsLifecycle = false` for shared lifecycles.
 	 */
 	public dispose(): void {
-		if (this._isDisposed) {
-			return;
-		}
-		this._isDisposed = true;
-
-		try {
-			if (this._initialized) {
-				const result = invokeSyncDispose(this._instance);
-				requireSynchronousDispose(result);
-			}
-		} finally {
-			this._instance = undefined;
-			this._initialized = false;
-			this._factory = null;
-		}
+		this._cache.dispose();
 	}
 
 	/**
@@ -230,20 +156,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * it waits for the value and invokes that value's cleanup hook.
 	 */
 	public async disposeAsync(): Promise<void> {
-		if (this._isDisposed) {
-			return;
-		}
-		this._isDisposed = true;
-
-		try {
-			if (this._initialized) {
-				await invokeAsyncDispose(this._instance);
-			}
-		} finally {
-			this._instance = undefined;
-			this._initialized = false;
-			this._factory = null;
-		}
+		await this._cache.disposeAsync();
 	}
 
 	/**
@@ -252,6 +165,6 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * @returns {boolean} True if disposed, false otherwise
 	 */
 	public get isDisposed(): boolean {
-		return this._isDisposed;
+		return this._cache.isDisposed;
 	}
 }
