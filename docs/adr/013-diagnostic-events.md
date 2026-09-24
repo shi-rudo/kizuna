@@ -67,6 +67,9 @@ The rules:
   rethrows the listener error with `queueMicrotask`, like
   `node:diagnostics_channel`. The error stays visible and cannot change the
   result of a Kizuna call.
+- The listener runs inside Kizuna calls. Its logger must exist before
+  `build()`, and the listener must not resolve services from the container.
+  A logger that the container creates would receive events before it exists.
 - Kizuna still never writes to the console, not even as a default listener.
 
 Inside Kizuna, the core defines the events and a reporter port. The container

@@ -6,12 +6,16 @@ that `build()` receives. Scopes report to the listener of their root container.
 ## Log every event
 
 ```typescript
-const container = builder.build({
-  diagnostics: {
-    level: 'debug', // optional, the default is 'error'
-    listener: (event) => logger[event.level](event, event.message),
-  },
-});
+const logger = pino(); // exists before the container
+
+const container = builder
+  .registerSingletonFactory('logger', () => logger)
+  .build({
+    diagnostics: {
+      level: 'debug', // optional, the default is 'error'
+      listener: (event) => logger[event.level](event, event.message),
+    },
+  });
 ```
 
 Each event has a `code`, a `level`, and a `message`. The level names match
@@ -28,7 +32,7 @@ and creation events. Use `debug` for development and troubleshooting.
 | --- | --- | --- | --- |
 | `UNAWAITED_CLEANUP_FAILED` | `error` | `serviceKey`, `lifetime`, `operation`, `error` | Alert on cleanup that failed without a waiting caller |
 | `CONTAINER_BUILT` | `debug` | `keyCount`, `registrationCount`, `validation` | Log the startup configuration |
-| `SCOPE_STARTED` | `debug` | none | Count scopes to find scopes that were never disposed |
+| `SCOPE_STARTED` | `debug` | none | Compare with scope disposals to detect scopes that are never disposed |
 | `CONTAINER_DISPOSED` | `debug` | `container`, `mode`, `failureCount` | Confirm shutdown and match scope disposals |
 | `SERVICE_CREATED` | `debug` | `serviceKey`, `lifetime`, `container`, `path` | Find services that are created more often than expected |
 
@@ -64,5 +68,11 @@ listener: (event) => {
 - Events carry no durations. Cloudflare Workers does not advance
   `performance.now()` or `Date.now()` during synchronous work.
 - Kizuna reports no event for a cache hit.
+- The events carry no scope identity. The counts show that scopes leak, not
+  which ones.
+- The listener runs inside Kizuna calls, for example inside `build()` and
+  `get()`. Create its logger before `build()`, and do not resolve services
+  from the container inside the listener.
 - If the listener throws, Kizuna completes its own operation and throws the
-  listener error again in a microtask.
+  listener error again in a microtask. In Node.js, an uncaught error ends the
+  process.

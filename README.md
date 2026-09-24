@@ -1034,12 +1034,16 @@ Kizuna never writes to the console. Pass a listener to `build()` to receive
 diagnostic events, for example in your application logger:
 
 ```typescript
-const container = builder.build({
-  diagnostics: {
-    level: 'debug', // optional, the default is 'error'
-    listener: (event) => logger[event.level](event, event.message),
-  },
-});
+const logger = pino(); // exists before the container
+
+const container = builder
+  .registerSingletonFactory('logger', () => logger)
+  .build({
+    diagnostics: {
+      level: 'debug', // optional, the default is 'error'
+      listener: (event) => logger[event.level](event, event.message),
+    },
+  });
 ```
 
 Each event has a `code`, a `level`, and a `message`. The level names match
@@ -1062,9 +1066,11 @@ its code. The event object itself carries the structured fields.
   `error` events. `debug` delivers all events.
 - `SERVICE_CREATED` reports each value that a lifecycle created. A cache hit
   reports nothing. `path` is the resolution chain, for example
-  `['userService', 'database']`. Compare `SCOPE_STARTED` with
-  `CONTAINER_DISPOSED` events for `container: 'scope'` to find scopes that
-  were never disposed.
+  `['userService', 'database']`.
+- If `SCOPE_STARTED` events keep outnumbering `CONTAINER_DISPOSED` events
+  for `container: 'scope'`, the application does not dispose some scopes. The
+  events carry no scope identity, so they show that scopes leak, not which
+  ones.
 - Scopes report to the listener of their root container.
 - Events carry no durations. Some runtimes, such as Cloudflare Workers, do not
   advance the clock during synchronous work.
@@ -1079,8 +1085,11 @@ listener: (event) => {
 },
 ```
 
-If the listener throws, Kizuna completes its own operation and throws the
-listener error again in a microtask.
+The listener runs inside Kizuna calls, for example inside `build()` and
+`get()`. Create its logger before `build()`, as above, and do not resolve
+services from the container inside the listener. If the listener throws,
+Kizuna completes its own operation and throws the listener error again in a
+microtask. In Node.js, an uncaught error ends the process.
 
 ### Promise Factory Values
 
