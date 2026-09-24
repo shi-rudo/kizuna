@@ -1,5 +1,5 @@
 import type { DisposalMode, FactoryArguments } from "../contracts.js";
-import { ContainerDisposedError } from "../errors.js";
+import type { ContainerDisposedError } from "../errors.js";
 import {
 	invokeAsyncDispose,
 	invokeSyncDispose,
@@ -7,6 +7,7 @@ import {
 	requireSynchronousDispose,
 } from "../services/async-dispose.js";
 import { observePromiseRejection } from "../services/promise-value.js";
+import { LifecycleFactory, type ValueFactory } from "./lifecycle-factory.js";
 
 /** Lifetimes that keep one service value per lifecycle instance. */
 export type CachingLifetime = "singleton" | "scoped";
@@ -21,13 +22,9 @@ export type CachingLifetime = "singleton" | "scoped";
  * @internal
  */
 export class CachedInstance {
-	private readonly _lifetime: CachingLifetime;
+	private readonly _factory: LifecycleFactory;
 	private _instance: any;
 	private _initialized = false;
-	private _factory: ((...args: any[]) => any) | null = null;
-	private _isDisposed = false;
-	/** Set once the owning container starts its disposal. */
-	private _closedBy: DisposalMode | null = null;
 	/**
 	 * Number of factory calls that have not returned yet, so disposal can wait
 	 * for their values. A factory can reach its own lifecycle again through
@@ -41,7 +38,7 @@ export class CachedInstance {
 	private _lateCleanup: Promise<void> | undefined;
 
 	constructor(lifetime: CachingLifetime) {
-		this._lifetime = lifetime;
+		this._factory = new LifecycleFactory(lifetime);
 	}
 
 	/**
@@ -50,37 +47,23 @@ export class CachedInstance {
 	 * hand out a value.
 	 */
 	public close(mode: DisposalMode): void {
-		this._closedBy ??= mode;
+		this._factory.close(mode);
 	}
 
 	public get isDisposed(): boolean {
-		return this._isDisposed;
+		return this._factory.isDisposed;
 	}
 
-	public setFactory(factory: (...args: any[]) => any): void {
-		if (this._isDisposed) {
-			throw new Error(
-				`Cannot set factory on a disposed ${this._lifetime} lifecycle`,
-			);
-		}
-		if (!factory || typeof factory !== "function") {
-			throw new Error("Factory must be a valid function");
-		}
-		this._factory = factory;
+	public setFactory(factory: ValueFactory): void {
+		this._factory.set(factory);
 	}
 
 	/**
 	 * Returns the factory for the lifecycle of a new scope.
 	 * @throws {Error} If this lifecycle is disposed or has no factory
 	 */
-	public factoryForNewScope(): (...args: any[]) => any {
-		if (this._isDisposed) {
-			throw new Error("Cannot create new scope from disposed lifecycle");
-		}
-		if (!this._factory) {
-			throw new Error("No factory available to create new scope");
-		}
-		return this._factory;
+	public factoryForNewScope(): ValueFactory {
+		return this._factory.forNewScope();
 	}
 
 	/**
@@ -88,12 +71,12 @@ export class CachedInstance {
 	 * the factory arguments only when it creates the value.
 	 */
 	public getInstance<T>(resolveArguments: FactoryArguments): T {
-		this.assertOpen();
+		this._factory.assertOpen();
 		if (!this._initialized) {
 			const args = resolveArguments();
 			// Resolving the arguments can close this lifecycle, or create its value
 			// through another container.
-			const factory = this.requireFactory();
+			const factory = this._factory.require();
 			if (!this._initialized) {
 				this.create(factory, args);
 			}
@@ -102,25 +85,7 @@ export class CachedInstance {
 		return this._instance as T;
 	}
 
-	private assertOpen(): void {
-		if (this._closedBy) {
-			throw new ContainerDisposedError(this.disposedMessage());
-		}
-	}
-
-	/** Returns the factory of an open lifecycle. */
-	private requireFactory(): (...args: any[]) => any {
-		this.assertOpen();
-		if (!this._factory) {
-			throw new Error("No factory registered for this lifecycle");
-		}
-		return this._factory;
-	}
-
-	private create(
-		factory: (...args: any[]) => any,
-		args: readonly unknown[],
-	): void {
+	private create(factory: ValueFactory, args: readonly unknown[]): void {
 		// A factory error propagates unchanged. The container wraps it once.
 		let factoryValue: unknown;
 		this._pendingCreations++;
@@ -129,13 +94,14 @@ export class CachedInstance {
 		} finally {
 			this._pendingCreations--;
 		}
-		if (this._closedBy) {
+		const closedBy = this._factory.closedBy;
+		if (closedBy) {
 			// The factory disposed its own container. Nothing owns the new value.
-			throw this.discardValueCreatedAfterClose(factoryValue, this._closedBy);
+			throw this.discardValueCreatedAfterClose(factoryValue, closedBy);
 		}
 		const instance = observePromiseRejection(factoryValue, () => {
 			// Until its own cleanup starts, a rejected value leaves the cache.
-			if (!this._isDisposed && this._instance === instance) {
+			if (!this._factory.isDisposed && this._instance === instance) {
 				this._instance = undefined;
 				this._initialized = false;
 			}
@@ -149,11 +115,10 @@ export class CachedInstance {
 	 * stays disposed when the hook throws.
 	 */
 	public dispose(): void {
-		if (this._isDisposed) {
+		if (this._factory.isDisposed) {
 			return;
 		}
-		this._isDisposed = true;
-		this.close("sync");
+		this._factory.dispose("sync");
 
 		try {
 			if (this._initialized) {
@@ -172,11 +137,10 @@ export class CachedInstance {
 	 * then waits for the cleanup of that late value.
 	 */
 	public async disposeAsync(): Promise<void> {
-		if (this._isDisposed) {
+		if (this._factory.isDisposed) {
 			return;
 		}
-		this._isDisposed = true;
-		this.close("async");
+		this._factory.dispose("async");
 
 		try {
 			if (this._initialized) {
@@ -217,27 +181,20 @@ export class CachedInstance {
 			if (!isPromiseValue) {
 				this._lateCleanup = cleanup;
 			}
-			return new ContainerDisposedError(this.disposedMessage());
+			return this._factory.disposedError();
 		}
 
 		try {
 			requireSynchronousDispose(invokeSyncDispose(value));
 		} catch (error) {
-			return new ContainerDisposedError(this.disposedMessage(), {
-				cause: error,
-			});
+			return this._factory.disposedError({ cause: error });
 		}
-		return new ContainerDisposedError(this.disposedMessage());
-	}
-
-	private disposedMessage(): string {
-		return `Cannot resolve from a disposed ${this._lifetime} lifecycle`;
+		return this._factory.disposedError();
 	}
 
 	private clear(): void {
 		this._instance = undefined;
 		this._initialized = false;
-		this._factory = null;
 		this._lateCleanup = undefined;
 	}
 }

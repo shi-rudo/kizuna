@@ -4,6 +4,7 @@ import type {
 	FactoryArguments,
 } from "../contracts.js";
 import { CachedInstance } from "./cached-instance.js";
+import type { ValueFactory } from "./lifecycle-factory.js";
 
 /**
  * Singleton lifecycle implementation that maintains one instance for the entire application lifetime.
@@ -70,7 +71,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * lifecycle.setFactory(() => new DatabaseService('connection-string'));
 	 * ```
 	 */
-	public setFactory(factory: (...args: any[]) => any): void {
+	public setFactory(factory: ValueFactory): void {
 		this._cache.setFactory(factory);
 	}
 

@@ -8,11 +8,17 @@ This document is a historical design record. Kizuna uses three internal
 lifecycle strategies: singleton, scoped, and transient. The package does not
 export an extension point for custom lifecycle strategies.
 
-The singleton and scoped strategies remain separate classes. They share their
-caching, retry, and disposal logic through an internal `CachedInstance` helper.
-They use this helper by composition, not through a base class. This removes the
-duplication between these two strategies. The transient strategy still has its
-own factory handling, so the duplication trade-off below still applies to it.
+The three strategies remain separate classes and share code by composition, not
+through a base class:
+
+- All three hold their factory in an internal `LifecycleFactory`. It validates
+  a new factory, rejects resolution after the owning container closes the
+  lifecycle, and hands the factory to the lifecycle of a new scope.
+- The singleton and scoped strategies also share their caching, retry, and
+  disposal logic through an internal `CachedInstance` helper.
+
+The duplication trade-off below therefore no longer applies to the current
+code. Each strategy keeps only the behavior that makes it different.
 
 ## Context
 
