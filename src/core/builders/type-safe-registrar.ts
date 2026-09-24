@@ -7,6 +7,7 @@ import type {
 	ConfigurableServiceLifecycle,
 	ServiceBuilder,
 } from "../contracts.js";
+import { InvalidServiceKeyError } from "../errors.js";
 import { ServiceWrapper } from "../services/service-wrapper.js";
 
 /**
@@ -62,7 +63,8 @@ export class TypeSafeRegistrarImpl<TRegistry extends ServiceRegistry, T>
 	private validateDependencies(dependencies: readonly unknown[]): string[] {
 		return dependencies.map((dependency, index) => {
 			if (typeof dependency !== "string" || dependency.trim() === "") {
-				throw new TypeError(
+				throw new InvalidServiceKeyError(
+					dependency,
 					`Dependency at index ${index} for service '${String(this.serviceName)}' must be a non-empty string`,
 				);
 			}

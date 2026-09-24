@@ -1,5 +1,5 @@
 import type { ConfigurableServiceLifecycle } from "../contracts.js";
-import { CircularDependencyError } from "../errors.js";
+import { ContainerDisposedError } from "../errors.js";
 
 /**
  * Transient lifecycle implementation that creates a new instance every time.
@@ -119,22 +119,15 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 */
 	public getInstance<T>(...args: any[]): T {
 		if (this._isDisposed) {
-			throw new Error("Cannot resolve from a disposed transient lifecycle");
+			throw new ContainerDisposedError(
+				"Cannot resolve from a disposed transient lifecycle",
+			);
 		}
 		if (!this._factory) {
 			throw new Error("No factory registered for this lifecycle");
 		}
-		try {
-			return this._factory(...args) as T;
-		} catch (error) {
-			if (error instanceof CircularDependencyError) {
-				throw error;
-			}
-			throw new Error(
-				`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`,
-				{ cause: error },
-			);
-		}
+		// A factory error propagates unchanged. The container wraps it once.
+		return this._factory(...args) as T;
 	}
 
 	/**

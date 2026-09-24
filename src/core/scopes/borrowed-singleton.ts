@@ -2,6 +2,7 @@ import type {
 	BorrowedSingletonReference,
 	ServiceLifecycle,
 } from "../contracts.js";
+import { ContainerDisposedError } from "../errors.js";
 
 /**
  * Resolves a singleton from another container without owning its value.
@@ -18,7 +19,9 @@ export class BorrowedSingletonLifecycle implements ServiceLifecycle {
 
 	getInstance<T>(): T {
 		if (!this.reference) {
-			throw new Error("Cannot resolve from a disposed borrowed singleton");
+			throw new ContainerDisposedError(
+				"Cannot resolve from a disposed borrowed singleton",
+			);
 		}
 		return this.reference.resolve() as T;
 	}

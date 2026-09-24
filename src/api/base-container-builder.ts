@@ -1,3 +1,8 @@
+import {
+	BuilderAlreadyBuiltError,
+	InvalidServiceKeyError,
+	RegistrationConflictError,
+} from "../core/errors.js";
 import type { ServiceWrapper } from "../core/services/service-wrapper.js";
 import { validateRegistrationGraph } from "./registration-graph.js";
 import { createRegistrationSnapshots } from "./registration-snapshots.js";
@@ -80,16 +85,11 @@ export abstract class BaseContainerBuilder {
 		this.ensureValidServiceName(serviceName);
 
 		if (this.multiRegistrations.has(serviceName)) {
-			throw new Error(
-				`Key '${serviceName}' is already registered as a multi-service. ` +
-					`Cannot mix add*() and register*() for the same key.`,
-			);
+			throw new RegistrationConflictError(serviceName, "multi", "single");
 		}
 
 		if (this.registrationNames.has(serviceName)) {
-			throw new Error(
-				`Service '${serviceName}' is already registered. Use a new builder or a different key.`,
-			);
+			throw new RegistrationConflictError(serviceName, "single", "single");
 		}
 	}
 
@@ -104,7 +104,10 @@ export abstract class BaseContainerBuilder {
 			typeof serviceName !== "string" ||
 			serviceName.trim() === ""
 		) {
-			throw new Error("Service registration must have a valid name");
+			throw new InvalidServiceKeyError(
+				serviceName,
+				"Service registration must have a valid name",
+			);
 		}
 	}
 
@@ -137,10 +140,7 @@ export abstract class BaseContainerBuilder {
 		this.ensureValidServiceName(serviceName);
 
 		if (this.registrations.has(serviceName)) {
-			throw new Error(
-				`Key '${serviceName}' is already registered as a single service. ` +
-					`Cannot mix register*() and add*() for the same key.`,
-			);
+			throw new RegistrationConflictError(serviceName, "single", "multi");
 		}
 
 		const existing = this.multiRegistrations.get(serviceName);
@@ -160,7 +160,7 @@ export abstract class BaseContainerBuilder {
 	 */
 	protected ensureNotBuilt(): void {
 		if (this.isBuilt) {
-			throw new Error("Cannot modify ContainerBuilder after it has been built");
+			throw new BuilderAlreadyBuiltError();
 		}
 	}
 

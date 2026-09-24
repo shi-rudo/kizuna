@@ -63,7 +63,7 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		);
 	});
 
-	it("wraps a factory error, keeps the cause, and retries on the next request", () => {
+	it("rethrows a factory error unchanged and retries on the next request", () => {
 		const lifecycle = create();
 		const failure = new Error("boom");
 		const factory = vi
@@ -76,25 +76,18 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 
 		const error = captureError(() => lifecycle.getInstance());
 
-		expect(error).toBeInstanceOf(Error);
-		expect((error as Error).message).toBe("Failed to resolve instance: boom");
-		expect((error as Error).cause).toBe(failure);
+		expect(error).toBe(failure);
 		expect(lifecycle.getInstance()).toBe("value");
 		expect(factory).toHaveBeenCalledTimes(2);
 	});
 
-	it("wraps a thrown value that is not an Error", () => {
+	it("rethrows a thrown value that is not an Error unchanged", () => {
 		const lifecycle = create();
 		lifecycle.setFactory(() => {
 			throw "offline";
 		});
 
-		const error = captureError(() => lifecycle.getInstance());
-
-		expect((error as Error).message).toBe(
-			"Failed to resolve instance: offline",
-		);
-		expect((error as Error).cause).toBe("offline");
+		expect(captureError(() => lifecycle.getInstance())).toBe("offline");
 	});
 
 	it("passes a circular dependency error through unchanged", () => {

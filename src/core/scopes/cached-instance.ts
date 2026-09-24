@@ -1,4 +1,4 @@
-import { CircularDependencyError } from "../errors.js";
+import { ContainerDisposedError } from "../errors.js";
 import {
 	invokeAsyncDispose,
 	invokeSyncDispose,
@@ -66,7 +66,7 @@ export class CachedInstance {
 	 */
 	public getInstance<T>(args: readonly unknown[]): T {
 		if (this._isDisposed) {
-			throw new Error(
+			throw new ContainerDisposedError(
 				`Cannot resolve from a disposed ${this._lifetime} lifecycle`,
 			);
 		}
@@ -75,25 +75,16 @@ export class CachedInstance {
 		}
 
 		if (!this._initialized) {
-			try {
-				const factoryValue = this._factory(...args);
-				const instance = observePromiseRejection(factoryValue, () => {
-					if (!this._isDisposed && this._instance === instance) {
-						this._instance = undefined;
-						this._initialized = false;
-					}
-				});
-				this._instance = instance;
-				this._initialized = true;
-			} catch (error) {
-				if (error instanceof CircularDependencyError) {
-					throw error;
+			// A factory error propagates unchanged. The container wraps it once.
+			const factoryValue = this._factory(...args);
+			const instance = observePromiseRejection(factoryValue, () => {
+				if (!this._isDisposed && this._instance === instance) {
+					this._instance = undefined;
+					this._initialized = false;
 				}
-				throw new Error(
-					`Failed to resolve instance: ${error instanceof Error ? error.message : String(error)}`,
-					{ cause: error },
-				);
-			}
+			});
+			this._instance = instance;
+			this._initialized = true;
 		}
 
 		return this._instance as T;
