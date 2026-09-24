@@ -57,7 +57,7 @@ export function invokeSyncDispose(instance: unknown): unknown {
  * @internal
  */
 export function continueWithoutWaiting(result: unknown): boolean {
-	if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+	if (isPromiseLike(result)) {
 		void Promise.resolve(result).catch(() => undefined);
 		return true;
 	}
@@ -115,7 +115,7 @@ export async function invokeAsyncDispose(instance: unknown): Promise<void> {
 	const syncDisposeSymbolFn = obj[Symbol.dispose];
 	if (typeof syncDisposeSymbolFn === "function") {
 		const result = (syncDisposeSymbolFn as () => unknown).call(instance);
-		if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+		if (isPromiseLike(result)) {
 			await result;
 		}
 		return;
@@ -124,12 +124,16 @@ export async function invokeAsyncDispose(instance: unknown): Promise<void> {
 	const disposeFn = obj.dispose;
 	if (typeof disposeFn === "function") {
 		const result = (disposeFn as () => unknown).call(instance);
-		if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+		if (isPromiseLike(result)) {
 			await result;
 		}
 	}
 }
 
-function isPromiseLike(instance: object): instance is PromiseLike<unknown> {
-	return typeof (instance as PromiseLike<unknown>).then === "function";
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+	return (
+		value !== null &&
+		(typeof value === "object" || typeof value === "function") &&
+		typeof (value as PromiseLike<unknown>).then === "function"
+	);
 }
