@@ -36,6 +36,20 @@
  * @packageDocumentation
  */
 
+export type {
+	RegistrationKind,
+	SingletonBorrowFailureReason,
+} from "../core/errors.js";
+export {
+	BuilderAlreadyBuiltError,
+	ContainerDisposedError,
+	InvalidServiceKeyError,
+	RegistrationConflictError,
+	RegistrationKindError,
+	ServiceNotRegisteredError,
+	ServiceResolutionError,
+	SingletonBorrowError,
+} from "../core/errors.js";
 export type { DisposalFailure, DisposalOperation } from "./container.js";
 export {
 	CircularDependencyError,

@@ -17,17 +17,19 @@ describe("dependency key validation", () => {
 	it.each(
 		invalidDependencyKeys,
 	)("rejects the invalid factory dependency key %s at registration time", (dependencyKey) => {
-		expect(() =>
+		const register = () =>
 			new ContainerBuilder().registerSingletonFactory(
 				"consumer",
 				() => ({}),
 				dependencyKey as never,
-			),
-		).toThrow(
+			);
+
+		expect(register).toThrow(TypeError);
+		expect(register).toThrow(
 			expect.objectContaining({
 				message:
 					"Dependency at index 0 for service 'consumer' must be a non-empty string",
-				name: "TypeError",
+				code: "INVALID_SERVICE_KEY",
 			}),
 		);
 	});

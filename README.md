@@ -767,7 +767,7 @@ Read the examples in the [`examples/`](./examples) directory:
 
 ### Package Exports
 
-The package root exports seven runtime values:
+The package root exports these runtime values:
 
 - `ContainerBuilder`
 - `interfaceToken`
@@ -776,6 +776,14 @@ The package root exports seven runtime values:
 - `CircularDependencyError`
 - `ContainerValidationError`
 - `DisposalError`
+- `ServiceNotRegisteredError`
+- `RegistrationKindError`
+- `ServiceResolutionError`
+- `ContainerDisposedError`
+- `RegistrationConflictError`
+- `BuilderAlreadyBuiltError`
+- `InvalidServiceKeyError`
+- `SingletonBorrowError`
 
 It also exports these public types:
 
@@ -783,6 +791,8 @@ It also exports these public types:
 - `ServiceContainer`
 - `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
 - `MultiRegistration`
+- `RegistrationKind`
+- `SingletonBorrowFailureReason`
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`
@@ -925,6 +935,49 @@ Do not make the helper generic over its registry, for example
 `<TRegistry extends { logger: Logger }>(container: ServiceContainer<TRegistry>)`.
 TypeScript cannot tell whether a key of a generic registry has one or multiple
 registrations, so `get()` and `getAll()` reject the key.
+
+### Error Contracts
+
+Each error that the public API can throw has an exported class. Each class has
+a literal `code` and the fields that a caller needs. Check `instanceof` or
+`code`. Do not parse the message, because the message text can change.
+
+| Class | `code` | Fields | Thrown when |
+| --- | --- | --- | --- |
+| `ServiceNotRegisteredError` | `SERVICE_NOT_REGISTERED` | `key` | `get()` or `getAll()` receives a key without a registration |
+| `RegistrationKindError` | `REGISTRATION_KIND_MISMATCH` | `key`, `registrationKind` | `get()` receives an `add*()` key, or `getAll()` receives a `register*()` key |
+| `ServiceResolutionError` | `SERVICE_RESOLUTION_FAILED` | `key`, `cause` | a factory, a constructor, or a dependency fails during resolution |
+| `CircularDependencyError` | `CIRCULAR_DEPENDENCY` | `chain` | resolution enters a key that it is already resolving |
+| `ContainerDisposedError` | `CONTAINER_DISPOSED` | — | code uses a disposed container or scope |
+| `DisposalError` | `DISPOSAL_FAILED` | `errors`, `failures` | one or more cleanup operations fail |
+| `ContainerValidationError` | `CONTAINER_VALIDATION_FAILED` | `issues` | `build()` finds an invalid graph |
+| `RegistrationConflictError` | `REGISTRATION_CONFLICT` | `key`, `existingKind`, `requestedKind` | a registration reuses a key |
+| `BuilderAlreadyBuiltError` | `BUILDER_ALREADY_BUILT` | — | code registers a service after `build()` |
+| `InvalidServiceKeyError` | `INVALID_SERVICE_KEY` | `key` | a registration, dependency, or resolution key is not a valid string; extends `TypeError` |
+| `SingletonBorrowError` | `SINGLETON_BORROW_FAILED` | `key`, `reason` | `borrowSingletonFrom()` cannot borrow the singleton |
+
+`registrationKind`, `existingKind`, and `requestedKind` have the type
+`RegistrationKind` (`'single' | 'multi'`). `reason` has the type
+`SingletonBorrowFailureReason`: `INCOMPATIBLE_SOURCE`, `INVALID_REFERENCE`,
+`SOURCE_IS_SCOPE`, `MULTI_REGISTRATION`, `NOT_REGISTERED`, `NOT_SINGLETON`, or
+`NOT_OWNED`.
+
+A `ServiceResolutionError` holds the original error as its `cause`. When a
+dependency fails, the `cause` of the requested key is the error of that
+dependency:
+
+```typescript
+try {
+  container.get('userService');
+} catch (error) {
+  if (error instanceof ServiceResolutionError) {
+    console.error(`Could not create ${error.key}`, error.cause);
+  }
+}
+```
+
+A `DisposalError` from `dispose()` contains a `TypeError` for a service whose
+cleanup needs a Promise. Use `disposeAsync()` for such services.
 
 ### Promise Factory Values
 

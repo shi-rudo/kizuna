@@ -1,8 +1,14 @@
 import {
 	CircularDependencyError,
+	ContainerDisposedError,
 	DisposalError,
 	type DisposalFailure,
 	type DisposalOperation,
+	InvalidServiceKeyError,
+	RegistrationKindError,
+	ServiceNotRegisteredError,
+	ServiceResolutionError,
+	SingletonBorrowError,
 } from "../core/errors.js";
 import {
 	createDisposalLayers,
@@ -117,15 +123,14 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 
 		if (typeof keyOrType !== "string") {
-			throw new TypeError(
+			throw new InvalidServiceKeyError(
+				keyOrType,
 				"Service keys must be strings or ServiceContainerToken",
 			);
 		}
 
 		if (this.multiRegistrations.has(keyOrType)) {
-			throw new Error(
-				`Key '${keyOrType}' has multiple registrations. Use getAll('${keyOrType}') to resolve them.`,
-			);
+			throw new RegistrationKindError(keyOrType, "multi");
 		}
 
 		return this.resolveSingle(keyOrType);
@@ -144,12 +149,10 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 
 		if (this.registrations.has(typeName)) {
-			throw new Error(
-				`Key '${typeName}' has a single registration. Use get('${typeName}') to resolve it.`,
-			);
+			throw new RegistrationKindError(typeName, "single");
 		}
 
-		throw new Error(`No service registered for key: ${typeName}`);
+		throw new ServiceNotRegisteredError(typeName);
 	}
 
 	/**
@@ -170,7 +173,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	private resolveSingle(key: string): unknown {
 		const resolver = this.registrations.get(key);
 		if (!resolver) {
-			throw new Error(`No service registered for key: ${key}`);
+			throw new ServiceNotRegisteredError(key);
 		}
 
 		try {
@@ -179,10 +182,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			if (error instanceof CircularDependencyError) {
 				throw error;
 			}
-			throw new Error(
-				`Failed to resolve service ${key}: ${error instanceof Error ? error.message : String(error)}`,
-				{ cause: error },
-			);
+			throw new ServiceResolutionError(key, error);
 		}
 	}
 
@@ -229,33 +229,43 @@ export class Container<TRegistry extends ServiceRegistry>
 		this.ensureNotDisposed();
 
 		if (!this.isRootContainer) {
-			throw new Error(
+			throw new SingletonBorrowError(
+				key,
+				"SOURCE_IS_SCOPE",
 				`Cannot borrow service '${key}'. The source is a scope. Use the root container that owns the singleton.`,
 			);
 		}
 
 		if (this.multiRegistrations.has(key)) {
-			throw new Error(
+			throw new SingletonBorrowError(
+				key,
+				"MULTI_REGISTRATION",
 				`Cannot borrow service '${key}'. Multi-service registrations are not supported.`,
 			);
 		}
 
 		const registration = this.registrations.get(key);
 		if (!registration) {
-			throw new Error(
+			throw new SingletonBorrowError(
+				key,
+				"NOT_REGISTERED",
 				`Cannot borrow service '${key}'. The source has no such registration.`,
 			);
 		}
 
 		const lifetime = registration.getLifetime();
 		if (lifetime !== "singleton") {
-			throw new Error(
+			throw new SingletonBorrowError(
+				key,
+				"NOT_SINGLETON",
 				`Cannot borrow service '${key}'. The source registration is ${lifetime}. Only singleton registrations can be borrowed.`,
 			);
 		}
 
 		if (!registration.ownsSingletonValue()) {
-			throw new Error(
+			throw new SingletonBorrowError(
+				key,
+				"NOT_OWNED",
 				`Cannot borrow service '${key}'. The source does not own this singleton.`,
 			);
 		}
@@ -427,7 +437,7 @@ export class Container<TRegistry extends ServiceRegistry>
 
 	private ensureNotDisposed(): void {
 		if (this._disposed) {
-			throw new Error("Cannot access services from a disposed container");
+			throw new ContainerDisposedError();
 		}
 	}
 
@@ -443,10 +453,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			if (error instanceof CircularDependencyError) {
 				throw error;
 			}
-			throw new Error(
-				`Failed to resolve multi-service ${typeName}: ${error instanceof Error ? error.message : String(error)}`,
-				{ cause: error },
-			);
+			throw new ServiceResolutionError(typeName, error, "multi");
 		}
 	}
 

@@ -1,5 +1,6 @@
 import { TypeSafeRegistrarImpl } from "../core/builders/type-safe-registrar.js";
 import type { ConfigurableServiceLifecycle } from "../core/contracts.js";
+import { SingletonBorrowError } from "../core/errors.js";
 import { BorrowedSingletonLifecycle } from "../core/scopes/borrowed-singleton.js";
 import { ScopedLifecycle } from "../core/scopes/scoped.js";
 import { SingletonLifecycle } from "../core/scopes/singleton.js";
@@ -207,13 +208,19 @@ export class ContainerBuilder<
 			borrowableSourceCapability
 		];
 		if (typeof borrow !== "function") {
-			throw new TypeError(
+			throw new SingletonBorrowError(
+				key,
+				"INCOMPATIBLE_SOURCE",
 				"The source must be a compatible Kizuna root container",
 			);
 		}
 		const reference = borrow.call(source, key);
 		if (!isBorrowedSingletonReference(reference)) {
-			throw new TypeError("The source returned an invalid singleton reference");
+			throw new SingletonBorrowError(
+				key,
+				"INVALID_REFERENCE",
+				"The source returned an invalid singleton reference",
+			);
 		}
 
 		const serviceWrapper = new ServiceWrapper(

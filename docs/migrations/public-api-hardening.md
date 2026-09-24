@@ -14,6 +14,14 @@ The package root now exports these runtime values:
 - `CircularDependencyError`
 - `ContainerValidationError`
 - `DisposalError`
+- `ServiceNotRegisteredError`
+- `RegistrationKindError`
+- `ServiceResolutionError`
+- `ContainerDisposedError`
+- `RegistrationConflictError`
+- `BuilderAlreadyBuiltError`
+- `InvalidServiceKeyError`
+- `SingletonBorrowError`
 
 It also exports these public types:
 
@@ -21,6 +29,8 @@ It also exports these public types:
 - `ServiceContainer`
 - `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
 - `MultiRegistration`
+- `RegistrationKind`
+- `SingletonBorrowFailureReason`
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`
@@ -132,6 +142,34 @@ function useLogger(container: ServiceContainer<{ logger: Logger }>) {
 
 The builder property `count` counted keys, not registrations. Use `keyCount` or
 `registrationCount`. `count` remains as a deprecated alias of `keyCount`.
+
+## Typed Errors
+
+Each error that the public API can throw now has an exported class with a
+literal `code`. Replace checks on the message text with `instanceof` or `code`:
+
+```typescript
+// Before
+if (error instanceof Error && error.message.startsWith('No service registered')) {
+  // ...
+}
+
+// After
+if (error instanceof ServiceNotRegisteredError) {
+  console.error(error.key);
+}
+```
+
+The README lists every class, code, and field under Error Contracts.
+
+These details changed:
+
+- `error.name` is the class name, for example `ServiceNotRegisteredError`.
+  `InvalidServiceKeyError` still extends `TypeError`.
+- A resolution error has one prefix. The message no longer contains
+  `Failed to resolve instance:`, and `cause` is the original error.
+- `borrowSingletonFrom()` throws `SingletonBorrowError` for an incompatible
+  source and for an invalid reference. These cases were `TypeError` before.
 
 ## Builder Changes
 
