@@ -107,9 +107,9 @@ Typical shared services include loggers, metrics collectors, configuration
 readers, and connection pools. Borrowing prevents duplicate resources and keeps
 the domain registry small.
 
-Borrowing creates a lifetime dependency. The source must outlive each borrower.
-When most registrations are shared, a single container is clearer. Borrowing
-is not suitable for request state or communication between processes.
+Borrowing creates a lifetime dependency between the containers. When most
+registrations are shared, a single container is clearer. Borrowing is not
+suitable for request state or communication between processes.
 
 `borrowSingletonFrom()` accepts a fixed string key or a registered interface
 token.
@@ -137,8 +137,7 @@ const domainContainer = new ContainerBuilder()
 
 The source must be the root container that registered and owns the singleton.
 You cannot borrow scoped, transient, multi-service, or borrowed registrations.
-A scope cannot lend a singleton. The source must outlive each borrower and its
-scopes.
+A scope cannot lend a singleton.
 
 Dispose all borrowers and their scopes first. Then dispose the source.
 
@@ -174,7 +173,7 @@ loggers.forEach(l => l.log('Hello'));
 - `getAll()` resolves only `add*()` keys; `get()` resolves only `register*()` keys and interface tokens. The wrong method fails at compile time and at runtime.
 - A constructor dependency on an `add*()` key receives all services as an array. Factories call `getAll()`.
 - Each implementation can have its own lifecycle (e.g., mix `addSingleton` + `addScoped` under one key)
-- `validate()` checks multi-registration dependencies for missing services and circular deps
+- `validate()` checks multi-registration dependencies for missing services, circular deps, and captive dependencies
 - Factory variants available: `addSingletonFactory`, `addScopedFactory`, `addTransientFactory`
 
 **Use cases:** plugin systems, middleware pipelines, event handlers, validation rule sets, composite loggers.

@@ -307,7 +307,10 @@ ${example}
 			),
 			"utf8",
 		);
-		const referenceExample = codeBlockAfter(reference, "## Borrowed singleton");
+		const referenceExample = codeBlockAfter(
+			reference,
+			"## Borrowed singleton",
+		).replace("from '@shirudo/kizuna'", 'from "../src"');
 		const declarations = `
 class Logger {
     log(_message: string): void {}
@@ -326,6 +329,19 @@ class UserService {
 				"skill-borrowed-singleton",
 			),
 		).toEqual([]);
+	});
+
+	it("keeps the packaged skill core workflow example type-safe", () => {
+		const skill = readFileSync(
+			join(repositoryRoot, "skills", "kizuna", "SKILL.md"),
+			"utf8",
+		);
+		const example = codeBlockAfter(skill, "## Core workflow").replace(
+			"from '@shirudo/kizuna'",
+			'from "../src"',
+		);
+
+		expect(strictTypeErrors(example, "skill-core-workflow")).toEqual([]);
 	});
 
 	it("does not pass factories to constructor registration methods", () => {

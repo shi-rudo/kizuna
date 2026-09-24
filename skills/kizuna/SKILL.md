@@ -85,11 +85,15 @@ await container.disposeAsync(); // At application shutdown.
 | Several implementations under one key | `addSingleton()`, `addScoped()`, `addTransient()`, or an `add*Factory()` method, resolved with `getAll(key)` |
 | A singleton that another root container owns | `borrowSingletonFrom(source, key)` |
 
-| Lifetime | Values | Cleanup owner |
-| --- | --- | --- |
-| Singleton | One per root container, shared by all scopes | The root container that registered it |
-| Scoped | One per scope | The scope that resolved it |
-| Transient | A new value on each resolution | The caller. Kizuna does not track transient values. |
+| Lifetime | Values |
+| --- | --- |
+| Singleton | One per root container, shared by all scopes |
+| Scoped | One per container or scope that resolves it |
+| Transient | A new value on each resolution. Kizuna does not track it, so the caller cleans it up. |
+
+Kizuna cleans up only the values that it owns. The
+[ownership table](references/lifecycle-guide.md#ownership) names the owner of
+each value, including a borrowed singleton.
 
 ## Rules
 

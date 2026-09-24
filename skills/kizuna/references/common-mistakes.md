@@ -1,8 +1,7 @@
 # Common Mistakes
 
 Each entry shows code that agents often generate and the Kizuna form that
-replaces it. CRITICAL entries break the build or the lifetime of a value. HIGH
-entries produce code that does not compile or hides dependencies.
+replaces it. The entries are sorted by impact: CRITICAL first, then HIGH.
 
 ## Contents
 
@@ -146,7 +145,7 @@ Wrong:
 ```typescript
 new ContainerBuilder()
   .registerSingleton('handler', DefaultHandler)
-  .addSingleton('handler', ExtraHandler) // throws at build time
+  .addSingleton('handler', ExtraHandler) // throws RegistrationConflictError here
   .build();
 ```
 
@@ -165,7 +164,7 @@ new ContainerBuilder()
   .build();
 ```
 
-A key must be either single-registration (`register*`) or multi-registration (`add*`). Mixing them on the same key throws an error.
+A key must be either single-registration (`register*`) or multi-registration (`add*`). The second registration method throws `RegistrationConflictError` when it is called, before `build()`.
 
 Source: base-container-builder.ts
 
@@ -329,7 +328,7 @@ Correct:
 
 ```typescript
 const validators = container.getAll('validators');
-// Explicitly returns Validator[] — intent is clear
+// Type: (LengthValidator | FormatValidator)[]
 ```
 
 `get()` rejects a multi-registration key, and `getAll()` rejects a single registration. Each error names the correct method. A constructor dependency on a multi-registration key still receives the array.
