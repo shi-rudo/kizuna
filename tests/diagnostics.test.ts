@@ -113,6 +113,44 @@ describe("UNAWAITED_CLEANUP_FAILED", () => {
 		]);
 	});
 
+	it("does not report the rejection of a pending factory Promise as a cleanup failure", async () => {
+		const { events, listener } = recorder();
+		let rejectConnection: ((error: Error) => void) | undefined;
+		const container = new ContainerBuilder()
+			.registerSingletonFactory(
+				"connection",
+				() =>
+					new Promise<object>((_, reject) => {
+						rejectConnection = reject;
+					}),
+			)
+			.build({ diagnostics: { listener } });
+		container.get("connection").catch(() => undefined);
+		captureError(() => container.dispose());
+
+		rejectConnection?.(new Error("connect failed"));
+		await settle();
+
+		expect(events).toEqual([]);
+	});
+
+	it("does not report the rejection of a Promise value that disposeAsync() discarded", async () => {
+		const { events, listener } = recorder();
+		let pending: Promise<void> | undefined;
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("connection", (current) => {
+				pending = current.disposeAsync();
+				return Promise.reject(new Error("connect failed"));
+			})
+			.build({ diagnostics: { listener } });
+		captureError(() => container.get("connection"));
+		await pending;
+
+		await settle();
+
+		expect(events).toEqual([]);
+	});
+
 	it("does not report a cleanup failure that disposeAsync() already reports", async () => {
 		const failure = new Error("close failed");
 		const { events, listener } = recorder();

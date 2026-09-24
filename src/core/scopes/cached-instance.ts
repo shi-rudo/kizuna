@@ -3,6 +3,7 @@ import type { ContainerDisposedError } from "../errors.js";
 import {
 	ignoreUnawaitedFailure,
 	invokeAsyncDispose,
+	invokeAsyncDisposeWhenFulfilled,
 	invokeSyncDispose,
 	isPromiseLike,
 	requireSynchronousDispose,
@@ -184,10 +185,12 @@ export class CachedInstance {
 		closedBy: DisposalMode,
 	): ContainerDisposedError {
 		if (closedBy === "async") {
-			const cleanup = invokeAsyncDispose(value);
 			if (isPromiseLike(value)) {
-				void cleanup.catch(this._reportUnawaitedFailure);
+				void invokeAsyncDisposeWhenFulfilled(value).catch(
+					this._reportUnawaitedFailure,
+				);
 			} else {
+				const cleanup = invokeAsyncDispose(value);
 				// Mark a rejection as handled now; disposeAsync() still awaits it.
 				void cleanup.catch(() => undefined);
 				this._lateCleanup = cleanup;

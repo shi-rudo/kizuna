@@ -24,8 +24,10 @@ export function invokeSyncDispose(instance: unknown): unknown {
 	}
 
 	if (isPromiseLike(instance)) {
-		return Promise.resolve(instance).then((resolved) =>
-			invokeSyncDispose(resolved),
+		// The rejection of the value belongs to its consumers, not to cleanup.
+		return Promise.resolve(instance).then(
+			(resolved) => invokeSyncDispose(resolved),
+			ignoreValueRejection,
 		);
 	}
 
@@ -47,6 +49,27 @@ export function invokeSyncDispose(instance: unknown): unknown {
 	}
 
 	return undefined;
+}
+
+/**
+ * A rejected Promise value has no value to clean up. Its consumers receive
+ * the rejection, so the cleanup ignores it.
+ */
+const ignoreValueRejection = (): undefined => undefined;
+
+/**
+ * Cleans up the resolved value of a Promise that no caller waits for. Only a
+ * failure of the cleanup hook rejects; a rejection of the value is ignored.
+ *
+ * @internal
+ */
+export function invokeAsyncDisposeWhenFulfilled(
+	value: PromiseLike<unknown>,
+): Promise<void> {
+	return Promise.resolve(value).then(
+		(resolved) => invokeAsyncDispose(resolved),
+		ignoreValueRejection,
+	);
 }
 
 /** Receives the failure of a cleanup that no caller waits for. @internal */
