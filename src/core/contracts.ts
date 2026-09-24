@@ -16,16 +16,20 @@ export interface BorrowedSingletonReference {
 export type DisposalMode = "sync" | "async";
 
 /**
- * Resolves the arguments of a factory call. A lifecycle calls it only when it
- * creates a value, so a cached value does not resolve its dependencies again.
+ * One request for a service value. A lifecycle resolves the factory arguments
+ * only when it creates a value, so a cached value does not resolve its
+ * dependencies again. It reports each value that it created.
  */
-export type FactoryArguments = () => readonly unknown[];
+export interface InstanceRequest {
+	factoryArguments(): readonly unknown[];
+	valueCreated(): void;
+}
 
 /** Internal runtime contract for service lifecycles. */
 export interface ServiceLifecycle {
 	readonly lifetime: ServiceLifetime;
 	readonly valueOwnership: ServiceValueOwnership;
-	getInstance<T>(resolveArguments: FactoryArguments): T;
+	getInstance<T>(request: InstanceRequest): T;
 	createScope(): ServiceLifecycle;
 	/**
 	 * Stops new resolutions before the owning container starts its cleanup.

@@ -1,7 +1,7 @@
 import type {
 	ConfigurableServiceLifecycle,
 	DisposalMode,
-	FactoryArguments,
+	InstanceRequest,
 } from "../contracts.js";
 import type { UnawaitedFailureSink } from "../services/async-dispose.js";
 import { CachedInstance } from "./cached-instance.js";
@@ -84,7 +84,7 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * subsequent calls return the same instance without resolving arguments.
 	 *
 	 * @template T - The type of the service instance
-	 * @param resolveArguments - Resolves the factory arguments (only called on creation)
+	 * @param request - Resolves the factory arguments (only on creation) and receives each created value
 	 * @returns {T} The singleton instance
 	 * @throws {Error} If the lifecycle has been disposed
 	 * @throws {Error} If no factory has been registered
@@ -96,15 +96,15 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * lifecycle.setFactory((config) => new DatabaseService(config));
 	 *
 	 * // First call - resolves the arguments and creates the instance
-	 * const db1 = lifecycle.getInstance(() => ['connection-string']);
+	 * const db1 = lifecycle.getInstance(requestWith('connection-string'));
 	 *
 	 * // Subsequent calls - return the same instance without resolving arguments
-	 * const db2 = lifecycle.getInstance(() => ['different-string']);
+	 * const db2 = lifecycle.getInstance(requestWith('different-string'));
 	 * console.log(db1 === db2); // true
 	 * ```
 	 */
-	public getInstance<T>(resolveArguments: FactoryArguments): T {
-		return this._cache.getInstance<T>(resolveArguments);
+	public getInstance<T>(request: InstanceRequest): T {
+		return this._cache.getInstance<T>(request);
 	}
 
 	/**
@@ -127,9 +127,9 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 *
 	 * // All scopes return the same singleton instance
 	 * lifecycle.setFactory(() => new ConfigService());
-	 * const config1 = lifecycle.getInstance(() => []);
-	 * const config2 = scope1.getInstance(() => []);
-	 * const config3 = scope2.getInstance(() => []);
+	 * const config1 = lifecycle.getInstance(request);
+	 * const config2 = scope1.getInstance(request);
+	 * const config3 = scope2.getInstance(request);
 	 * console.log(config1 === config2 && config2 === config3); // true
 	 * ```
 	 */

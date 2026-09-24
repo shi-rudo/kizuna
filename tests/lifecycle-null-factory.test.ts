@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
+import type { InstanceRequest } from "../src/core/contracts";
 import { ScopedLifecycle } from "../src/core/scopes/scoped";
 import { SingletonLifecycle } from "../src/core/scopes/singleton";
 
-const noArguments = (): readonly unknown[] => [];
+const requestWith = (...args: unknown[]): InstanceRequest => ({
+	factoryArguments: () => args,
+	valueCreated: () => undefined,
+});
+
+const noArguments = requestWith();
 
 describe("Lifecycle null factory return", () => {
 	describe("SingletonLifecycle", () => {

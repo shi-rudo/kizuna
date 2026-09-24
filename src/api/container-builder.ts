@@ -723,6 +723,11 @@ export class ContainerBuilder<
 		this.markAsBuilt();
 
 		const diagnostics = diagnosticsReporterFor(options.diagnostics);
+		diagnostics.containerBuilt(
+			this.keyCount,
+			this.registrationCount,
+			options.validation ?? "eager",
+		);
 		return new Container<TRegistry>(
 			this.registrations,
 			this.multiRegistrations,

@@ -1,7 +1,7 @@
 import type {
 	ConfigurableServiceLifecycle,
 	DisposalMode,
-	FactoryArguments,
+	InstanceRequest,
 } from "../contracts.js";
 import type { UnawaitedFailureSink } from "../services/async-dispose.js";
 import { CachedInstance } from "./cached-instance.js";
@@ -94,7 +94,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * different instances even if they use the same factory.
 	 *
 	 * @template T - The type of the service instance
-	 * @param resolveArguments - Resolves the factory arguments (only called on creation within this scope)
+	 * @param request - Resolves the factory arguments (only on creation within this scope) and receives each created value
 	 * @returns {T} The scoped instance
 	 * @throws {Error} If no factory has been registered
 	 * @throws {Error} If the factory function throws an error during instance creation
@@ -105,20 +105,20 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * lifecycle.setFactory((userId) => new UserContext(userId));
 	 *
 	 * // First call in this scope - resolves the arguments and creates the instance
-	 * const ctx1 = lifecycle.getInstance(() => ['user123']);
+	 * const ctx1 = lifecycle.getInstance(requestWith('user123'));
 	 *
 	 * // Subsequent calls in same scope - return the same instance without resolving arguments
-	 * const ctx2 = lifecycle.getInstance(() => ['different-user']);
+	 * const ctx2 = lifecycle.getInstance(requestWith('different-user'));
 	 * console.log(ctx1 === ctx2); // true
 	 *
 	 * // New scope would create a new instance
 	 * const newScope = lifecycle.createScope();
-	 * const ctx3 = newScope.getInstance(() => ['user456']);
+	 * const ctx3 = newScope.getInstance(requestWith('user456'));
 	 * console.log(ctx1 === ctx3); // false
 	 * ```
 	 */
-	public getInstance<T>(resolveArguments: FactoryArguments): T {
-		return this._cache.getInstance<T>(resolveArguments);
+	public getInstance<T>(request: InstanceRequest): T {
+		return this._cache.getInstance<T>(request);
 	}
 
 	/**
@@ -139,16 +139,16 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * lifecycle.setFactory(() => new RequestContext());
 	 *
 	 * // Create the first instance in the original scope
-	 * const ctx1 = lifecycle.getInstance(() => []);
+	 * const ctx1 = lifecycle.getInstance(request);
 	 *
 	 * // Create a new scope - independent of the original
 	 * const newScope = lifecycle.createScope();
-	 * const ctx2 = newScope.getInstance(() => []);
+	 * const ctx2 = newScope.getInstance(request);
 	 *
 	 * console.log(ctx1 === ctx2); // false - different instances
 	 *
 	 * // But within the same scope, instances are reused
-	 * const ctx3 = newScope.getInstance(() => []);
+	 * const ctx3 = newScope.getInstance(request);
 	 * console.log(ctx2 === ctx3); // true - same scope, same instance
 	 * ```
 	 */
@@ -185,7 +185,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * const lifecycle = new ScopedLifecycle();
 	 * lifecycle.setFactory(() => new DatabaseTransaction());
 	 *
-	 * const transaction = lifecycle.getInstance(() => []);
+	 * const transaction = lifecycle.getInstance(request);
 	 *
 	 * // Clean up when the scope is done
 	 * lifecycle.dispose();
@@ -194,7 +194,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * console.log(lifecycle.isDisposed); // true
 	 *
 	 * // This would throw an error
-	 * // lifecycle.getInstance(() => []); // Error: Cannot resolve from a disposed scoped lifecycle
+	 * // lifecycle.getInstance(request); // Error: Cannot resolve from a disposed scoped lifecycle
 	 * ```
 	 */
 	public dispose(): void {
@@ -228,7 +228,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 *
 	 * // Trying to use disposed scope throws error
 	 * try {
-	 *   lifecycle.getInstance(() => []);
+	 *   lifecycle.getInstance(request);
 	 * } catch (error) {
 	 *   console.log(error.message); // "Cannot resolve from a disposed scoped lifecycle"
 	 * }

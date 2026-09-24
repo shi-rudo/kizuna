@@ -1,5 +1,6 @@
 import type {
 	DisposalMode,
+	InstanceRequest,
 	ServiceLifecycle,
 	ServiceLifetime,
 	ServiceValueOwnership,
@@ -19,6 +20,39 @@ export const resolveDependency: unique symbol = Symbol(
 /** Minimal contract for dependency resolution within ServiceWrapper. */
 interface ServiceResolver {
 	[resolveDependency](key: string): unknown;
+}
+
+/** Receives a service whose lifecycle created a new value. @internal */
+export type CreationObserver = (service: ServiceWrapper) => void;
+
+/**
+ * The request that a service passes to its lifecycle for one resolution. It
+ * resolves the factory arguments through the resolving container and reports
+ * a created value to the observer.
+ */
+class ResolutionRequest implements InstanceRequest {
+	constructor(
+		private readonly service: ServiceWrapper,
+		private readonly container: ServiceResolver,
+		private readonly onCreated: CreationObserver,
+	) {}
+
+	/**
+	 * Returns the container for a factory registration, or the resolved
+	 * dependencies for a constructor.
+	 */
+	factoryArguments(): readonly unknown[] {
+		if (!this.service.isConstructorBased()) {
+			return [this.container];
+		}
+		return this.service
+			.getDependencies()
+			.map((dependency) => this.container[resolveDependency](dependency));
+	}
+
+	valueCreated(): void {
+		this.onCreated(this.service);
+	}
 }
 
 /**
@@ -54,28 +88,18 @@ export class ServiceWrapper {
 	/**
 	 * Resolves the service instance with its dependencies.
 	 * @param container The container or scope that resolves dependencies
+	 * @param onCreated Receives this service when its lifecycle creates a value
 	 * @returns The resolved service instance
 	 */
-	resolve(container: ServiceResolver): any {
+	resolve(container: ServiceResolver, onCreated: CreationObserver): any {
 		if (!this._lifecycle) {
 			throw new ContainerDisposedError(
 				`Cannot resolve disposed service '${this._name}'`,
 			);
 		}
 
-		return this._lifecycle.getInstance(() => this.factoryArguments(container));
-	}
-
-	/**
-	 * Returns the arguments of a factory call: the container for a factory
-	 * registration, or the resolved dependencies for a constructor.
-	 */
-	private factoryArguments(container: ServiceResolver): readonly unknown[] {
-		if (!this.isConstructorBased()) {
-			return [container];
-		}
-		return this._dependencies.map((dependency) =>
-			container[resolveDependency](dependency),
+		return this._lifecycle.getInstance(
+			new ResolutionRequest(this, container, onCreated),
 		);
 	}
 

@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
+import type { InstanceRequest } from "../src/core/contracts";
 import { ContainerDisposedError } from "../src/core/errors";
 import { TransientLifecycle } from "../src/core/scopes/transient";
 
-const noArguments = (): readonly unknown[] => [];
+const requestWith = (...args: unknown[]): InstanceRequest => ({
+	factoryArguments: () => args,
+	valueCreated: () => undefined,
+});
+
+const noArguments = requestWith();
 
 const captureError = (action: () => unknown): unknown => {
 	try {
@@ -34,9 +40,9 @@ describe("transient lifecycle", () => {
 	it("creates a new instance from the arguments of each request", () => {
 		const lifecycle = new TransientLifecycle();
 		lifecycle.setFactory((name: string) => ({ name }));
-		const first = lifecycle.getInstance(() => ["first"]);
+		const first = lifecycle.getInstance(requestWith("first"));
 
-		const second = lifecycle.getInstance(() => ["second"]);
+		const second = lifecycle.getInstance(requestWith("second"));
 
 		expect(second).not.toBe(first);
 		expect([first, second]).toEqual([{ name: "first" }, { name: "second" }]);
@@ -72,14 +78,19 @@ describe("transient lifecycle", () => {
 
 	it("rejects resolution after close without resolving arguments", () => {
 		const lifecycle = new TransientLifecycle();
-		const resolveArguments = vi.fn(noArguments);
+		const factoryArguments = vi.fn((): readonly unknown[] => []);
 		lifecycle.setFactory(() => ({}));
 		lifecycle.close("sync");
 
-		const error = captureError(() => lifecycle.getInstance(resolveArguments));
+		const error = captureError(() =>
+			lifecycle.getInstance({
+				factoryArguments,
+				valueCreated: () => undefined,
+			}),
+		);
 
 		expect(error).toBeInstanceOf(ContainerDisposedError);
-		expect(resolveArguments).not.toHaveBeenCalled();
+		expect(factoryArguments).not.toHaveBeenCalled();
 	});
 
 	it("does not call the factory when the arguments close the lifecycle", () => {
@@ -88,9 +99,12 @@ describe("transient lifecycle", () => {
 		lifecycle.setFactory(factory);
 
 		const error = captureError(() =>
-			lifecycle.getInstance(() => {
-				lifecycle.close("sync");
-				return [];
+			lifecycle.getInstance({
+				factoryArguments: () => {
+					lifecycle.close("sync");
+					return [];
+				},
+				valueCreated: () => undefined,
 			}),
 		);
 

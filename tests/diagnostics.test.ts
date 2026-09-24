@@ -25,6 +25,19 @@ const recorder = () => {
 	return { events, listener: (event: DiagnosticEvent) => events.push(event) };
 };
 
+const eventsWithCode = (
+	events: readonly DiagnosticEvent[],
+	code: DiagnosticEvent["code"],
+): DiagnosticEvent[] => events.filter((event) => event.code === code);
+
+class Logger {}
+
+class Consumer {
+	constructor(readonly logger: Logger) {}
+}
+
+class Handler {}
+
 afterEach(() => {
 	vi.restoreAllMocks();
 });
@@ -143,5 +156,199 @@ describe("UNAWAITED_CLEANUP_FAILED", () => {
 		expect(disposalError).toBeInstanceOf(DisposalError);
 		expect(scheduled).toHaveLength(1);
 		expect(() => scheduled[0]?.()).toThrow(listenerFailure);
+	});
+});
+
+describe("diagnostic levels", () => {
+	it("delivers no debug events at the default level", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerSingleton("logger", Logger)
+			.build({ diagnostics: { listener } });
+		container.get("logger");
+		container.startScope().dispose();
+
+		container.dispose();
+
+		expect(events).toEqual([]);
+	});
+});
+
+describe("debug events", () => {
+	it("reports CONTAINER_BUILT with the registration counts and the validation mode", () => {
+		const { events, listener } = recorder();
+
+		new ContainerBuilder()
+			.registerSingleton("logger", Logger)
+			.addSingleton("handlers", Handler)
+			.addSingleton("handlers", Handler)
+			.build({
+				validation: "deferred",
+				diagnostics: { listener, level: "debug" },
+			});
+
+		expect(events).toEqual([
+			expect.objectContaining({
+				code: "CONTAINER_BUILT",
+				level: "debug",
+				keyCount: 2,
+				registrationCount: 3,
+				validation: "deferred",
+			}),
+		]);
+	});
+
+	it("reports SCOPE_STARTED for each scope", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerScoped("logger", Logger)
+			.build({ diagnostics: { listener, level: "debug" } });
+		container.startScope();
+
+		container.startScope();
+
+		expect(eventsWithCode(events, "SCOPE_STARTED")).toHaveLength(2);
+	});
+
+	it("reports CONTAINER_DISPOSED for a scope and the root with the disposal mode", async () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerScoped("logger", Logger)
+			.build({ diagnostics: { listener, level: "debug" } });
+		container.startScope().dispose();
+
+		await container.disposeAsync();
+
+		expect(eventsWithCode(events, "CONTAINER_DISPOSED")).toEqual([
+			expect.objectContaining({
+				container: "scope",
+				mode: "sync",
+				failureCount: 0,
+			}),
+			expect.objectContaining({
+				container: "root",
+				mode: "async",
+				failureCount: 0,
+			}),
+		]);
+	});
+
+	it("reports CONTAINER_DISPOSED with the failure count when disposal fails", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("resource", () => ({
+				dispose() {
+					throw new Error("close failed");
+				},
+			}))
+			.build({ diagnostics: { listener, level: "debug" } });
+		container.get("resource");
+
+		captureError(() => container.dispose());
+
+		expect(eventsWithCode(events, "CONTAINER_DISPOSED")).toEqual([
+			expect.objectContaining({ container: "root", failureCount: 1 }),
+		]);
+	});
+
+	it("reports SERVICE_CREATED once for a singleton and nothing for a cache hit", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerSingleton("logger", Logger)
+			.build({ diagnostics: { listener, level: "debug" } });
+		container.get("logger");
+
+		container.get("logger");
+
+		expect(eventsWithCode(events, "SERVICE_CREATED")).toEqual([
+			expect.objectContaining({
+				serviceKey: "logger",
+				lifetime: "singleton",
+				container: "root",
+				path: ["logger"],
+			}),
+		]);
+	});
+
+	it("reports SERVICE_CREATED for each transient value", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("handler", Handler)
+			.build({ diagnostics: { listener, level: "debug" } });
+		container.get("handler");
+
+		container.get("handler");
+
+		expect(eventsWithCode(events, "SERVICE_CREATED")).toHaveLength(2);
+	});
+
+	it("reports the resolution path of a created dependency", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerSingleton("logger", Logger)
+			.registerSingleton("consumer", Consumer, "logger")
+			.build({ diagnostics: { listener, level: "debug" } });
+
+		container.get("consumer");
+
+		expect(eventsWithCode(events, "SERVICE_CREATED")).toEqual([
+			expect.objectContaining({
+				serviceKey: "logger",
+				path: ["consumer", "logger"],
+			}),
+			expect.objectContaining({ serviceKey: "consumer", path: ["consumer"] }),
+		]);
+	});
+
+	it("reports SERVICE_CREATED in the scope that resolved the value", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerScoped("logger", Logger)
+			.build({ diagnostics: { listener, level: "debug" } });
+
+		container.startScope().get("logger");
+
+		expect(eventsWithCode(events, "SERVICE_CREATED")).toEqual([
+			expect.objectContaining({ serviceKey: "logger", container: "scope" }),
+		]);
+	});
+
+	it("does not report SERVICE_CREATED when the factory throws", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("broken", (): Logger => {
+				throw new Error("factory failed");
+			})
+			.build({ diagnostics: { listener, level: "debug" } });
+
+		captureError(() => container.get("broken"));
+
+		expect(eventsWithCode(events, "SERVICE_CREATED")).toEqual([]);
+	});
+
+	it("reports one creation when a dependency creates the same singleton through another container", () => {
+		const { events, listener } = recorder();
+		let nested = false;
+		const root = new ContainerBuilder()
+			.registerTransientFactory("connection", () => {
+				if (!nested) {
+					nested = true;
+					root.get("repository");
+				}
+				return new Logger();
+			})
+			.registerSingleton("repository", Consumer, "connection")
+			.build({ diagnostics: { listener, level: "debug" } });
+		const scope = root.startScope();
+
+		scope.get("repository");
+
+		const repositoryCreations = eventsWithCode(
+			events,
+			"SERVICE_CREATED",
+		).filter(
+			(event) => "serviceKey" in event && event.serviceKey === "repository",
+		);
+		expect(repositoryCreations).toHaveLength(1);
 	});
 });

@@ -20,6 +20,7 @@ import {
 	createDisposalPlan,
 } from "../core/services/disposal-order.js";
 import {
+	type CreationObserver,
 	resolveDependency,
 	type ServiceWrapper,
 } from "../core/services/service-wrapper.js";
@@ -96,6 +97,11 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * dependency cycles at resolve time (see {@link CircularDependencyError}).
 	 */
 	private readonly _resolutionStack: string[] = [];
+
+	/** Reports a value that a lifecycle created during a resolution here. */
+	private readonly reportCreated: CreationObserver = (service) => {
+		this.diagnostics.serviceCreated(service, this.kind, this._resolutionStack);
+	};
 
 	constructor(
 		registrations: ReadonlyMap<string, ServiceWrapper>,
@@ -184,7 +190,9 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 
 		try {
-			return this.trackResolution(key, () => resolver.resolve(this));
+			return this.trackResolution(key, () =>
+				resolver.resolve(this, this.reportCreated),
+			);
 		} catch (error) {
 			if (this.passesThrough(error)) {
 				throw error;
@@ -220,12 +228,14 @@ export class Container<TRegistry extends ServiceRegistry>
 			.map((resolver) => scopedResolvers.get(resolver))
 			.filter((resolver): resolver is ServiceWrapper => resolver !== undefined);
 
-		return new Container<TRegistry>(
+		const scope = new Container<TRegistry>(
 			newRegistrations,
 			newMultiRegistrations,
 			scopedRegistrationOrder,
 			{ kind: "scope", diagnostics: this.diagnostics },
 		);
+		this.diagnostics.scopeStarted();
+		return scope;
 	}
 
 	/**
@@ -311,7 +321,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			this.clearRegistrations();
 		}
 
-		this.throwDisposalFailures(failures);
+		this.finishDisposal("sync", failures);
 	}
 
 	/**
@@ -339,7 +349,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			this.clearRegistrations();
 		}
 
-		this.throwDisposalFailures(failures);
+		this.finishDisposal("async", failures);
 	}
 
 	/**
@@ -438,7 +448,12 @@ export class Container<TRegistry extends ServiceRegistry>
 		});
 	}
 
-	private throwDisposalFailures(failures: readonly DisposalFailure[]): void {
+	/** Reports the finished disposal, then throws its failures. */
+	private finishDisposal(
+		mode: DisposalMode,
+		failures: readonly DisposalFailure[],
+	): void {
+		this.diagnostics.containerDisposed(this.kind, mode, failures.length);
 		if (failures.length > 0) {
 			throw new DisposalError(
 				failures.map((failure) => failure.error),
@@ -466,7 +481,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	): any[] {
 		try {
 			return this.trackResolution(typeName, () =>
-				resolvers.map((resolver) => resolver.resolve(this)),
+				resolvers.map((resolver) => resolver.resolve(this, this.reportCreated)),
 			);
 		} catch (error) {
 			if (this.passesThrough(error)) {

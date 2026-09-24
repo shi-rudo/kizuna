@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { InstanceRequest } from "../src/core/contracts";
 import { CircularDependencyError } from "../src/core/errors";
 import { ScopedLifecycle } from "../src/core/scopes/scoped";
 import { SingletonLifecycle } from "../src/core/scopes/singleton";
@@ -8,7 +9,12 @@ const cachingLifecycles = [
 	{ lifetime: "scoped", create: () => new ScopedLifecycle() },
 ] as const;
 
-const noArguments = (): readonly unknown[] => [];
+const requestWith = (...args: unknown[]): InstanceRequest => ({
+	factoryArguments: () => args,
+	valueCreated: () => undefined,
+});
+
+const noArguments = requestWith();
 
 const captureError = (action: () => unknown): unknown => {
 	try {
@@ -45,8 +51,8 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		const factory = vi.fn((name: string) => ({ name }));
 		lifecycle.setFactory(factory);
 
-		const first = lifecycle.getInstance(() => ["first"]);
-		const second = lifecycle.getInstance(() => ["second"]);
+		const first = lifecycle.getInstance(requestWith("first"));
+		const second = lifecycle.getInstance(requestWith("second"));
 
 		expect(second).toBe(first);
 		expect(first).toEqual({ name: "first" });
