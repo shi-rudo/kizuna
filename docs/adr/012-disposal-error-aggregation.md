@@ -36,7 +36,9 @@ report them.
 If a sync cleanup call returns a Promise, Kizuna attaches a rejection handler.
 This handler prevents an unhandled rejection. Kizuna adds a `TypeError` to the
 `DisposalError`. The error tells the caller to use `disposeAsync()` for future
-containers. The Promise has started, but the sync API does not wait for it.
+containers. The Promise has started, but the sync API does not wait for it. A
+later rejection reaches a diagnostics listener as described in
+[ADR-013](./013-diagnostic-events.md).
 
 The container clears its state before it reports the `DisposalError`. A second
 disposal call is a no-op, even if the first call reported errors.
