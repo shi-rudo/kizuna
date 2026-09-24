@@ -180,8 +180,9 @@ export class CachedInstance {
 	 * becomes the cause. After `disposeAsync()`, the value runs its asynchronous
 	 * cleanup, and `disposeAsync()` of this lifecycle waits for it before its
 	 * dependencies are disposed. A Promise value is the exception: an `async`
-	 * factory can wait for `disposeAsync()` itself, so its cleanup starts
-	 * without a waiter and a later failure is not reported.
+	 * factory that calls `disposeAsync()` before its first `await` can then
+	 * wait for it, so its cleanup starts without a waiter and a later failure is
+	 * not reported.
 	 */
 	private discardValueCreatedAfterClose(
 		value: unknown,

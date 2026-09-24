@@ -157,7 +157,9 @@ that meets a disposed container, for example through a root singleton, throws
 `ServiceResolutionError` with the `ContainerDisposedError` as `cause`. If a
 singleton or scoped factory disposes its own container, Kizuna cleans up the new
 value instead of returning it. `disposeAsync()` does not wait for a Promise
-value from such a factory, because the factory can wait for `disposeAsync()`.
+value from such a factory. After its first `await`, an `async` factory must not
+wait for the disposal of its own container: `disposeAsync()` then waits for the
+factory's Promise, so neither settles.
 
 ## Runtime consistency
 

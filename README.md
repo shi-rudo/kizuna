@@ -998,14 +998,21 @@ throws a `ContainerDisposedError`:
   registration waits for that cleanup before its declared dependencies start
   their cleanup, as in the normal disposal order. A cleanup failure appears in
   the `DisposalError`.
-- A Promise value is the exception. An `async` factory can wait for
-  `disposeAsync()` itself, so `disposeAsync()` does not wait for that value.
-  Its cleanup starts, and a later failure or rejection is not reported.
+- A Promise value is the exception. `disposeAsync()` does not wait for that
+  value, so an `async` factory that calls `disposeAsync()` before its first
+  `await` and then waits for it cannot block it. Its cleanup starts, and a
+  later failure or rejection is not reported.
 
 `dispose()` cleans up all services before the factory can return, so after
 `dispose()` the value is cleaned up after its dependencies. A transient factory
 that disposes its container still returns its value: Kizuna does not track
 transient values, so the caller owns it.
+
+An `async` factory must not wait for the disposal of its own container or
+scope after its first `await`. At that point, Kizuna caches the factory's
+Promise, and `disposeAsync()` waits for that Promise before it cleans up the
+value. A factory that then waits for `disposeAsync()` waits for itself, so
+neither Promise settles.
 
 ### Promise Factory Values
 
