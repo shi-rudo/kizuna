@@ -1,14 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { InstanceRequest } from "../src/core/contracts";
 import { ContainerDisposedError } from "../src/core/errors";
 import { TransientLifecycle } from "../src/core/scopes/transient";
-
-const requestWith = (...args: unknown[]): InstanceRequest => ({
-	factoryArguments: () => args,
-	valueCreated: () => undefined,
-});
-
-const noArguments = requestWith();
+import { noArguments, requestWith } from "./instance-request";
 
 const captureError = (action: () => unknown): unknown => {
 	try {

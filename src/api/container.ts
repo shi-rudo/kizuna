@@ -20,7 +20,7 @@ import {
 	createDisposalPlan,
 } from "../core/services/disposal-order.js";
 import {
-	type CreationObserver,
+	reportValueCreated,
 	resolveDependency,
 	type ServiceWrapper,
 } from "../core/services/service-wrapper.js";
@@ -97,11 +97,6 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * dependency cycles at resolve time (see {@link CircularDependencyError}).
 	 */
 	private readonly _resolutionStack: string[] = [];
-
-	/** Reports a value that a lifecycle created during a resolution here. */
-	private readonly reportCreated: CreationObserver = (service) => {
-		this.diagnostics.serviceCreated(service, this.kind, this._resolutionStack);
-	};
 
 	constructor(
 		registrations: ReadonlyMap<string, ServiceWrapper>,
@@ -182,6 +177,15 @@ export class Container<TRegistry extends ServiceRegistry>
 			: this.resolveSingle(key);
 	}
 
+	/**
+	 * Reports a value that a lifecycle created during a resolution on this
+	 * container.
+	 * @internal
+	 */
+	[reportValueCreated](service: ServiceWrapper): void {
+		this.diagnostics.serviceCreated(service, this.kind, this._resolutionStack);
+	}
+
 	/** Resolves a key with one registration and wraps resolution failures. */
 	private resolveSingle(key: string): unknown {
 		const resolver = this.registrations.get(key);
@@ -190,9 +194,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 
 		try {
-			return this.trackResolution(key, () =>
-				resolver.resolve(this, this.reportCreated),
-			);
+			return this.trackResolution(key, () => resolver.resolve(this));
 		} catch (error) {
 			if (this.passesThrough(error)) {
 				throw error;
@@ -481,7 +483,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	): any[] {
 		try {
 			return this.trackResolution(typeName, () =>
-				resolvers.map((resolver) => resolver.resolve(this, this.reportCreated)),
+				resolvers.map((resolver) => resolver.resolve(this)),
 			);
 		} catch (error) {
 			if (this.passesThrough(error)) {

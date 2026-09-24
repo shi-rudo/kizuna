@@ -1,20 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import type { InstanceRequest } from "../src/core/contracts";
 import { CircularDependencyError } from "../src/core/errors";
 import { ScopedLifecycle } from "../src/core/scopes/scoped";
 import { SingletonLifecycle } from "../src/core/scopes/singleton";
+import { noArguments, requestWith } from "./instance-request";
 
 const cachingLifecycles = [
 	{ lifetime: "singleton", create: () => new SingletonLifecycle() },
 	{ lifetime: "scoped", create: () => new ScopedLifecycle() },
 ] as const;
-
-const requestWith = (...args: unknown[]): InstanceRequest => ({
-	factoryArguments: () => args,
-	valueCreated: () => undefined,
-});
-
-const noArguments = requestWith();
 
 const captureError = (action: () => unknown): unknown => {
 	try {

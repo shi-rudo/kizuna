@@ -17,24 +17,29 @@ export const resolveDependency: unique symbol = Symbol(
 	"kizuna.resolveDependency",
 );
 
-/** Minimal contract for dependency resolution within ServiceWrapper. */
+/**
+ * Reports that the lifecycle of a service created a value during a resolution.
+ * @internal
+ */
+export const reportValueCreated: unique symbol = Symbol(
+	"kizuna.reportValueCreated",
+);
+
+/** The container that resolves a service: its dependencies and its creations. */
 interface ServiceResolver {
 	[resolveDependency](key: string): unknown;
+	[reportValueCreated](service: ServiceWrapper): void;
 }
-
-/** Receives a service whose lifecycle created a new value. @internal */
-export type CreationObserver = (service: ServiceWrapper) => void;
 
 /**
  * The request that a service passes to its lifecycle for one resolution. It
  * resolves the factory arguments through the resolving container and reports
- * a created value to the observer.
+ * a created value to it.
  */
 class ResolutionRequest implements InstanceRequest {
 	constructor(
 		private readonly service: ServiceWrapper,
 		private readonly container: ServiceResolver,
-		private readonly onCreated: CreationObserver,
 	) {}
 
 	/**
@@ -51,7 +56,7 @@ class ResolutionRequest implements InstanceRequest {
 	}
 
 	valueCreated(): void {
-		this.onCreated(this.service);
+		this.container[reportValueCreated](this.service);
 	}
 }
 
@@ -87,20 +92,18 @@ export class ServiceWrapper {
 
 	/**
 	 * Resolves the service instance with its dependencies.
-	 * @param container The container or scope that resolves dependencies
-	 * @param onCreated Receives this service when its lifecycle creates a value
+	 * @param container The container or scope that resolves dependencies and
+	 * receives each created value
 	 * @returns The resolved service instance
 	 */
-	resolve(container: ServiceResolver, onCreated: CreationObserver): any {
+	resolve(container: ServiceResolver): any {
 		if (!this._lifecycle) {
 			throw new ContainerDisposedError(
 				`Cannot resolve disposed service '${this._name}'`,
 			);
 		}
 
-		return this._lifecycle.getInstance(
-			new ResolutionRequest(this, container, onCreated),
-		);
+		return this._lifecycle.getInstance(new ResolutionRequest(this, container));
 	}
 
 	/**
