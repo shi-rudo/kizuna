@@ -783,6 +783,7 @@ The package root exports these runtime values:
 - `RegistrationConflictError`
 - `BuilderAlreadyBuiltError`
 - `InvalidServiceKeyError`
+- `InvalidBuildOptionsError`
 - `SingletonBorrowError`
 
 It also exports these public types:
@@ -964,6 +965,7 @@ a literal `code` and the fields that a caller needs. Check `instanceof` or
 | `RegistrationConflictError` | `REGISTRATION_CONFLICT` | `key`, `existingKind`, `requestedKind` | a registration reuses a key |
 | `BuilderAlreadyBuiltError` | `BUILDER_ALREADY_BUILT` | — | code registers a service after `build()` |
 | `InvalidServiceKeyError` | `INVALID_SERVICE_KEY` | `key` | a registration, dependency, or resolution key is not a valid string; extends `TypeError` |
+| `InvalidBuildOptionsError` | `INVALID_BUILD_OPTIONS` | `option`, `value` | `build()` receives an unsupported `validation` mode or `diagnostics` option; extends `TypeError` |
 | `SingletonBorrowError` | `SINGLETON_BORROW_FAILED` | `key`, `reason` | `borrowSingletonFrom()` cannot borrow the singleton |
 
 `registrationKind`, `existingKind`, and `requestedKind` have the type

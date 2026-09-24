@@ -9,3 +9,4 @@ Report diagnostic events to an optional listener.
 - At the level `debug`, it also receives `CONTAINER_BUILT`, `SCOPE_STARTED`, `CONTAINER_DISPOSED`, and `SERVICE_CREATED` (each value that a lifecycle created, with its resolution path).
 - Scopes report to the listener of their root container. Without the option, Kizuna reports nothing and still never writes to the console.
 - New public types: `DiagnosticsOptions`, `DiagnosticListener`, `DiagnosticLevel`, `DiagnosticEvent`, `DiagnosticContainerKind`, and one type per event.
+- `build()` checks its options at runtime and throws the new `InvalidBuildOptionsError` (code `INVALID_BUILD_OPTIONS`, fields `option` and `value`) for an unsupported `validation` mode, a `diagnostics.listener` that is not a function, or an unsupported `diagnostics.level`. TypeScript already rejects these values. Before, JavaScript code that passed an unknown `validation` mode got eager validation without an error.

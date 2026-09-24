@@ -189,6 +189,22 @@ export class InvalidServiceKeyError extends TypeError {
 	}
 }
 
+/** `build()` received an option value that it does not support. */
+export class InvalidBuildOptionsError extends TypeError {
+	public readonly code = "INVALID_BUILD_OPTIONS" as const;
+	/** The path of the rejected option, for example `diagnostics.level`. */
+	public readonly option: string;
+	/** The rejected value. */
+	public readonly value: unknown;
+
+	constructor(option: string, value: unknown, message: string) {
+		super(message);
+		this.name = "InvalidBuildOptionsError";
+		this.option = option;
+		this.value = value;
+	}
+}
+
 /** The reason why `borrowSingletonFrom()` rejected a borrow. */
 export type SingletonBorrowFailureReason =
 	| "INCOMPATIBLE_SOURCE"

@@ -503,6 +503,7 @@ describe("published feature evidence", () => {
 			"RegistrationConflictError",
 			"BuilderAlreadyBuiltError",
 			"InvalidServiceKeyError",
+			"InvalidBuildOptionsError",
 			"SingletonBorrowError",
 		];
 		const typeExports = [

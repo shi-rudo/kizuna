@@ -10,6 +10,7 @@ describe("public package API", () => {
 			"ContainerDisposedError",
 			"ContainerValidationError",
 			"DisposalError",
+			"InvalidBuildOptionsError",
 			"InvalidServiceKeyError",
 			"RegistrationConflictError",
 			"RegistrationKindError",

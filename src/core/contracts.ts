@@ -15,6 +15,9 @@ export interface BorrowedSingletonReference {
 /** The disposal path that closes a container: `dispose()` or `disposeAsync()`. */
 export type DisposalMode = "sync" | "async";
 
+/** When `build()` validates the dependency graph. */
+export type ValidationMode = "eager" | "deferred";
+
 /**
  * One request for a service value. A lifecycle resolves the factory arguments
  * only when it creates a value, so a cached value does not resolve its

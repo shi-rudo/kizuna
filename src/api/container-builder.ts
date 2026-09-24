@@ -14,7 +14,7 @@ import {
 } from "./borrowed-singleton-capability.js";
 import {
 	type ContainerBuildOptions,
-	diagnosticsReporterFor,
+	resolveBuildOptions,
 } from "./build-options.js";
 import { Container } from "./container.js";
 import type { RootServiceContainer } from "./contracts/interfaces.js";
@@ -696,6 +696,7 @@ export class ContainerBuilder<
 	 * @param options - Selects eager or deferred graph validation and an
 	 * optional diagnostics listener
 	 * @returns The configured root container with complete type inference
+	 * @throws {InvalidBuildOptionsError} If an option has an unsupported value
 	 * @throws {ContainerValidationError} If eager validation finds an invalid graph
 	 * @throws {Error} If the builder has already been built
 	 *
@@ -713,7 +714,8 @@ export class ContainerBuilder<
 	build(options: ContainerBuildOptions = {}): RootServiceContainer<TRegistry> {
 		this.ensureNotBuilt();
 
-		if (options.validation !== "deferred") {
+		const { validation, diagnostics } = resolveBuildOptions(options);
+		if (validation === "eager") {
 			const issues = this.validate();
 			if (issues.length > 0) {
 				throw new ContainerValidationError(issues);
@@ -722,11 +724,10 @@ export class ContainerBuilder<
 
 		this.markAsBuilt();
 
-		const diagnostics = diagnosticsReporterFor(options.diagnostics);
 		diagnostics.containerBuilt(
 			this.keyCount,
 			this.registrationCount,
-			options.validation ?? "eager",
+			validation,
 		);
 		return new Container<TRegistry>(
 			this.registrations,

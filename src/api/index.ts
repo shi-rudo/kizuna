@@ -54,6 +54,7 @@ export type {
 export {
 	BuilderAlreadyBuiltError,
 	ContainerDisposedError,
+	InvalidBuildOptionsError,
 	InvalidServiceKeyError,
 	RegistrationConflictError,
 	RegistrationKindError,

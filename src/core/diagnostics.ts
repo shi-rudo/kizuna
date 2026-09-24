@@ -1,4 +1,8 @@
-import type { DisposalMode, ServiceLifetime } from "./contracts.js";
+import type {
+	DisposalMode,
+	ServiceLifetime,
+	ValidationMode,
+} from "./contracts.js";
 import type { DisposalOperation } from "./errors.js";
 
 /**
@@ -33,7 +37,7 @@ export interface ContainerBuiltEvent
 	extends DiagnosticEventBase<"CONTAINER_BUILT", "debug"> {
 	readonly keyCount: number;
 	readonly registrationCount: number;
-	readonly validation: "eager" | "deferred";
+	readonly validation: ValidationMode;
 }
 
 /** `startScope()` created a scope. */
@@ -88,7 +92,7 @@ export interface DiagnosticsReporter {
 	containerBuilt(
 		keyCount: number,
 		registrationCount: number,
-		validation: "eager" | "deferred",
+		validation: ValidationMode,
 	): void;
 	scopeStarted(): void;
 	containerDisposed(
@@ -166,7 +170,7 @@ export function createDiagnosticsReporter(
 				deliver({
 					code: "CONTAINER_DISPOSED",
 					level: "debug",
-					message: `Disposed a ${container} container with ${failureCount} failures`,
+					message: `Disposed a ${container} container with ${failureCount} ${failureCount === 1 ? "failure" : "failures"}`,
 					container,
 					mode,
 					failureCount,
