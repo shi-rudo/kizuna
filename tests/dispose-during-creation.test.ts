@@ -233,6 +233,34 @@ describe("a factory that calls disposeAsync() on its own container", () => {
 		expect(events).toEqual(["a start", "a done", "b start"]);
 	});
 
+	it("waits for the late value after a nested creation of the same singleton failed", async () => {
+		const events: string[] = [];
+		let pending: Promise<void> | undefined;
+		let creations = 0;
+		const root = new ContainerBuilder()
+			.registerSingletonFactory("resource", () => {
+				creations++;
+				if (creations > 1) {
+					throw new Error("nested creation failed");
+				}
+				captureError(() => root.get("resource"));
+				pending = root.disposeAsync();
+				return {
+					async [Symbol.asyncDispose]() {
+						await new Promise((resolve) => setTimeout(resolve, 0));
+						events.push("cleanup done");
+					},
+				};
+			})
+			.build();
+		const scope = root.startScope();
+
+		captureError(() => scope.get("resource"));
+		await pending;
+
+		expect(events).toEqual(["cleanup done"]);
+	});
+
 	it("treats a value with a throwing then getter as a plain value", async () => {
 		let pending: Promise<void> | undefined;
 		const container = new ContainerBuilder()

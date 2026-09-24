@@ -29,8 +29,12 @@ export class CachedInstance {
 	private _isDisposed = false;
 	/** Set once the owning container starts its disposal. */
 	private _closedBy: DisposalMode | null = null;
-	/** True while the factory runs, so disposal can wait for its value. */
-	private _creating = false;
+	/**
+	 * Number of factory calls that have not returned yet, so disposal can wait
+	 * for their values. A factory can reach its own lifecycle again through
+	 * another container, so the calls can nest.
+	 */
+	private _pendingCreations = 0;
 	/**
 	 * Asynchronous cleanup of a value that the factory returned after the
 	 * close. `disposeAsync()` waits for it before dependencies are disposed.
@@ -96,11 +100,11 @@ export class CachedInstance {
 		if (!this._initialized) {
 			// A factory error propagates unchanged. The container wraps it once.
 			let factoryValue: unknown;
-			this._creating = true;
+			this._pendingCreations++;
 			try {
 				factoryValue = this._factory(...args);
 			} finally {
-				this._creating = false;
+				this._pendingCreations--;
 			}
 			if (this._closedBy) {
 				// The factory disposed its own container. Nothing owns the new value.
@@ -157,7 +161,7 @@ export class CachedInstance {
 		try {
 			if (this._initialized) {
 				await invokeAsyncDispose(this._instance);
-			} else if (this._creating) {
+			} else if (this._pendingCreations > 0) {
 				// The factory runs synchronously, so it has returned after one turn.
 				await Promise.resolve();
 			}
