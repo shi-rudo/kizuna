@@ -1,4 +1,4 @@
-import type { AdoptLateCleanup } from "../contracts.js";
+import type { DisposalMode } from "../contracts.js";
 import { ContainerDisposedError } from "../errors.js";
 import {
 	continueWithoutWaiting,
@@ -27,10 +27,15 @@ export class CachedInstance {
 	private _initialized = false;
 	private _factory: ((...args: any[]) => any) | null = null;
 	private _isDisposed = false;
-	/** True once the owning container starts its disposal. */
-	private _closed = false;
-	/** Set when `disposeAsync()` of the owning container closed this lifecycle. */
-	private _adoptLateCleanup: AdoptLateCleanup | undefined;
+	/** Set once the owning container starts its disposal. */
+	private _closedBy: DisposalMode | null = null;
+	/** True while the factory runs, so disposal can wait for its value. */
+	private _creating = false;
+	/**
+	 * Asynchronous cleanup of a value that the factory returned after the
+	 * close. `disposeAsync()` waits for it before dependencies are disposed.
+	 */
+	private _lateCleanup: Promise<void> | undefined;
 
 	constructor(lifetime: CachingLifetime) {
 		this._lifetime = lifetime;
@@ -39,14 +44,10 @@ export class CachedInstance {
 	/**
 	 * Stops new resolutions. The owning container calls this method before it
 	 * starts any cleanup, so a factory that disposes its own container cannot
-	 * hand out a value. `disposeAsync()` passes `adopt`; `dispose()` does not.
+	 * hand out a value.
 	 */
-	public close(adopt?: AdoptLateCleanup): void {
-		if (this._closed) {
-			return;
-		}
-		this._closed = true;
-		this._adoptLateCleanup = adopt;
+	public close(mode: DisposalMode): void {
+		this._closedBy ??= mode;
 	}
 
 	public get isDisposed(): boolean {
@@ -85,7 +86,7 @@ export class CachedInstance {
 	 * hit does not copy them again.
 	 */
 	public getInstance<T>(args: readonly unknown[]): T {
-		if (this._closed) {
+		if (this._closedBy) {
 			throw new ContainerDisposedError(this.disposedMessage());
 		}
 		if (!this._factory) {
@@ -94,10 +95,16 @@ export class CachedInstance {
 
 		if (!this._initialized) {
 			// A factory error propagates unchanged. The container wraps it once.
-			const factoryValue = this._factory(...args);
-			if (this._closed) {
+			let factoryValue: unknown;
+			this._creating = true;
+			try {
+				factoryValue = this._factory(...args);
+			} finally {
+				this._creating = false;
+			}
+			if (this._closedBy) {
 				// The factory disposed its own container. Nothing owns the new value.
-				throw this.discardValueCreatedAfterClose(factoryValue);
+				throw this.discardValueCreatedAfterClose(factoryValue, this._closedBy);
 			}
 			const instance = observePromiseRejection(factoryValue, () => {
 				// Until its own cleanup starts, a rejected value leaves the cache.
@@ -122,7 +129,7 @@ export class CachedInstance {
 			return;
 		}
 		this._isDisposed = true;
-		this.close();
+		this.close("sync");
 
 		try {
 			if (this._initialized) {
@@ -136,18 +143,26 @@ export class CachedInstance {
 
 	/**
 	 * Awaits the cleanup hook of a created value. For a Promise value, it waits
-	 * for the value and invokes that value's cleanup hook.
+	 * for the value and invokes that value's cleanup hook. If the factory of
+	 * this lifecycle is still running, it first lets the factory return and
+	 * then waits for the cleanup of that late value.
 	 */
 	public async disposeAsync(): Promise<void> {
 		if (this._isDisposed) {
 			return;
 		}
 		this._isDisposed = true;
-		this.close();
+		this.close("async");
 
 		try {
 			if (this._initialized) {
 				await invokeAsyncDispose(this._instance);
+			} else if (this._creating) {
+				// The factory runs synchronously, so it has returned after one turn.
+				await Promise.resolve();
+			}
+			if (this._lateCleanup) {
+				await this._lateCleanup;
 			}
 		} finally {
 			this.clear();
@@ -158,22 +173,23 @@ export class CachedInstance {
 	 * Cleans up a value that the factory returned after the lifecycle closed,
 	 * and returns the error for the resolution.
 	 *
-	 * During `dispose()`, the value runs its synchronous cleanup, and a failure
-	 * becomes the cause. During `disposeAsync()`, the container waits for the
-	 * asynchronous cleanup of the value. A Promise value is the exception: it
-	 * can wait for `disposeAsync()` itself, so its cleanup starts without a
-	 * waiter and a later failure is not reported.
+	 * After `dispose()`, the value runs its synchronous cleanup, and a failure
+	 * becomes the cause. After `disposeAsync()`, the value runs its asynchronous
+	 * cleanup, and `disposeAsync()` of this lifecycle waits for it before its
+	 * dependencies are disposed. A Promise value is the exception: an `async`
+	 * factory can wait for `disposeAsync()` itself, so its cleanup starts
+	 * without a waiter and a later failure is not reported.
 	 */
 	private discardValueCreatedAfterClose(
 		value: unknown,
+		closedBy: DisposalMode,
 	): ContainerDisposedError {
-		const adopt = this._adoptLateCleanup;
-		if (adopt) {
+		if (closedBy === "async") {
 			const cleanup = invokeAsyncDispose(value);
-			if (isPromiseLike(value)) {
-				continueWithoutWaiting(cleanup);
-			} else {
-				adopt(cleanup);
+			// Mark a rejection as handled now; disposeAsync() still awaits it.
+			continueWithoutWaiting(cleanup);
+			if (!isPromiseLike(value)) {
+				this._lateCleanup = cleanup;
 			}
 			return new ContainerDisposedError(this.disposedMessage());
 		}
@@ -196,7 +212,6 @@ export class CachedInstance {
 		this._instance = undefined;
 		this._initialized = false;
 		this._factory = null;
-		// Keep the adopt callback: a factory that started disposeAsync() can still
-		// return its value after this lifecycle finished its own cleanup.
+		this._lateCleanup = undefined;
 	}
 }

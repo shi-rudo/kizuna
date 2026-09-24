@@ -1,6 +1,6 @@
 import type {
-	AdoptLateCleanup,
 	ConfigurableServiceLifecycle,
+	DisposalMode,
 } from "../contracts.js";
 import { CachedInstance } from "./cached-instance.js";
 
@@ -158,8 +158,8 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	/**
 	 * Stops new resolutions before the owning container starts its cleanup.
 	 */
-	public close(adopt?: AdoptLateCleanup): void {
-		this._cache.close(adopt);
+	public close(mode: DisposalMode): void {
+		this._cache.close(mode);
 	}
 
 	/**

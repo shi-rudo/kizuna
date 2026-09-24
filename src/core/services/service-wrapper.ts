@@ -1,4 +1,5 @@
 import type {
+	DisposalMode,
 	ServiceLifecycle,
 	ServiceLifetime,
 	ServiceValueOwnership,
@@ -117,15 +118,11 @@ export class ServiceWrapper {
 
 	/**
 	 * Stops new resolutions of an owned lifecycle before the container starts
-	 * its cleanup. A late cleanup is reported with this service's key.
+	 * its cleanup.
 	 */
-	close(
-		adopt?: (resolver: ServiceWrapper, cleanup: Promise<void>) => void,
-	): void {
+	close(mode: DisposalMode): void {
 		if (this._lifecycle && this._ownsLifecycle) {
-			this._lifecycle.close?.(
-				adopt ? (cleanup) => adopt(this, cleanup) : undefined,
-			);
+			this._lifecycle.close?.(mode);
 		}
 	}
 

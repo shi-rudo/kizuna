@@ -1,3 +1,4 @@
+import type { DisposalMode } from "../core/contracts.js";
 import {
 	CircularDependencyError,
 	ContainerDisposedError,
@@ -37,6 +38,7 @@ import type {
 } from "./interface-token.js";
 
 export type { DisposalFailure, DisposalOperation } from "../core/errors.js";
+
 export { CircularDependencyError, DisposalError } from "../core/errors.js";
 
 /** Stable identity token that resolves the current container or scope. */
@@ -285,7 +287,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			return;
 		}
 		this._disposed = true;
-		this.closeOwnedLifecycles();
+		this.closeOwnedLifecycles("sync");
 
 		const failures: DisposalFailure[] = [];
 		try {
@@ -323,26 +325,11 @@ export class Container<TRegistry extends ServiceRegistry>
 			return;
 		}
 		this._disposed = true;
-		const lateCleanups: Promise<DisposalFailure | undefined>[] = [];
-		this.closeOwnedLifecycles((resolver, cleanup) => {
-			lateCleanups.push(
-				cleanup.then(
-					() => undefined,
-					(error: unknown) =>
-						this.createDisposalFailure(resolver, "disposeAsync", error),
-				),
-			);
-		});
+		this.closeOwnedLifecycles("async");
 
-		const failures: DisposalFailure[] = [];
+		let failures: readonly DisposalFailure[] = [];
 		try {
-			failures.push(...(await this.runDependencyAwareDisposeAsync()));
-			// A factory that started this disposal can hand over a late cleanup.
-			for (const failure of await Promise.all(lateCleanups)) {
-				if (failure) {
-					failures.push(failure);
-				}
-			}
+			failures = await this.runDependencyAwareDisposeAsync();
 		} finally {
 			this.clearRegistrations();
 		}
@@ -427,11 +414,9 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * Closes every owned lifecycle before any cleanup runs. A factory that
 	 * disposes its own container then cannot hand out a value.
 	 */
-	private closeOwnedLifecycles(
-		adopt?: (resolver: ServiceWrapper, cleanup: Promise<void>) => void,
-	): void {
+	private closeOwnedLifecycles(mode: DisposalMode): void {
 		for (const resolver of this.registrationOrder) {
-			resolver.close(adopt);
+			resolver.close(mode);
 		}
 	}
 

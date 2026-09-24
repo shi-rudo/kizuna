@@ -11,11 +11,8 @@ export interface BorrowedSingletonReference {
 	resolve(): unknown;
 }
 
-/**
- * Takes over the asynchronous cleanup of a value that a factory returned after
- * its lifecycle closed. `disposeAsync()` passes it and waits for the cleanup.
- */
-export type AdoptLateCleanup = (cleanup: Promise<void>) => void;
+/** The disposal path that closes a container: `dispose()` or `disposeAsync()`. */
+export type DisposalMode = "sync" | "async";
 
 /** Internal runtime contract for service lifecycles. */
 export interface ServiceLifecycle {
@@ -25,9 +22,10 @@ export interface ServiceLifecycle {
 	createScope(): ServiceLifecycle;
 	/**
 	 * Stops new resolutions before the owning container starts its cleanup.
-	 * `disposeAsync()` passes `adopt`; `dispose()` does not.
+	 * The mode tells a lifecycle how to clean up a value that a running factory
+	 * still returns.
 	 */
-	close?(adopt?: AdoptLateCleanup): void;
+	close?(mode: DisposalMode): void;
 	dispose(): void;
 	disposeAsync(): Promise<void>;
 }

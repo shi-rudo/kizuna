@@ -201,6 +201,58 @@ describe("a factory that calls disposeAsync() on its own container", () => {
 		]);
 	});
 
+	it("finishes the late cleanup before a declared dependency starts its cleanup", async () => {
+		const events: string[] = [];
+		let pending: Promise<void> | undefined;
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("b", () => ({
+				async [Symbol.asyncDispose]() {
+					events.push("b start");
+				},
+			}))
+			.registerSingletonFactory(
+				"a",
+				(current) => {
+					current.get("b");
+					pending = current.disposeAsync();
+					return {
+						async [Symbol.asyncDispose]() {
+							events.push("a start");
+							await new Promise((resolve) => setTimeout(resolve, 0));
+							events.push("a done");
+						},
+					};
+				},
+				"b",
+			)
+			.build();
+
+		captureError(() => container.get("a"));
+		await pending;
+
+		expect(events).toEqual(["a start", "a done", "b start"]);
+	});
+
+	it("treats a value with a throwing then getter as a plain value", async () => {
+		let pending: Promise<void> | undefined;
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("resource", (current) => {
+				pending = current.disposeAsync();
+				return {
+					// biome-ignore lint/suspicious/noThenProperty: the test needs a throwing then getter.
+					get then(): never {
+						throw new Error("getter");
+					},
+				};
+			})
+			.build();
+
+		const error = captureError(() => container.get("resource"));
+
+		expect(error).toBeInstanceOf(ContainerDisposedError);
+		expect(await settle(pending)).toBeUndefined();
+	});
+
 	it("settles when an async factory awaits disposeAsync() of its own container", async () => {
 		let pending: Promise<void> | undefined;
 		const container = new ContainerBuilder()

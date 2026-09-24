@@ -130,11 +130,22 @@ export async function invokeAsyncDispose(instance: unknown): Promise<void> {
 	}
 }
 
-/** @internal */
+/**
+ * Returns true for a value with a callable `then`. A `then` getter that throws
+ * makes the value a plain value, as in `observePromiseRejection()`.
+ *
+ * @internal
+ */
 export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
-	return (
-		value !== null &&
-		(typeof value === "object" || typeof value === "function") &&
-		typeof (value as PromiseLike<unknown>).then === "function"
-	);
+	if (
+		value === null ||
+		(typeof value !== "object" && typeof value !== "function")
+	) {
+		return false;
+	}
+	try {
+		return typeof (value as PromiseLike<unknown>).then === "function";
+	} catch {
+		return false;
+	}
 }

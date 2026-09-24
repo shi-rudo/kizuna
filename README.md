@@ -994,16 +994,17 @@ throws a `ContainerDisposedError`:
 - After `dispose()`, the value uses its synchronous cleanup. A cleanup failure
   becomes the `cause`. An asynchronous cleanup or a Promise value produces the
   same `TypeError` cause that `dispose()` reports for such services.
-- After `disposeAsync()`, the value uses its asynchronous cleanup, and the
-  Promise from `disposeAsync()` waits for it. A cleanup failure appears in its
-  `DisposalError`.
+- After `disposeAsync()`, the value uses its asynchronous cleanup. Its
+  registration waits for that cleanup before its declared dependencies start
+  their cleanup, as in the normal disposal order. A cleanup failure appears in
+  the `DisposalError`.
 - A Promise value is the exception. An `async` factory can wait for
   `disposeAsync()` itself, so `disposeAsync()` does not wait for that value.
   Its cleanup starts, and a later failure or rejection is not reported.
 
-This value is cleaned up after its own dependencies, because those
-dependencies were disposed before the value existed. A transient factory that
-disposes its container still returns its value: Kizuna does not track
+`dispose()` cleans up all services before the factory can return, so after
+`dispose()` the value is cleaned up after its dependencies. A transient factory
+that disposes its container still returns its value: Kizuna does not track
 transient values, so the caller owns it.
 
 ### Promise Factory Values
