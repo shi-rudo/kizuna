@@ -35,6 +35,16 @@ It also exports these public types:
 - `DisposalFailure`
 - `DisposalOperation`
 - `ContainerBuildOptions`
+- `DiagnosticsOptions`
+- `DiagnosticListener`
+- `DiagnosticLevel`
+- `DiagnosticEvent`
+- `DiagnosticContainerKind`
+- `UnawaitedCleanupFailedEvent`
+- `ContainerBuiltEvent`
+- `ScopeStartedEvent`
+- `ContainerDisposedEvent`
+- `ServiceCreatedEvent`
 - `ValidationIssue`
 - `ValidationIssueCode`
 - `ValidationPathSegment`

@@ -7,11 +7,11 @@ description: >
   addScoped, addTransient, addSingletonFactory, addScopedFactory,
   addTransientFactory, borrowSingletonFrom, build(), validate(), get(), getAll(), startScope(),
   dispose(), disposeAsync(), Symbol.dispose, Symbol.asyncDispose,
-  getRegisteredServiceNames(), ServiceContainer,
-  ContainerValidationError, CircularDependencyError.
+  getRegisteredServiceNames(), ServiceContainer, build({ diagnostics }),
+  DiagnosticEvent, ContainerValidationError, CircularDependencyError.
   Activate when registering services, choosing lifecycles, managing request
   scopes, registering multiple implementations under one key, debugging
-  validation errors, testing with mock containers, deploying to edge
+  validation errors, logging container events, testing with mock containers, deploying to edge
   runtimes (Cloudflare Workers, Vercel Edge), or integrating with web
   frameworks.
 type: core
@@ -120,6 +120,8 @@ each value, including a borrowed singleton.
 - Use `disposeAsync()` for shutdown. Use `dispose()` only when every owned
   value has synchronous cleanup.
 - Branch on an error class or its `code`, never on the message text.
+- Kizuna never writes to the console. To log its events, pass
+  `build({ diagnostics: { listener } })`.
 - Do not import internal types such as `Factory`. Let TypeScript infer them
   from the registration method.
 - `registerInterface()`, `registerFactory()`, `registerInstance()`, and
@@ -141,4 +143,5 @@ correct code for each rule.
 | Deploy to Cloudflare Workers or Vercel Edge | [edge-runtimes.md](references/edge-runtimes.md) |
 | Test with stub registrations, scopes, and disposal | [testing.md](references/testing.md) |
 | Migrate from manual wiring, tsyringe, inversify, or NestJS | [migration.md](references/migration.md) |
+| Log Kizuna events, find unreported cleanup failures or undisposed scopes | [diagnostics.md](references/diagnostics.md) |
 | Check generated code against known mistakes | [common-mistakes.md](references/common-mistakes.md) |

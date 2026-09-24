@@ -27,6 +27,7 @@ The runtime suite runs through `pnpm test`. The type suite runs through
 | Test containers can replace service contracts without `any`. | [Documentation contract test](../tests/documentation-api.test.ts) | This check requires strict TypeScript and cannot protect JavaScript or unsafe casts. |
 | The published package has no runtime dependency entries. | [Package contract test](../tests/documentation-api.test.ts) | The package still has development and peer dependencies. |
 | CI covers Node.js, a packed Vite consumer build, and workerd through Miniflare. | [CI workflow](../.github/workflows/ci.yml), [package E2E workflow](../.github/workflows/e2e.yml), and [workerd tests](../tests/edge-compat.test.ts) | CI does not run a browser, Vercel Edge, Deno, Bun, or Node.js 18 runtime test. |
+| An optional listener receives typed diagnostic events, including cleanup failures that no caller waits for. | [Diagnostics tests](../tests/diagnostics.test.ts) and [diagnostics type tests](../tests/diagnostics.test-d.ts) | Events carry no durations, a cache hit produces no event, and Kizuna never writes events to the console. |
 | Pull-request workflows run the listed gates for release-candidate changes. | [CI workflow](../.github/workflows/ci.yml) and [E2E workflow](../.github/workflows/e2e.yml) | The gates do not prove application fitness, load capacity, security, or production readiness. |
 
 ## Quality gates
