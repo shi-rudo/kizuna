@@ -4,6 +4,7 @@ import type {
 	FactoryArguments,
 } from "../contracts.js";
 import { CachedInstance } from "./cached-instance.js";
+import type { ValueFactory } from "./lifecycle-factory.js";
 
 /**
  * Scoped lifecycle implementation that maintains one instance per scope.
@@ -76,7 +77,7 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * lifecycle.setFactory((userId) => new UserContext(userId));
 	 * ```
 	 */
-	public setFactory(factory: (...args: any[]) => any): void {
+	public setFactory(factory: ValueFactory): void {
 		this._cache.setFactory(factory);
 	}
 

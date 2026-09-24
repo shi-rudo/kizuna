@@ -1,8 +1,9 @@
 import type {
 	ConfigurableServiceLifecycle,
+	DisposalMode,
 	FactoryArguments,
 } from "../contracts.js";
-import { ContainerDisposedError } from "../errors.js";
+import { LifecycleFactory, type ValueFactory } from "./lifecycle-factory.js";
 
 /**
  * Transient lifecycle implementation that creates a new instance every time.
@@ -53,19 +54,10 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	public readonly lifetime = "transient" as const;
 	public readonly valueOwnership = "untracked" as const;
 	/**
-	 * The factory function used to create new instances.
+	 * The factory and the closed and disposed state.
 	 * @private
 	 */
-	private _factory: ((...args: any[]) => any) | null = null;
-
-	/**
-	 * Tracks whether this lifecycle has been disposed.
-	 * @private
-	 */
-	private _isDisposed = false;
-
-	/** Set once the owning container starts its disposal. */
-	private _isClosed = false;
+	private readonly _factory = new LifecycleFactory(this.lifetime);
 
 	/**
 	 * Sets the factory function that will be used to create new instances.
@@ -86,14 +78,8 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * // Each call to getInstance will create a new RequestId with current timestamp
 	 * ```
 	 */
-	public setFactory(factory: (...args: any[]) => any): void {
-		if (this._isDisposed) {
-			throw new Error("Cannot set factory on a disposed transient lifecycle");
-		}
-		if (!factory || typeof factory !== "function") {
-			throw new Error("Factory must be a valid function");
-		}
-		this._factory = factory;
+	public setFactory(factory: ValueFactory): void {
+		this._factory.set(factory);
 	}
 
 	/**
@@ -124,10 +110,10 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public getInstance<T>(resolveArguments: FactoryArguments): T {
-		this.assertOpen();
+		this._factory.assertOpen();
 		const args = resolveArguments();
 		// Resolving the arguments can close this lifecycle.
-		const factory = this.requireFactory();
+		const factory = this._factory.require();
 		// A factory error propagates unchanged. The container wraps it once.
 		return factory(...args) as T;
 	}
@@ -137,25 +123,8 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * The lifecycle does not track its values, so a running factory still
 	 * returns its value to the caller.
 	 */
-	public close(): void {
-		this._isClosed = true;
-	}
-
-	private assertOpen(): void {
-		if (this._isClosed) {
-			throw new ContainerDisposedError(
-				"Cannot resolve from a disposed transient lifecycle",
-			);
-		}
-	}
-
-	/** Returns the factory of an open lifecycle. */
-	private requireFactory(): (...args: any[]) => any {
-		this.assertOpen();
-		if (!this._factory) {
-			throw new Error("No factory registered for this lifecycle");
-		}
-		return this._factory;
+	public close(mode: DisposalMode): void {
+		this._factory.close(mode);
 	}
 
 	/**
@@ -191,14 +160,9 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public createScope(): TransientLifecycle {
-		if (this._isDisposed) {
-			throw new Error("Cannot create new scope from disposed lifecycle");
-		}
-		if (!this._factory) {
-			throw new Error("No factory available to create new scope");
-		}
+		const factory = this._factory.forNewScope();
 		const lifecycle = new TransientLifecycle();
-		lifecycle.setFactory(this._factory);
+		lifecycle.setFactory(factory);
 		return lifecycle;
 	}
 
@@ -235,11 +199,7 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public dispose(): void {
-		if (!this._isDisposed) {
-			this.close();
-			this._factory = null;
-			this._isDisposed = true;
-		}
+		this._factory.dispose("sync");
 	}
 
 	/**
@@ -249,7 +209,7 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * the factory reference. Provided for `ServiceLifecycle` interface conformance.
 	 */
 	public async disposeAsync(): Promise<void> {
-		this.dispose();
+		this._factory.dispose("async");
 	}
 
 	/**
@@ -281,6 +241,6 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public get isDisposed(): boolean {
-		return this._isDisposed;
+		return this._factory.isDisposed;
 	}
 }
