@@ -1,8 +1,10 @@
 import type {
+	DisposalMode,
 	ServiceLifecycle,
 	ServiceLifetime,
 	ServiceValueOwnership,
 } from "../contracts.js";
+import { ContainerDisposedError } from "../errors.js";
 
 /**
  * Resolves one declared constructor dependency. A key with multiple
@@ -55,7 +57,9 @@ export class ServiceWrapper {
 	 */
 	resolve(container: ServiceResolver): any {
 		if (!this._lifecycle) {
-			throw new Error(`Cannot resolve disposed service '${this._name}'`);
+			throw new ContainerDisposedError(
+				`Cannot resolve disposed service '${this._name}'`,
+			);
 		}
 
 		if (!this.isConstructorBased()) {
@@ -110,6 +114,16 @@ export class ServiceWrapper {
 			this._constructorFn,
 			!isShared,
 		);
+	}
+
+	/**
+	 * Stops new resolutions of an owned lifecycle before the container starts
+	 * its cleanup.
+	 */
+	close(mode: DisposalMode): void {
+		if (this._lifecycle && this._ownsLifecycle) {
+			this._lifecycle.close?.(mode);
+		}
 	}
 
 	/**

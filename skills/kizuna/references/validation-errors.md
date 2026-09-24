@@ -151,6 +151,16 @@ Each error that the public API can throw has an exported class with a literal
 A `ServiceResolutionError` holds the original error as its `cause`. If a
 dependency fails, the `cause` is the error of that dependency.
 
+`dispose()` and `disposeAsync()` close the container before any cleanup runs.
+A call on the disposed container throws `ContainerDisposedError`. A live scope
+that meets a disposed container, for example through a root singleton, throws
+`ServiceResolutionError` with the `ContainerDisposedError` as `cause`. If a
+singleton or scoped factory disposes its own container, Kizuna cleans up the new
+value instead of returning it. `disposeAsync()` does not wait for a Promise
+value from such a factory. After its first `await`, an `async` factory must not
+wait for the disposal of its own container: `disposeAsync()` then waits for the
+factory's Promise, so neither settles.
+
 ## Runtime consistency
 
 Kizuna does not read constructor source code or parameter names. It also does

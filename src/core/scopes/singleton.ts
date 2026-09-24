@@ -1,4 +1,7 @@
-import type { ConfigurableServiceLifecycle } from "../contracts.js";
+import type {
+	ConfigurableServiceLifecycle,
+	DisposalMode,
+} from "../contracts.js";
 import { CachedInstance } from "./cached-instance.js";
 
 /**
@@ -133,6 +136,13 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	public createScope(): SingletonLifecycle {
 		// Singletons share the same instance across all scopes
 		return this;
+	}
+
+	/**
+	 * Stops new resolutions before the owning container starts its cleanup.
+	 */
+	public close(mode: DisposalMode): void {
+		this._cache.close(mode);
 	}
 
 	/**

@@ -11,12 +11,21 @@ export interface BorrowedSingletonReference {
 	resolve(): unknown;
 }
 
+/** The disposal path that closes a container: `dispose()` or `disposeAsync()`. */
+export type DisposalMode = "sync" | "async";
+
 /** Internal runtime contract for service lifecycles. */
 export interface ServiceLifecycle {
 	readonly lifetime: ServiceLifetime;
 	readonly valueOwnership: ServiceValueOwnership;
 	getInstance<T>(...args: any): T;
 	createScope(): ServiceLifecycle;
+	/**
+	 * Stops new resolutions before the owning container starts its cleanup.
+	 * The mode tells a lifecycle how to clean up a value that a running factory
+	 * still returns.
+	 */
+	close?(mode: DisposalMode): void;
 	dispose(): void;
 	disposeAsync(): Promise<void>;
 }

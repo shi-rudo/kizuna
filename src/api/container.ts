@@ -1,3 +1,4 @@
+import type { DisposalMode } from "../core/contracts.js";
 import {
 	CircularDependencyError,
 	ContainerDisposedError,
@@ -37,6 +38,7 @@ import type {
 } from "./interface-token.js";
 
 export type { DisposalFailure, DisposalOperation } from "../core/errors.js";
+
 export { CircularDependencyError, DisposalError } from "../core/errors.js";
 
 /** Stable identity token that resolves the current container or scope. */
@@ -179,7 +181,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		try {
 			return this.trackResolution(key, () => resolver.resolve(this));
 		} catch (error) {
-			if (error instanceof CircularDependencyError) {
+			if (this.passesThrough(error)) {
 				throw error;
 			}
 			throw new ServiceResolutionError(key, error);
@@ -285,6 +287,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			return;
 		}
 		this._disposed = true;
+		this.closeOwnedLifecycles("sync");
 
 		const failures: DisposalFailure[] = [];
 		try {
@@ -322,6 +325,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			return;
 		}
 		this._disposed = true;
+		this.closeOwnedLifecycles("async");
 
 		let failures: readonly DisposalFailure[] = [];
 		try {
@@ -406,6 +410,16 @@ export class Container<TRegistry extends ServiceRegistry>
 		});
 	}
 
+	/**
+	 * Closes every owned lifecycle before any cleanup runs. A factory that
+	 * disposes its own container then cannot hand out a value.
+	 */
+	private closeOwnedLifecycles(mode: DisposalMode): void {
+		for (const resolver of this.registrationOrder) {
+			resolver.close(mode);
+		}
+	}
+
 	private createDisposalFailure(
 		resolver: ServiceWrapper,
 		operation: DisposalOperation,
@@ -450,11 +464,23 @@ export class Container<TRegistry extends ServiceRegistry>
 				resolvers.map((resolver) => resolver.resolve(this)),
 			);
 		} catch (error) {
-			if (error instanceof CircularDependencyError) {
+			if (this.passesThrough(error)) {
 				throw error;
 			}
 			throw new ServiceResolutionError(typeName, error, "multi");
 		}
+	}
+
+	/**
+	 * A cycle error keeps its chain unwrapped. A disposal error stays unwrapped
+	 * only when this container itself is disposed; otherwise the caller needs
+	 * the key of the service that met another disposed container.
+	 */
+	private passesThrough(error: unknown): boolean {
+		return (
+			error instanceof CircularDependencyError ||
+			(error instanceof ContainerDisposedError && this._disposed)
+		);
 	}
 
 	/**

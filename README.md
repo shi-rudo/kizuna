@@ -948,7 +948,7 @@ a literal `code` and the fields that a caller needs. Check `instanceof` or
 | `RegistrationKindError` | `REGISTRATION_KIND_MISMATCH` | `key`, `registrationKind` | `get()` receives an `add*()` key, or `getAll()` receives a `register*()` key |
 | `ServiceResolutionError` | `SERVICE_RESOLUTION_FAILED` | `key`, `cause` | a factory, a constructor, or a dependency fails during resolution |
 | `CircularDependencyError` | `CIRCULAR_DEPENDENCY` | `chain` | resolution enters a key that it is already resolving |
-| `ContainerDisposedError` | `CONTAINER_DISPOSED` | — | code uses a disposed container or scope |
+| `ContainerDisposedError` | `CONTAINER_DISPOSED` | — | code uses a container or scope after its disposal started |
 | `DisposalError` | `DISPOSAL_FAILED` | `errors`, `failures` | one or more cleanup operations fail |
 | `ContainerValidationError` | `CONTAINER_VALIDATION_FAILED` | `issues` | `build()` finds an invalid graph |
 | `RegistrationConflictError` | `REGISTRATION_CONFLICT` | `key`, `existingKind`, `requestedKind` | a registration reuses a key |
@@ -978,6 +978,41 @@ try {
 
 A `DisposalError` from `dispose()` contains a `TypeError` for a service whose
 cleanup needs a Promise. Use `disposeAsync()` for such services.
+
+`dispose()` and `disposeAsync()` close a container before they run any cleanup.
+From then on, the container and the singletons it owns reject resolution. A
+call on the disposed container itself throws `ContainerDisposedError`. When a
+live container or scope meets another disposed container, for example a scope
+that requests a singleton of a disposed root container, it throws a
+`ServiceResolutionError` with the key it resolved and the
+`ContainerDisposedError` as its `cause`.
+
+If a singleton or scoped factory disposes its own container or scope, Kizuna
+does not return the value that the factory creates. It cleans up the value and
+throws a `ContainerDisposedError`:
+
+- After `dispose()`, the value uses its synchronous cleanup. A cleanup failure
+  becomes the `cause`. An asynchronous cleanup or a Promise value produces the
+  same `TypeError` cause that `dispose()` reports for such services.
+- After `disposeAsync()`, the value uses its asynchronous cleanup. Its
+  registration waits for that cleanup before its declared dependencies start
+  their cleanup, as in the normal disposal order. A cleanup failure appears in
+  the `DisposalError`.
+- A Promise value is the exception. `disposeAsync()` does not wait for that
+  value, so an `async` factory that calls `disposeAsync()` before its first
+  `await` and then waits for it cannot block it. Its cleanup starts, and a
+  later failure or rejection is not reported.
+
+`dispose()` cleans up all services before the factory can return, so after
+`dispose()` the value is cleaned up after its dependencies. A transient factory
+that disposes its container still returns its value: Kizuna does not track
+transient values, so the caller owns it.
+
+An `async` factory must not wait for the disposal of its own container or
+scope after its first `await`. At that point, Kizuna caches the factory's
+Promise, and `disposeAsync()` waits for that Promise before it cleans up the
+value. A factory that then waits for `disposeAsync()` waits for itself, so
+neither Promise settles.
 
 ### Promise Factory Values
 

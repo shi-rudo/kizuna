@@ -50,16 +50,30 @@ export function invokeSyncDispose(instance: unknown): unknown {
 }
 
 /**
+ * Lets an asynchronous cleanup result run without waiting for it. A rejection
+ * handler prevents an unhandled rejection.
+ *
+ * @returns True if the result was asynchronous
+ * @internal
+ */
+function continueWithoutWaiting(result: unknown): boolean {
+	if (isPromiseLike(result)) {
+		void Promise.resolve(result).catch(() => undefined);
+		return true;
+	}
+	return false;
+}
+
+/**
  * Reports cleanup that a synchronous disposal call cannot wait for.
  *
- * A rejection handler prevents an unhandled rejection. The caller receives a
- * synchronous error and can use `disposeAsync()` for future containers.
+ * The caller receives a synchronous error and can use `disposeAsync()` for
+ * future containers.
  *
  * @internal
  */
 export function requireSynchronousDispose(result: unknown): void {
-	if (result && typeof (result as PromiseLike<unknown>).then === "function") {
-		void Promise.resolve(result).catch(() => undefined);
+	if (continueWithoutWaiting(result)) {
 		throw new TypeError(
 			"dispose() started asynchronous cleanup but cannot wait for it. Use disposeAsync() instead of dispose() for containers with asynchronous cleanup.",
 		);
@@ -101,7 +115,7 @@ export async function invokeAsyncDispose(instance: unknown): Promise<void> {
 	const syncDisposeSymbolFn = obj[Symbol.dispose];
 	if (typeof syncDisposeSymbolFn === "function") {
 		const result = (syncDisposeSymbolFn as () => unknown).call(instance);
-		if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+		if (isPromiseLike(result)) {
 			await result;
 		}
 		return;
@@ -110,12 +124,28 @@ export async function invokeAsyncDispose(instance: unknown): Promise<void> {
 	const disposeFn = obj.dispose;
 	if (typeof disposeFn === "function") {
 		const result = (disposeFn as () => unknown).call(instance);
-		if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+		if (isPromiseLike(result)) {
 			await result;
 		}
 	}
 }
 
-function isPromiseLike(instance: object): instance is PromiseLike<unknown> {
-	return typeof (instance as PromiseLike<unknown>).then === "function";
+/**
+ * Returns true for a value with a callable `then`. A `then` getter that throws
+ * makes the value a plain value, as in `observePromiseRejection()`.
+ *
+ * @internal
+ */
+export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+	if (
+		value === null ||
+		(typeof value !== "object" && typeof value !== "function")
+	) {
+		return false;
+	}
+	try {
+		return typeof (value as PromiseLike<unknown>).then === "function";
+	} catch {
+		return false;
+	}
 }

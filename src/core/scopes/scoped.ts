@@ -1,4 +1,7 @@
-import type { ConfigurableServiceLifecycle } from "../contracts.js";
+import type {
+	ConfigurableServiceLifecycle,
+	DisposalMode,
+} from "../contracts.js";
 import { CachedInstance } from "./cached-instance.js";
 
 /**
@@ -150,6 +153,13 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 		const lifecycle = new ScopedLifecycle();
 		lifecycle.setFactory(factory);
 		return lifecycle;
+	}
+
+	/**
+	 * Stops new resolutions before the owning container starts its cleanup.
+	 */
+	public close(mode: DisposalMode): void {
+		this._cache.close(mode);
 	}
 
 	/**

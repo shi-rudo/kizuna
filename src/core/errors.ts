@@ -122,8 +122,11 @@ export class ServiceResolutionError extends Error {
 export class ContainerDisposedError extends Error {
 	public readonly code = "CONTAINER_DISPOSED" as const;
 
-	constructor(message = "Cannot access services from a disposed container") {
-		super(message);
+	constructor(
+		message = "Cannot access services from a disposed container",
+		options?: ErrorOptions,
+	) {
+		super(message, options);
 		this.name = "ContainerDisposedError";
 	}
 }

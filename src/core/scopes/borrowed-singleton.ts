@@ -30,8 +30,16 @@ export class BorrowedSingletonLifecycle implements ServiceLifecycle {
 		return this;
 	}
 
-	dispose(): void {
+	/**
+	 * Stops new resolutions before the borrower starts its cleanup. The source
+	 * container still owns the value, so there is nothing to clean up here.
+	 */
+	close(): void {
 		this.reference = null;
+	}
+
+	dispose(): void {
+		this.close();
 	}
 
 	async disposeAsync(): Promise<void> {
