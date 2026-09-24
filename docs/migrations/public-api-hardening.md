@@ -114,6 +114,22 @@ type Registry = { handlers: Handler[] };
 type Registry = { handlers: MultiRegistration<Handler> };
 ```
 
+A helper function that is generic over its registry no longer compiles, because
+TypeScript cannot tell whether a key of a generic registry has one or multiple
+registrations. Give the helper an exact registry type instead:
+
+```typescript
+// Before
+function useLogger<R extends { logger: Logger }>(container: ServiceContainer<R>) {
+  return container.get('logger');
+}
+
+// After
+function useLogger(container: ServiceContainer<{ logger: Logger }>) {
+  return container.get('logger');
+}
+```
+
 The builder property `count` counted keys, not registrations. Use `keyCount` or
 `registrationCount`. `count` remains as a deprecated alias of `keyCount`.
 

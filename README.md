@@ -877,9 +877,11 @@ interface RootServiceContainer<TRegistry>
   extends ServiceContainer<TRegistry> {}
 
 interface ServiceContainer<TRegistry> {
-  get<K extends SingleRegistrationKey<TRegistry>>(key: K): TRegistry[K];  // Resolve one service
+  // K: a key from register*() or an interface token
+  get<K extends keyof TRegistry>(key: K): TRegistry[K];                  // Resolve one service
   get(token: typeof ServiceContainerToken): ServiceContainer<TRegistry>; // Get the current container
-  getAll<K extends MultiRegistrationKey<TRegistry>>(key: K): T[];         // Resolve all services of an add*() key
+  // K: a key from add*(); TRegistry[K] is MultiRegistration<T>
+  getAll<K extends keyof TRegistry>(key: K): T[];                        // Resolve all services of the key
   startScope(): ServiceContainer<TRegistry>;                  // Create new scope
   dispose(): void;                                            // Synchronous cleanup
   disposeAsync(): Promise<void>;                              // Await async cleanup (DB pools, etc.)
@@ -903,6 +905,26 @@ registered services through their string keys.
 `ServiceProviderToken` and `TypeSafeServiceLocator` are deprecated aliases of
 `ServiceContainerToken` and `ServiceContainer`. They keep existing code working.
 A future major version removes them.
+
+#### Typing helper functions
+
+Give a helper function the exact registry that it needs. A container with more
+registrations is assignable to this type:
+
+```typescript
+function useLogger(container: ServiceContainer<{ logger: Logger }>) {
+  return container.get('logger');
+}
+
+function runPlugins(container: ServiceContainer<{ plugins: MultiRegistration<Plugin> }>) {
+  return container.getAll('plugins');
+}
+```
+
+Do not make the helper generic over its registry, for example
+`<TRegistry extends { logger: Logger }>(container: ServiceContainer<TRegistry>)`.
+TypeScript cannot tell whether a key of a generic registry has one or multiple
+registrations, so `get()` and `getAll()` reject the key.
 
 ### Promise Factory Values
 

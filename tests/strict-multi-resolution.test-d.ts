@@ -132,6 +132,28 @@ test("the registry marks multi-registration keys", () => {
 	expectTypeOf(typed.get("logger")).toEqualTypeOf<Logger>();
 });
 
+test("helpers take a container typed with an exact minimal registry", () => {
+	const useLogger = (current: ServiceContainer<{ logger: Logger }>) =>
+		current.get("logger");
+	const useHandlers = (
+		current: ServiceContainer<{ handlers: MultiRegistration<Handler> }>,
+	) => current.getAll("handlers");
+
+	expectTypeOf(useLogger(container)).toEqualTypeOf<Logger>();
+	expectTypeOf(useHandlers(container)).toEqualTypeOf<Handler[]>();
+});
+
+test("a helper that is generic over its registry cannot classify a key", () => {
+	function useLogger<TRegistry extends { logger: Logger }>(
+		current: ServiceContainer<TRegistry>,
+	) {
+		// @ts-expect-error The key kind of a generic registry is unknown. Use an exact registry type.
+		return current.get("logger");
+	}
+
+	void useLogger;
+});
+
 test("borrowing accepts only single registrations", () => {
 	new ContainerBuilder()
 		// @ts-expect-error A multi-registration key cannot be borrowed.
