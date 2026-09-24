@@ -274,9 +274,27 @@ const validators = container.getAll('validators'); // New instances each time
 
 **Key rules:**
 - `add*()` and `register*()` cannot be mixed for the same key — each key is either single or multi
-- `getAll()` returns an array; `get()` on a multi-key also returns the array
-- `getAll()` on a single-registration key wraps the result in a single-element array
-- Registration order is preserved in the returned array
+- `getAll()` resolves only keys from `add*()`. It returns the services in registration order.
+- `get()` resolves only keys from `register*()` and interface tokens. It rejects a multi-registration key at compile time and at runtime, and names `getAll()` in the error.
+- `getAll()` rejects a single registration in the same way and names `get()`.
+- A constructor dependency on a multi-registration key receives all services as an array. A factory calls `getAll()`.
+
+```typescript
+class EventBus {
+  constructor(private handlers: Handler[]) {}
+}
+
+const container = new ContainerBuilder()
+  .addSingleton('handlers', HandlerA)
+  .addSingleton('handlers', HandlerB)
+  .registerSingleton('bus', EventBus, 'handlers') // receives [HandlerA, HandlerB]
+  .registerSingletonFactory('count', (container) => container.getAll('handlers').length, 'handlers')
+  .build();
+```
+
+The registry type marks a multi-registration key as `MultiRegistration<T>`. Use
+this type when you write a registry type by hand, for example
+`ServiceContainer<{ handlers: MultiRegistration<Handler> }>`.
 
 ## 🎯 Registry Type Inference
 
@@ -764,6 +782,7 @@ It also exports these public types:
 - `RootServiceContainer`
 - `ServiceContainer`
 - `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
+- `MultiRegistration`
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`
@@ -841,7 +860,9 @@ Scopes and borrowers cannot lend a registration.
 ```typescript
 .build(options?: { validation?: 'eager' | 'deferred' }): RootServiceContainer<TRegistry>
 .validate(): readonly ValidationIssue[]                // Validate the dependency graph
-.count: number                                         // Number of registered services
+.keyCount: number                                      // Number of registered keys (a multi-registration key counts once)
+.registrationCount: number                             // Number of registrations (each add*() call counts)
+.count: number                                         // Deprecated alias of keyCount
 .isRegistered(key: string): boolean                    // Check if service is registered
 .getRegisteredServiceNames(): string[]                 // List all registered keys
 ```
@@ -856,9 +877,11 @@ interface RootServiceContainer<TRegistry>
   extends ServiceContainer<TRegistry> {}
 
 interface ServiceContainer<TRegistry> {
-  get<K extends keyof TRegistry>(key: K): TRegistry[K];      // Resolve service
+  // K: a key from register*() or an interface token
+  get<K extends keyof TRegistry>(key: K): TRegistry[K];                  // Resolve one service
   get(token: typeof ServiceContainerToken): ServiceContainer<TRegistry>; // Get the current container
-  getAll<K extends keyof TRegistry>(key: K): TRegistry[K][]; // Resolve all implementations as array
+  // K: a key from add*(); TRegistry[K] is MultiRegistration<T>
+  getAll<K extends keyof TRegistry>(key: K): T[];                        // Resolve all services of the key
   startScope(): ServiceContainer<TRegistry>;                  // Create new scope
   dispose(): void;                                            // Synchronous cleanup
   disposeAsync(): Promise<void>;                              // Await async cleanup (DB pools, etc.)
@@ -882,6 +905,26 @@ registered services through their string keys.
 `ServiceProviderToken` and `TypeSafeServiceLocator` are deprecated aliases of
 `ServiceContainerToken` and `ServiceContainer`. They keep existing code working.
 A future major version removes them.
+
+#### Typing helper functions
+
+Give a helper function the exact registry that it needs. A container with more
+registrations is assignable to this type:
+
+```typescript
+function useLogger(container: ServiceContainer<{ logger: Logger }>) {
+  return container.get('logger');
+}
+
+function runPlugins(container: ServiceContainer<{ plugins: MultiRegistration<Plugin> }>) {
+  return container.getAll('plugins');
+}
+```
+
+Do not make the helper generic over its registry, for example
+`<TRegistry extends { logger: Logger }>(container: ServiceContainer<TRegistry>)`.
+TypeScript cannot tell whether a key of a generic registry has one or multiple
+registrations, so `get()` and `getAll()` reject the key.
 
 ### Promise Factory Values
 

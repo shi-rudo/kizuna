@@ -4,9 +4,18 @@ import type {
 	ServiceValueOwnership,
 } from "../contracts.js";
 
+/**
+ * Resolves one declared constructor dependency. A key with multiple
+ * registrations resolves to all of its services.
+ * @internal
+ */
+export const resolveDependency: unique symbol = Symbol(
+	"kizuna.resolveDependency",
+);
+
 /** Minimal contract for dependency resolution within ServiceWrapper. */
 interface ServiceResolver {
-	get(key: string): any;
+	[resolveDependency](key: string): unknown;
 }
 
 /**
@@ -58,7 +67,9 @@ export class ServiceWrapper {
 		}
 
 		return this._lifecycle.getInstance(
-			...this._dependencies.map((dependency) => container.get(dependency)),
+			...this._dependencies.map((dependency) =>
+				container[resolveDependency](dependency),
+			),
 		);
 	}
 

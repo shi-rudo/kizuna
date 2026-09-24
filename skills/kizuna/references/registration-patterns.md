@@ -157,7 +157,8 @@ loggers.forEach(l => l.log('Hello'));
 
 **Key rules:**
 - `add*()` and `register*()` cannot share the same key — pick one pattern per key
-- `getAll()` returns an array; `get()` on a multi-key also returns the array
+- `getAll()` resolves only `add*()` keys; `get()` resolves only `register*()` keys and interface tokens. The wrong method fails at compile time and at runtime.
+- A constructor dependency on an `add*()` key receives all services as an array. Factories call `getAll()`.
 - Each implementation can have its own lifecycle (e.g., mix `addSingleton` + `addScoped` under one key)
 - `validate()` checks multi-registration dependencies for missing services and circular deps
 - Factory variants available: `addSingletonFactory`, `addScopedFactory`, `addTransientFactory`

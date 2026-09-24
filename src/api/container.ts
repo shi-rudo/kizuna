@@ -8,14 +8,22 @@ import {
 	createDisposalLayers,
 	createDisposalPlan,
 } from "../core/services/disposal-order.js";
-import type { ServiceWrapper } from "../core/services/service-wrapper.js";
+import {
+	resolveDependency,
+	type ServiceWrapper,
+} from "../core/services/service-wrapper.js";
 import {
 	type BorrowableSingletonSource,
 	type BorrowedSingletonReference,
 	borrowableSourceCapability,
 } from "./borrowed-singleton-capability.js";
 import type { ServiceContainer } from "./contracts/interfaces.js";
-import type { ServiceRegistry } from "./contracts/types.js";
+import type {
+	MultiRegistrationKey,
+	MultiRegistrationService,
+	ServiceRegistry,
+	SingleRegistrationKey,
+} from "./contracts/types.js";
 import type {
 	InterfaceToken,
 	InterfaceTokenService,
@@ -97,7 +105,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	get<TToken extends InterfaceToken<unknown, string>>(
 		token: RegisteredInterfaceToken<TRegistry, TToken>,
 	): InterfaceTokenService<TToken>;
-	get<K extends keyof TRegistry>(
+	get<K extends SingleRegistrationKey<TRegistry>>(
 		key: K extends InterfaceToken<unknown, string> ? never : K,
 	): TRegistry[K];
 	get(token: typeof ServiceContainerToken): ServiceContainer<TRegistry>;
@@ -114,67 +122,68 @@ export class Container<TRegistry extends ServiceRegistry>
 			);
 		}
 
-		const typeName = keyOrType;
+		if (this.multiRegistrations.has(keyOrType)) {
+			throw new Error(
+				`Key '${keyOrType}' has multiple registrations. Use getAll('${keyOrType}') to resolve them.`,
+			);
+		}
 
-		// Check multi-registrations first
+		return this.resolveSingle(keyOrType);
+	}
+
+	getAll<K extends string & MultiRegistrationKey<TRegistry>>(
+		key: K extends InterfaceToken<unknown, string> ? never : K,
+	): MultiRegistrationService<TRegistry[K]>[];
+	getAll(key: string): unknown[] {
+		this.ensureNotDisposed();
+		const typeName = String(key);
+
 		const multiResolvers = this.multiRegistrations.get(typeName);
 		if (multiResolvers) {
 			return this.resolveMulti(typeName, multiResolvers);
 		}
 
-		const resolver = this.registrations.get(typeName);
+		if (this.registrations.has(typeName)) {
+			throw new Error(
+				`Key '${typeName}' has a single registration. Use get('${typeName}') to resolve it.`,
+			);
+		}
+
+		throw new Error(`No service registered for key: ${typeName}`);
+	}
+
+	/**
+	 * Resolves one declared constructor dependency. A key with multiple
+	 * registrations resolves to all of its services.
+	 * @internal
+	 */
+	[resolveDependency](key: string): unknown {
+		this.ensureNotDisposed();
+
+		const multiResolvers = this.multiRegistrations.get(key);
+		return multiResolvers
+			? this.resolveMulti(key, multiResolvers)
+			: this.resolveSingle(key);
+	}
+
+	/** Resolves a key with one registration and wraps resolution failures. */
+	private resolveSingle(key: string): unknown {
+		const resolver = this.registrations.get(key);
 		if (!resolver) {
-			throw new Error(`No service registered for key: ${String(typeName)}`);
+			throw new Error(`No service registered for key: ${key}`);
 		}
 
 		try {
-			return this.trackResolution(typeName, () => resolver.resolve(this));
+			return this.trackResolution(key, () => resolver.resolve(this));
 		} catch (error) {
 			if (error instanceof CircularDependencyError) {
 				throw error;
 			}
 			throw new Error(
-				`Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
+				`Failed to resolve service ${key}: ${error instanceof Error ? error.message : String(error)}`,
 				{ cause: error },
 			);
 		}
-	}
-
-	getAll<TToken extends InterfaceToken<unknown, string>>(
-		token: RegisteredInterfaceToken<TRegistry, TToken>,
-	): InterfaceTokenService<TToken> extends (infer U)[]
-		? U[]
-		: InterfaceTokenService<TToken>[];
-	getAll<K extends string & keyof TRegistry>(
-		key: K extends InterfaceToken<unknown, string> ? never : K,
-	): TRegistry[K] extends (infer U)[] ? U[] : TRegistry[K][];
-	getAll(key: any): any[] {
-		this.ensureNotDisposed();
-		const typeName = String(key);
-
-		// Multi-registration key — resolve all wrappers
-		const multiResolvers = this.multiRegistrations.get(typeName);
-		if (multiResolvers) {
-			return this.resolveMulti(typeName, multiResolvers);
-		}
-
-		// Single-registration key — wrap in array
-		const resolver = this.registrations.get(typeName);
-		if (resolver) {
-			try {
-				return [this.trackResolution(typeName, () => resolver.resolve(this))];
-			} catch (error) {
-				if (error instanceof CircularDependencyError) {
-					throw error;
-				}
-				throw new Error(
-					`Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
-					{ cause: error },
-				);
-			}
-		}
-
-		throw new Error(`No service registered for key: ${String(typeName)}`);
 	}
 
 	startScope(): ServiceContainer<TRegistry> {

@@ -98,7 +98,8 @@ export default {
 				.addSingleton("plugins", Logger)
 				.addSingleton("plugins", Logger);
 
-			const registrationCount = b.count;
+			const keyCount = b.keyCount;
+			const registrationCount = b.registrationCount;
 			const wasRegistered = b.isRegistered("Logger");
 			const names = b.getRegisteredServiceNames();
 
@@ -118,6 +119,7 @@ export default {
 
 			return Response.json({
 				ok: true,
+				keyCount,
 				registrationCount,
 				wasRegistered,
 				namesLength: names.length,

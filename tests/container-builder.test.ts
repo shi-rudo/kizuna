@@ -418,16 +418,16 @@ describe("ContainerBuilder - Unified API", () => {
 
 	describe("Service Management", () => {
 		it("should track registration count", () => {
-			expect(builder.count).toBe(0);
+			expect(builder.keyCount).toBe(0);
 
 			builder.registerSingleton("Service1", TestService);
-			expect(builder.count).toBe(1);
+			expect(builder.keyCount).toBe(1);
 
 			builder.registerScoped("Service2", ServiceWithDependency, "Service1");
-			expect(builder.count).toBe(2);
+			expect(builder.keyCount).toBe(2);
 
 			builder.registerSingletonFactory("Service3", () => ({ value: 42 }));
-			expect(builder.count).toBe(3);
+			expect(builder.keyCount).toBe(3);
 		});
 
 		it("should check service registration status", () => {

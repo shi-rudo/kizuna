@@ -54,13 +54,66 @@ export type ObservedFactoryValue<T> =
  */
 export type ServiceRegistry = Record<string, any>;
 
+declare const multiRegistrationBrand: unique symbol;
+
+/**
+ * Registry entry for a key with multiple registrations from the `add*()`
+ * methods. `getAll()` resolves the key to `T[]`. `get()` does not accept it.
+ * A constructor dependency on the key receives `T[]`.
+ *
+ * @template T - The service type of one registration under the key
+ */
+export interface MultiRegistration<T> {
+	readonly [multiRegistrationBrand]: T;
+}
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * Only the `add*()` methods create a `MultiRegistration` entry. Every other
+ * entry is a single registration, including an entry typed `any` or `never`.
+ */
+type IsMultiRegistrationEntry<TEntry> =
+	IsAny<TEntry> extends true
+		? false
+		: [TEntry] extends [never]
+			? false
+			: [TEntry] extends [MultiRegistration<unknown>]
+				? true
+				: false;
+
+/** Keys of a registry that hold one registration. */
+export type SingleRegistrationKey<TRegistry> = {
+	[K in keyof TRegistry]: IsMultiRegistrationEntry<TRegistry[K]> extends true
+		? never
+		: K;
+}[keyof TRegistry];
+
+/** Keys of a registry that hold multiple registrations. */
+export type MultiRegistrationKey<TRegistry> = {
+	[K in keyof TRegistry]: IsMultiRegistrationEntry<TRegistry[K]> extends true
+		? K
+		: never;
+}[keyof TRegistry];
+
+/** Service type of one registration in a multi-registration entry. */
+export type MultiRegistrationService<TEntry> =
+	TEntry extends MultiRegistration<infer T> ? T : never;
+
+/**
+ * Value that a constructor dependency receives for a registry entry: the
+ * service itself, or all services of a multi-registration as an array.
+ */
+export type ResolvedDependency<TEntry> =
+	TEntry extends MultiRegistration<infer T> ? T[] : TEntry;
+
 /**
  * Utility type that adds a service to the registry under a multi-registration key.
  *
- * - If K is new, creates `Record<K, T[]>` (new multi-key).
- * - If K already exists and holds an array type, widens the union: `(U | T)[]`.
- * - If K already exists but is NOT an array (single-registration collision), resolves to `never`
- *   which produces a compile-time error.
+ * - If K is new, creates `Record<K, MultiRegistration<T>>`.
+ * - If K already holds a multi-registration, widens its service type to `U | T`.
+ * - If K already holds a single registration, resolves to `never`, which
+ *   produces a compile-time error.
  *
  * @template TRegistry - The current service registry
  * @template K - The string key for the service
@@ -71,10 +124,10 @@ export type AddToRegistry<
 	K extends string,
 	T,
 > = K extends keyof TRegistry
-	? TRegistry[K] extends (infer U)[]
-		? Omit<TRegistry, K> & Record<K, (U | T)[]>
+	? TRegistry[K] extends MultiRegistration<infer U>
+		? Omit<TRegistry, K> & Record<K, MultiRegistration<U | T>>
 		: never
-	: TRegistry & Record<K, T[]>;
+	: TRegistry & Record<K, MultiRegistration<T>>;
 
 /**
  * Type-safe registrar interface that provides simplified registration methods.

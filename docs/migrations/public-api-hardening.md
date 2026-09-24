@@ -20,6 +20,7 @@ It also exports these public types:
 - `RootServiceContainer`
 - `ServiceContainer`
 - `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
+- `MultiRegistration`
 - `InterfaceToken`
 - `DisposalFailure`
 - `DisposalOperation`
@@ -77,6 +78,60 @@ import { ServiceProviderToken, type TypeSafeServiceLocator } from '@shirudo/kizu
 // After
 import { ServiceContainerToken, type ServiceContainer } from '@shirudo/kizuna';
 ```
+
+## Single and Multi-Registration Resolution
+
+`get()` and `getAll()` now follow the registration method of the key:
+
+- `get()` resolves keys from `register*()` and interface tokens.
+- `getAll()` resolves keys from `add*()`.
+
+The wrong method fails at compile time. At runtime, it throws an error that
+names the correct method. Earlier versions returned an array from `get()` for an
+`add*()` key and wrapped a single registration in an array for `getAll()`.
+
+```typescript
+// Before
+const handlers = container.get('handlers');
+const [config] = container.getAll('config');
+
+// After
+const handlers = container.getAll('handlers');
+const config = container.get('config');
+```
+
+A constructor dependency on an `add*()` key still receives all services as an
+array. A factory must call `getAll()` for an `add*()` key.
+
+The registry type marks an `add*()` key as `MultiRegistration<T>` instead of
+`T[]`. Update hand-written registry types:
+
+```typescript
+// Before
+type Registry = { handlers: Handler[] };
+
+// After
+type Registry = { handlers: MultiRegistration<Handler> };
+```
+
+A helper function that is generic over its registry no longer compiles, because
+TypeScript cannot tell whether a key of a generic registry has one or multiple
+registrations. Give the helper an exact registry type instead:
+
+```typescript
+// Before
+function useLogger<R extends { logger: Logger }>(container: ServiceContainer<R>) {
+  return container.get('logger');
+}
+
+// After
+function useLogger(container: ServiceContainer<{ logger: Logger }>) {
+  return container.get('logger');
+}
+```
+
+The builder property `count` counted keys, not registrations. Use `keyCount` or
+`registrationCount`. `count` remains as a deprecated alias of `keyCount`.
 
 ## Builder Changes
 

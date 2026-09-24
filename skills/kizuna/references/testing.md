@@ -298,7 +298,8 @@ describe('Container inspection', () => {
 
     expect(builder.isRegistered('logger')).toBe(true);
     expect(builder.isRegistered('missing')).toBe(false);
-    expect(builder.count).toBe(2);
+    expect(builder.keyCount).toBe(2);
+    expect(builder.registrationCount).toBe(2);
   });
 });
 ```

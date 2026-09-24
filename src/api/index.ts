@@ -49,6 +49,7 @@ export type {
 	ServiceContainer,
 	TypeSafeServiceLocator,
 } from "./contracts/interfaces.js";
+export type { MultiRegistration } from "./contracts/types.js";
 export type { InterfaceToken } from "./interface-token.js";
 export { interfaceToken } from "./interface-token.js";
 export type {
