@@ -12,7 +12,7 @@ Request scoping creates a fresh set of scoped service instances per request whil
 
 Scoped services share one instance within the scope. Different scopes get different instances. Singletons are shared across all scopes.
 
-**Sync vs async disposal:** use `disposeAsync()` whenever any registered service has Promise-returning `dispose()` or implements `[Symbol.asyncDispose]` (DB connection pools, file handles, transaction rollback, queue producers). The sync variant invokes async handlers but does not await them — cleanup may still be running when the next operation begins. Some framework hooks (Express `res.on('finish')`, Fastify `done`-callback hooks) cannot `await` directly; those are noted inline.
+**Sync vs async disposal:** use `disposeAsync()` whenever any registered service has Promise-returning `dispose()` or implements `[Symbol.asyncDispose]` (DB connection pools, file handles, transaction rollback, queue producers). The sync variant starts async cleanup but cannot wait for it, and its `DisposalError` then contains a `TypeError`. Some framework hooks (Express `res.on('finish')`, Fastify `done`-callback hooks) cannot `await` directly; those are noted inline.
 
 ## Which framework pattern
 

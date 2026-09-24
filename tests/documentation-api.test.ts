@@ -296,15 +296,7 @@ ${example}
 		expect(strictTypeErrors(source, "multiple-containers")).toEqual([]);
 	});
 
-	it("keeps the packaged skill borrowing examples type-safe", () => {
-		const skill = readFileSync(
-			join(repositoryRoot, "skills", "kizuna", "SKILL.md"),
-			"utf8",
-		);
-		const skillExample = codeBlockAfter(
-			skill,
-			"### Borrow a singleton from another container",
-		);
+	it("keeps the packaged skill borrowing example type-safe", () => {
 		const reference = readFileSync(
 			join(
 				repositoryRoot,
@@ -315,7 +307,10 @@ ${example}
 			),
 			"utf8",
 		);
-		const referenceExample = codeBlockAfter(reference, "## Borrowed singleton");
+		const referenceExample = codeBlockAfter(
+			reference,
+			"## Borrowed singleton",
+		).replace("from '@shirudo/kizuna'", 'from "../src"');
 		const declarations = `
 class Logger {
     log(_message: string): void {}
@@ -330,16 +325,23 @@ class UserService {
 
 		expect(
 			strictTypeErrors(
-				`${declarations}\n${skillExample}`,
+				`${declarations}\n${referenceExample}`,
 				"skill-borrowed-singleton",
 			),
 		).toEqual([]);
-		expect(
-			strictTypeErrors(
-				`import { ContainerBuilder } from "../src";\n${declarations}\n${referenceExample}`,
-				"skill-registration-pattern",
-			),
-		).toEqual([]);
+	});
+
+	it("keeps the packaged skill core workflow example type-safe", () => {
+		const skill = readFileSync(
+			join(repositoryRoot, "skills", "kizuna", "SKILL.md"),
+			"utf8",
+		);
+		const example = codeBlockAfter(skill, "## Core workflow").replace(
+			"from '@shirudo/kizuna'",
+			'from "../src"',
+		);
+
+		expect(strictTypeErrors(example, "skill-core-workflow")).toEqual([]);
 	});
 
 	it("does not pass factories to constructor registration methods", () => {
