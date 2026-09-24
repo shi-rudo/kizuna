@@ -122,30 +122,13 @@ export class Container<TRegistry extends ServiceRegistry>
 			);
 		}
 
-		const typeName = keyOrType;
-
-		if (this.multiRegistrations.has(typeName)) {
+		if (this.multiRegistrations.has(keyOrType)) {
 			throw new Error(
-				`Key '${typeName}' has multiple registrations. Use getAll('${typeName}') to resolve them.`,
+				`Key '${keyOrType}' has multiple registrations. Use getAll('${keyOrType}') to resolve them.`,
 			);
 		}
 
-		const resolver = this.registrations.get(typeName);
-		if (!resolver) {
-			throw new Error(`No service registered for key: ${String(typeName)}`);
-		}
-
-		try {
-			return this.trackResolution(typeName, () => resolver.resolve(this));
-		} catch (error) {
-			if (error instanceof CircularDependencyError) {
-				throw error;
-			}
-			throw new Error(
-				`Failed to resolve service ${String(typeName)}: ${error instanceof Error ? error.message : String(error)}`,
-				{ cause: error },
-			);
-		}
+		return this.resolveSingle(keyOrType);
 	}
 
 	getAll<K extends string & MultiRegistrationKey<TRegistry>>(
@@ -175,9 +158,32 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * @internal
 	 */
 	[resolveDependency](key: string): unknown {
-		return this.multiRegistrations.has(key)
-			? this.getAll(key as never)
-			: this.get(key as never);
+		this.ensureNotDisposed();
+
+		const multiResolvers = this.multiRegistrations.get(key);
+		return multiResolvers
+			? this.resolveMulti(key, multiResolvers)
+			: this.resolveSingle(key);
+	}
+
+	/** Resolves a key with one registration and wraps resolution failures. */
+	private resolveSingle(key: string): unknown {
+		const resolver = this.registrations.get(key);
+		if (!resolver) {
+			throw new Error(`No service registered for key: ${key}`);
+		}
+
+		try {
+			return this.trackResolution(key, () => resolver.resolve(this));
+		} catch (error) {
+			if (error instanceof CircularDependencyError) {
+				throw error;
+			}
+			throw new Error(
+				`Failed to resolve service ${key}: ${error instanceof Error ? error.message : String(error)}`,
+				{ cause: error },
+			);
+		}
 	}
 
 	startScope(): ServiceContainer<TRegistry> {
