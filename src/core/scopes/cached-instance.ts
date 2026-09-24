@@ -1,4 +1,4 @@
-import type { DisposalMode } from "../contracts.js";
+import type { DisposalMode, FactoryArguments } from "../contracts.js";
 import { ContainerDisposedError } from "../errors.js";
 import {
 	invokeAsyncDispose,
@@ -84,43 +84,60 @@ export class CachedInstance {
 	}
 
 	/**
-	 * Returns the cached value, or creates it with the factory arguments on the
-	 * first request. The caller passes the arguments as one array, so a cache
-	 * hit does not copy them again.
+	 * Returns the cached value, or creates it on the first request. It resolves
+	 * the factory arguments only when it creates the value.
 	 */
-	public getInstance<T>(args: readonly unknown[]): T {
+	public getInstance<T>(resolveArguments: FactoryArguments): T {
+		this.requireFactory();
+		if (!this._initialized) {
+			const args = resolveArguments();
+			// Resolving the arguments can close this lifecycle, or create its value
+			// through another container.
+			const factory = this.requireFactory();
+			if (!this._initialized) {
+				this.create(factory, args);
+			}
+		}
+
+		return this._instance as T;
+	}
+
+	/** Returns the factory, or throws if this lifecycle cannot resolve. */
+	private requireFactory(): (...args: any[]) => any {
 		if (this._closedBy) {
 			throw new ContainerDisposedError(this.disposedMessage());
 		}
 		if (!this._factory) {
 			throw new Error("No factory registered for this lifecycle");
 		}
+		return this._factory;
+	}
 
-		if (!this._initialized) {
-			// A factory error propagates unchanged. The container wraps it once.
-			let factoryValue: unknown;
-			this._pendingCreations++;
-			try {
-				factoryValue = this._factory(...args);
-			} finally {
-				this._pendingCreations--;
-			}
-			if (this._closedBy) {
-				// The factory disposed its own container. Nothing owns the new value.
-				throw this.discardValueCreatedAfterClose(factoryValue, this._closedBy);
-			}
-			const instance = observePromiseRejection(factoryValue, () => {
-				// Until its own cleanup starts, a rejected value leaves the cache.
-				if (!this._isDisposed && this._instance === instance) {
-					this._instance = undefined;
-					this._initialized = false;
-				}
-			});
-			this._instance = instance;
-			this._initialized = true;
+	private create(
+		factory: (...args: any[]) => any,
+		args: readonly unknown[],
+	): void {
+		// A factory error propagates unchanged. The container wraps it once.
+		let factoryValue: unknown;
+		this._pendingCreations++;
+		try {
+			factoryValue = factory(...args);
+		} finally {
+			this._pendingCreations--;
 		}
-
-		return this._instance as T;
+		if (this._closedBy) {
+			// The factory disposed its own container. Nothing owns the new value.
+			throw this.discardValueCreatedAfterClose(factoryValue, this._closedBy);
+		}
+		const instance = observePromiseRejection(factoryValue, () => {
+			// Until its own cleanup starts, a rejected value leaves the cache.
+			if (!this._isDisposed && this._instance === instance) {
+				this._instance = undefined;
+				this._initialized = false;
+			}
+		});
+		this._instance = instance;
+		this._initialized = true;
 	}
 
 	/**
