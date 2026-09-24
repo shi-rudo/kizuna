@@ -56,7 +56,7 @@ export function invokeSyncDispose(instance: unknown): unknown {
  * @returns True if the result was asynchronous
  * @internal
  */
-export function continueWithoutWaiting(result: unknown): boolean {
+function continueWithoutWaiting(result: unknown): boolean {
 	if (isPromiseLike(result)) {
 		void Promise.resolve(result).catch(() => undefined);
 		return true;

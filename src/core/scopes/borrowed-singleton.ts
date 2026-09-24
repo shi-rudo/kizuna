@@ -39,7 +39,7 @@ export class BorrowedSingletonLifecycle implements ServiceLifecycle {
 	}
 
 	dispose(): void {
-		this.reference = null;
+		this.close();
 	}
 
 	async disposeAsync(): Promise<void> {

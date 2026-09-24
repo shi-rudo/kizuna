@@ -1,7 +1,6 @@
 import type { DisposalMode } from "../contracts.js";
 import { ContainerDisposedError } from "../errors.js";
 import {
-	continueWithoutWaiting,
 	invokeAsyncDispose,
 	invokeSyncDispose,
 	isPromiseLike,
@@ -189,10 +188,11 @@ export class CachedInstance {
 		closedBy: DisposalMode,
 	): ContainerDisposedError {
 		if (closedBy === "async") {
+			const isPromiseValue = isPromiseLike(value);
 			const cleanup = invokeAsyncDispose(value);
 			// Mark a rejection as handled now; disposeAsync() still awaits it.
-			continueWithoutWaiting(cleanup);
-			if (!isPromiseLike(value)) {
+			void cleanup.catch(() => undefined);
+			if (!isPromiseValue) {
 				this._lateCleanup = cleanup;
 			}
 			return new ContainerDisposedError(this.disposedMessage());
