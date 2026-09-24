@@ -67,16 +67,31 @@ export interface MultiRegistration<T> {
 	readonly [multiRegistrationBrand]: T;
 }
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * Only the `add*()` methods create a `MultiRegistration` entry. Every other
+ * entry is a single registration, including an entry typed `any` or `never`.
+ */
+type IsMultiRegistrationEntry<TEntry> =
+	IsAny<TEntry> extends true
+		? false
+		: [TEntry] extends [never]
+			? false
+			: [TEntry] extends [MultiRegistration<unknown>]
+				? true
+				: false;
+
 /** Keys of a registry that hold one registration. */
 export type SingleRegistrationKey<TRegistry> = {
-	[K in keyof TRegistry]: TRegistry[K] extends MultiRegistration<unknown>
+	[K in keyof TRegistry]: IsMultiRegistrationEntry<TRegistry[K]> extends true
 		? never
 		: K;
 }[keyof TRegistry];
 
 /** Keys of a registry that hold multiple registrations. */
 export type MultiRegistrationKey<TRegistry> = {
-	[K in keyof TRegistry]: TRegistry[K] extends MultiRegistration<unknown>
+	[K in keyof TRegistry]: IsMultiRegistrationEntry<TRegistry[K]> extends true
 		? K
 		: never;
 }[keyof TRegistry];

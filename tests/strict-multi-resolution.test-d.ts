@@ -85,6 +85,40 @@ test("factories resolve multi-registrations through getAll()", () => {
 		});
 });
 
+test("a register*() key typed any accepts only get()", () => {
+	const raw = '{"debug":true}';
+	const parsed = new ContainerBuilder()
+		.registerSingletonFactory("cfg", () => JSON.parse(raw))
+		.build();
+
+	expectTypeOf(parsed.get("cfg")).toBeAny();
+	// @ts-expect-error A register*() key typed any still requires get().
+	parsed.getAll("cfg");
+});
+
+test("an add*() key with services typed any accepts only getAll()", () => {
+	const raw = '{"debug":true}';
+	const parsed = new ContainerBuilder()
+		.addSingletonFactory("configs", () => JSON.parse(raw))
+		.build();
+
+	expectTypeOf(parsed.getAll("configs")).toEqualTypeOf<any[]>();
+	// @ts-expect-error An add*() key typed any still requires getAll().
+	parsed.get("configs");
+});
+
+test("a register*() key typed never accepts only get()", () => {
+	const placeholder = new ContainerBuilder()
+		.registerSingletonFactory("todo", (): never => {
+			throw new Error("not implemented");
+		})
+		.build();
+
+	expectTypeOf(placeholder.get("todo")).toBeNever();
+	// @ts-expect-error A register*() key typed never still requires get().
+	placeholder.getAll("todo");
+});
+
 test("the registry marks multi-registration keys", () => {
 	const typed: ServiceContainer<{
 		logger: Logger;
