@@ -31,7 +31,7 @@ export interface ServiceLifecycle {
 	 * The mode tells a lifecycle how to clean up a value that a running factory
 	 * still returns.
 	 */
-	close?(mode: DisposalMode): void;
+	close(mode: DisposalMode): void;
 	dispose(): void;
 	disposeAsync(): Promise<void>;
 }

@@ -64,6 +64,9 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 */
 	private _isDisposed = false;
 
+	/** Set once the owning container starts its disposal. */
+	private _isClosed = false;
+
 	/**
 	 * Sets the factory function that will be used to create new instances.
 	 *
@@ -121,21 +124,34 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * ```
 	 */
 	public getInstance<T>(resolveArguments: FactoryArguments): T {
-		this.requireFactory();
+		this.assertOpen();
 		const args = resolveArguments();
-		// Resolving the arguments can dispose this lifecycle.
+		// Resolving the arguments can close this lifecycle.
 		const factory = this.requireFactory();
 		// A factory error propagates unchanged. The container wraps it once.
 		return factory(...args) as T;
 	}
 
-	/** Returns the factory, or throws if this lifecycle cannot resolve. */
-	private requireFactory(): (...args: any[]) => any {
-		if (this._isDisposed) {
+	/**
+	 * Stops new resolutions before the owning container starts its cleanup.
+	 * The lifecycle does not track its values, so a running factory still
+	 * returns its value to the caller.
+	 */
+	public close(): void {
+		this._isClosed = true;
+	}
+
+	private assertOpen(): void {
+		if (this._isClosed) {
 			throw new ContainerDisposedError(
 				"Cannot resolve from a disposed transient lifecycle",
 			);
 		}
+	}
+
+	/** Returns the factory of an open lifecycle. */
+	private requireFactory(): (...args: any[]) => any {
+		this.assertOpen();
 		if (!this._factory) {
 			throw new Error("No factory registered for this lifecycle");
 		}
@@ -220,6 +236,7 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 */
 	public dispose(): void {
 		if (!this._isDisposed) {
+			this.close();
 			this._factory = null;
 			this._isDisposed = true;
 		}

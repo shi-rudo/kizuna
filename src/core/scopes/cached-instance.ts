@@ -88,7 +88,7 @@ export class CachedInstance {
 	 * the factory arguments only when it creates the value.
 	 */
 	public getInstance<T>(resolveArguments: FactoryArguments): T {
-		this.requireFactory();
+		this.assertOpen();
 		if (!this._initialized) {
 			const args = resolveArguments();
 			// Resolving the arguments can close this lifecycle, or create its value
@@ -102,11 +102,15 @@ export class CachedInstance {
 		return this._instance as T;
 	}
 
-	/** Returns the factory, or throws if this lifecycle cannot resolve. */
-	private requireFactory(): (...args: any[]) => any {
+	private assertOpen(): void {
 		if (this._closedBy) {
 			throw new ContainerDisposedError(this.disposedMessage());
 		}
+	}
+
+	/** Returns the factory of an open lifecycle. */
+	private requireFactory(): (...args: any[]) => any {
+		this.assertOpen();
 		if (!this._factory) {
 			throw new Error("No factory registered for this lifecycle");
 		}

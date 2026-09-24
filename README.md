@@ -980,8 +980,9 @@ A `DisposalError` from `dispose()` contains a `TypeError` for a service whose
 cleanup needs a Promise. Use `disposeAsync()` for such services.
 
 `dispose()` and `disposeAsync()` close a container before they run any cleanup.
-From then on, the container and the singletons it owns reject resolution. A
-call on the disposed container itself throws `ContainerDisposedError`. When a
+From then on, the container and all of its registrations reject resolution,
+also when a dependency starts the disposal while a service resolves. A call on
+the disposed container itself throws `ContainerDisposedError`. When a
 live container or scope meets another disposed container, for example a scope
 that requests a singleton of a disposed root container, it throws a
 `ServiceResolutionError` with the key it resolved and the

@@ -19,6 +19,10 @@ class Repository {
 	}
 }
 
+class Service {
+	constructor(readonly repository: Repository) {}
+}
+
 const captureError = (action: () => unknown): unknown => {
 	try {
 		action();
@@ -105,6 +109,25 @@ describe("dependencies of a cached service", () => {
 			.build();
 
 		const error = captureError(() => container.get("repository"));
+
+		expect(error).toBeInstanceOf(ContainerDisposedError);
+		expect(Repository.created).toBe(0);
+	});
+
+	it("do not create a transient service when a dependency starts disposeAsync() of the container", async () => {
+		resetCounters();
+		let pending: Promise<void> | undefined;
+		const container = new ContainerBuilder()
+			.registerTransientFactory("connection", (current) => {
+				pending = current.disposeAsync();
+				return new Connection();
+			})
+			.registerTransient("repository", Repository, "connection")
+			.registerSingleton("service", Service, "repository")
+			.build();
+
+		const error = captureError(() => container.get("repository"));
+		await pending;
 
 		expect(error).toBeInstanceOf(ContainerDisposedError);
 		expect(Repository.created).toBe(0);

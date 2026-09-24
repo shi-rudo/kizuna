@@ -123,7 +123,7 @@ export class ServiceWrapper {
 	 */
 	close(mode: DisposalMode): void {
 		if (this._lifecycle && this._ownsLifecycle) {
-			this._lifecycle.close?.(mode);
+			this._lifecycle.close(mode);
 		}
 	}
 
