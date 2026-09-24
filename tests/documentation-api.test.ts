@@ -499,6 +499,7 @@ describe("published feature evidence", () => {
 			"RootServiceContainer",
 			"ServiceContainer",
 			"TypeSafeServiceLocator",
+			"MultiRegistration",
 			"InterfaceToken",
 			"DisposalFailure",
 			"DisposalOperation",
