@@ -62,18 +62,19 @@ export class ServiceWrapper {
 			);
 		}
 
+		return this._lifecycle.getInstance(() => this.factoryArguments(container));
+	}
+
+	/**
+	 * Returns the arguments of a factory call: the container for a factory
+	 * registration, or the resolved dependencies for a constructor.
+	 */
+	private factoryArguments(container: ServiceResolver): readonly unknown[] {
 		if (!this.isConstructorBased()) {
-			return this._lifecycle.getInstance(container);
+			return [container];
 		}
-
-		if (this._dependencies.length === 0) {
-			return this._lifecycle.getInstance();
-		}
-
-		return this._lifecycle.getInstance(
-			...this._dependencies.map((dependency) =>
-				container[resolveDependency](dependency),
-			),
+		return this._dependencies.map((dependency) =>
+			container[resolveDependency](dependency),
 		);
 	}
 
@@ -122,7 +123,7 @@ export class ServiceWrapper {
 	 */
 	close(mode: DisposalMode): void {
 		if (this._lifecycle && this._ownsLifecycle) {
-			this._lifecycle.close?.(mode);
+			this._lifecycle.close(mode);
 		}
 	}
 

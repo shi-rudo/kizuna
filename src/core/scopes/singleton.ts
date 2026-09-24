@@ -1,6 +1,7 @@
 import type {
 	ConfigurableServiceLifecycle,
 	DisposalMode,
+	FactoryArguments,
 } from "../contracts.js";
 import { CachedInstance } from "./cached-instance.js";
 
@@ -76,15 +77,12 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	/**
 	 * Gets or creates the singleton instance.
 	 *
-	 * On the first call, this method creates the instance using the registered factory
-	 * and stores it for future use. All subsequent calls return the same instance,
-	 * regardless of the arguments passed.
-	 *
-	 * **Note:** Arguments are only used during the first creation. Subsequent calls
-	 * ignore any provided arguments and return the existing instance.
+	 * On the first call, this method resolves the factory arguments, creates the
+	 * instance using the registered factory, and stores it for future use. All
+	 * subsequent calls return the same instance without resolving arguments.
 	 *
 	 * @template T - The type of the service instance
-	 * @param {...any[]} args - Arguments to pass to the factory function (only used on first call)
+	 * @param resolveArguments - Resolves the factory arguments (only called on creation)
 	 * @returns {T} The singleton instance
 	 * @throws {Error} If the lifecycle has been disposed
 	 * @throws {Error} If no factory has been registered
@@ -95,16 +93,16 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * const lifecycle = new SingletonLifecycle();
 	 * lifecycle.setFactory((config) => new DatabaseService(config));
 	 *
-	 * // First call - creates the instance
-	 * const db1 = lifecycle.getInstance('connection-string');
+	 * // First call - resolves the arguments and creates the instance
+	 * const db1 = lifecycle.getInstance(() => ['connection-string']);
 	 *
-	 * // Subsequent calls - returns same instance (ignores arguments)
-	 * const db2 = lifecycle.getInstance('different-string');
+	 * // Subsequent calls - return the same instance without resolving arguments
+	 * const db2 = lifecycle.getInstance(() => ['different-string']);
 	 * console.log(db1 === db2); // true
 	 * ```
 	 */
-	public getInstance<T>(...args: any[]): T {
-		return this._cache.getInstance<T>(args);
+	public getInstance<T>(resolveArguments: FactoryArguments): T {
+		return this._cache.getInstance<T>(resolveArguments);
 	}
 
 	/**
@@ -127,9 +125,9 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 *
 	 * // All scopes return the same singleton instance
 	 * lifecycle.setFactory(() => new ConfigService());
-	 * const config1 = lifecycle.getInstance();
-	 * const config2 = scope1.getInstance();
-	 * const config3 = scope2.getInstance();
+	 * const config1 = lifecycle.getInstance(() => []);
+	 * const config2 = scope1.getInstance(() => []);
+	 * const config3 = scope2.getInstance(() => []);
 	 * console.log(config1 === config2 && config2 === config3); // true
 	 * ```
 	 */

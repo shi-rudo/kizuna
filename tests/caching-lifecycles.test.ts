@@ -8,6 +8,8 @@ const cachingLifecycles = [
 	{ lifetime: "scoped", create: () => new ScopedLifecycle() },
 ] as const;
 
+const noArguments = (): readonly unknown[] => [];
+
 const captureError = (action: () => unknown): unknown => {
 	try {
 		action();
@@ -38,13 +40,13 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		expect(factory).not.toHaveBeenCalled();
 	});
 
-	it("creates the instance once and ignores later arguments", () => {
+	it("creates the instance once and does not resolve arguments again", () => {
 		const lifecycle = create();
 		const factory = vi.fn((name: string) => ({ name }));
 		lifecycle.setFactory(factory);
 
-		const first = lifecycle.getInstance("first");
-		const second = lifecycle.getInstance("second");
+		const first = lifecycle.getInstance(() => ["first"]);
+		const second = lifecycle.getInstance(() => ["second"]);
 
 		expect(second).toBe(first);
 		expect(first).toEqual({ name: "first" });
@@ -58,7 +60,7 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 	});
 
 	it("requires a factory before resolution", () => {
-		expect(() => create().getInstance()).toThrow(
+		expect(() => create().getInstance(noArguments)).toThrow(
 			"No factory registered for this lifecycle",
 		);
 	});
@@ -74,10 +76,10 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 			.mockReturnValue("value");
 		lifecycle.setFactory(factory);
 
-		const error = captureError(() => lifecycle.getInstance());
+		const error = captureError(() => lifecycle.getInstance(noArguments));
 
 		expect(error).toBe(failure);
-		expect(lifecycle.getInstance()).toBe("value");
+		expect(lifecycle.getInstance(noArguments)).toBe("value");
 		expect(factory).toHaveBeenCalledTimes(2);
 	});
 
@@ -87,7 +89,9 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 			throw "offline";
 		});
 
-		expect(captureError(() => lifecycle.getInstance())).toBe("offline");
+		expect(captureError(() => lifecycle.getInstance(noArguments))).toBe(
+			"offline",
+		);
 	});
 
 	it("passes a circular dependency error through unchanged", () => {
@@ -97,7 +101,7 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 			throw cycle;
 		});
 
-		expect(captureError(() => lifecycle.getInstance())).toBe(cycle);
+		expect(captureError(() => lifecycle.getInstance(noArguments))).toBe(cycle);
 	});
 
 	it("clears a rejected factory Promise and calls the factory again", async () => {
@@ -108,8 +112,8 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 			.mockImplementation(() => Promise.resolve("online"));
 		lifecycle.setFactory(factory);
 
-		await expect(lifecycle.getInstance()).rejects.toThrow("offline");
-		await expect(lifecycle.getInstance()).resolves.toBe("online");
+		await expect(lifecycle.getInstance(noArguments)).rejects.toThrow("offline");
+		await expect(lifecycle.getInstance(noArguments)).resolves.toBe("online");
 		expect(factory).toHaveBeenCalledTimes(2);
 	});
 
@@ -118,10 +122,10 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		const factory = vi.fn(() => Promise.resolve({}));
 		lifecycle.setFactory(factory);
 
-		const first = lifecycle.getInstance<Promise<object>>();
+		const first = lifecycle.getInstance<Promise<object>>(noArguments);
 		await first;
 
-		expect(lifecycle.getInstance()).toBe(first);
+		expect(lifecycle.getInstance(noArguments)).toBe(first);
 		expect(factory).toHaveBeenCalledTimes(1);
 	});
 
@@ -140,14 +144,14 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		const lifecycle = create();
 		const cleanup = vi.fn();
 		lifecycle.setFactory(() => ({ dispose: cleanup }));
-		lifecycle.getInstance();
+		lifecycle.getInstance(noArguments);
 
 		lifecycle.dispose();
 		lifecycle.dispose();
 
 		expect(cleanup).toHaveBeenCalledTimes(1);
 		expect(lifecycle.isDisposed).toBe(true);
-		expect(() => lifecycle.getInstance()).toThrow(
+		expect(() => lifecycle.getInstance(noArguments)).toThrow(
 			`Cannot resolve from a disposed ${lifetime} lifecycle`,
 		);
 		expect(() => lifecycle.setFactory(() => ({}))).toThrow(
@@ -161,7 +165,7 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 			throw new Error("cleanup failed");
 		});
 		lifecycle.setFactory(() => ({ dispose: cleanup }));
-		lifecycle.getInstance();
+		lifecycle.getInstance(noArguments);
 
 		expect(() => lifecycle.dispose()).toThrow("cleanup failed");
 		lifecycle.dispose();
@@ -175,7 +179,7 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		lifecycle.setFactory(() => ({
 			async [Symbol.asyncDispose]() {},
 		}));
-		lifecycle.getInstance();
+		lifecycle.getInstance(noArguments);
 
 		expect(() => lifecycle.dispose()).toThrow(TypeError);
 		expect(lifecycle.isDisposed).toBe(true);
@@ -190,13 +194,13 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 				events.push("disposed");
 			},
 		}));
-		lifecycle.getInstance();
+		lifecycle.getInstance(noArguments);
 
 		await lifecycle.disposeAsync();
 		await lifecycle.disposeAsync();
 
 		expect(events).toEqual(["disposed"]);
-		expect(() => lifecycle.getInstance()).toThrow(
+		expect(() => lifecycle.getInstance(noArguments)).toThrow(
 			`Cannot resolve from a disposed ${lifetime} lifecycle`,
 		);
 	});
@@ -205,7 +209,7 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		const lifecycle = create();
 		const cleanup = vi.fn();
 		lifecycle.setFactory(() => Promise.resolve({ dispose: cleanup }));
-		lifecycle.getInstance();
+		lifecycle.getInstance(noArguments);
 
 		await lifecycle.disposeAsync();
 
@@ -235,28 +239,28 @@ describe("scoped lifecycle scopes", () => {
 		const lifecycle = new ScopedLifecycle();
 		const factory = vi.fn(() => ({}));
 		lifecycle.setFactory(factory);
-		const parentValue = lifecycle.getInstance();
+		const parentValue = lifecycle.getInstance(noArguments);
 
 		const scope = lifecycle.createScope();
-		const scopeValue = scope.getInstance();
+		const scopeValue = scope.getInstance(noArguments);
 
 		expect(scope).toBeInstanceOf(ScopedLifecycle);
 		expect(scope).not.toBe(lifecycle);
 		expect(scopeValue).not.toBe(parentValue);
-		expect(scope.getInstance()).toBe(scopeValue);
+		expect(scope.getInstance(noArguments)).toBe(scopeValue);
 		expect(factory).toHaveBeenCalledTimes(2);
 	});
 
 	it("keeps the parent usable after a scope is disposed", () => {
 		const lifecycle = new ScopedLifecycle();
 		lifecycle.setFactory(() => ({}));
-		const parentValue = lifecycle.getInstance();
+		const parentValue = lifecycle.getInstance(noArguments);
 		const scope = lifecycle.createScope();
 
 		scope.dispose();
 
 		expect(lifecycle.isDisposed).toBe(false);
-		expect(lifecycle.getInstance()).toBe(parentValue);
+		expect(lifecycle.getInstance(noArguments)).toBe(parentValue);
 	});
 
 	it("requires a factory to create a scope", () => {
