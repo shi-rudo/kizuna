@@ -1,4 +1,3 @@
-import type { DisposalMode } from "../core/contracts.js";
 import {
 	CircularDependencyError,
 	ContainerDisposedError,
@@ -16,7 +15,6 @@ import {
 	createDisposalPlan,
 } from "../core/services/disposal-order.js";
 import {
-	type AdoptServiceCleanup,
 	resolveDependency,
 	type ServiceWrapper,
 } from "../core/services/service-wrapper.js";
@@ -181,10 +179,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		try {
 			return this.trackResolution(key, () => resolver.resolve(this));
 		} catch (error) {
-			if (
-				error instanceof CircularDependencyError ||
-				error instanceof ContainerDisposedError
-			) {
+			if (this.passesThrough(error)) {
 				throw error;
 			}
 			throw new ServiceResolutionError(key, error);
@@ -290,7 +285,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			return;
 		}
 		this._disposed = true;
-		this.closeOwnedLifecycles("sync", () => undefined);
+		this.closeOwnedLifecycles();
 
 		const failures: DisposalFailure[] = [];
 		try {
@@ -329,17 +324,12 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 		this._disposed = true;
 		const lateCleanups: Promise<DisposalFailure | undefined>[] = [];
-		this.closeOwnedLifecycles("async", (serviceKey, lifetime, cleanup) => {
+		this.closeOwnedLifecycles((resolver, cleanup) => {
 			lateCleanups.push(
 				cleanup.then(
 					() => undefined,
 					(error: unknown) =>
-						Object.freeze({
-							serviceKey,
-							lifetime,
-							operation: "disposeAsync" as const,
-							error,
-						}),
+						this.createDisposalFailure(resolver, "disposeAsync", error),
 				),
 			);
 		});
@@ -438,11 +428,10 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * disposes its own container then cannot hand out a value.
 	 */
 	private closeOwnedLifecycles(
-		mode: DisposalMode,
-		adopt: AdoptServiceCleanup,
+		adopt?: (resolver: ServiceWrapper, cleanup: Promise<void>) => void,
 	): void {
 		for (const resolver of this.registrationOrder) {
-			resolver.close(mode, adopt);
+			resolver.close(adopt);
 		}
 	}
 
@@ -490,14 +479,23 @@ export class Container<TRegistry extends ServiceRegistry>
 				resolvers.map((resolver) => resolver.resolve(this)),
 			);
 		} catch (error) {
-			if (
-				error instanceof CircularDependencyError ||
-				error instanceof ContainerDisposedError
-			) {
+			if (this.passesThrough(error)) {
 				throw error;
 			}
 			throw new ServiceResolutionError(typeName, error, "multi");
 		}
+	}
+
+	/**
+	 * A cycle error keeps its chain unwrapped. A disposal error stays unwrapped
+	 * only when this container itself is disposed; otherwise the caller needs
+	 * the key of the service that met another disposed container.
+	 */
+	private passesThrough(error: unknown): boolean {
+		return (
+			error instanceof CircularDependencyError ||
+			(error instanceof ContainerDisposedError && this._disposed)
+		);
 	}
 
 	/**

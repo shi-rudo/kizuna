@@ -152,9 +152,12 @@ A `ServiceResolutionError` holds the original error as its `cause`. If a
 dependency fails, the `cause` is the error of that dependency.
 
 `dispose()` and `disposeAsync()` close the container before any cleanup runs.
-A resolution that meets a closed container throws `ContainerDisposedError`
-directly, never wrapped. If a factory disposes its own container, Kizuna cleans
-up the new value instead of returning it.
+A call on the disposed container throws `ContainerDisposedError`. A live scope
+that meets a disposed container, for example through a root singleton, throws
+`ServiceResolutionError` with the `ContainerDisposedError` as `cause`. If a
+singleton or scoped factory disposes its own container, Kizuna cleans up the new
+value instead of returning it. `disposeAsync()` does not wait for a Promise
+value from such a factory, because the factory can wait for `disposeAsync()`.
 
 ## Runtime consistency
 

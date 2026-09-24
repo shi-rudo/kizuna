@@ -130,7 +130,8 @@ export async function invokeAsyncDispose(instance: unknown): Promise<void> {
 	}
 }
 
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+/** @internal */
+export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 	return (
 		value !== null &&
 		(typeof value === "object" || typeof value === "function") &&

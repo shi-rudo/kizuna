@@ -1,20 +1,9 @@
 import type {
-	DisposalMode,
 	ServiceLifecycle,
 	ServiceLifetime,
 	ServiceValueOwnership,
 } from "../contracts.js";
-
-/**
- * Takes over the cleanup of a value that a factory returned after its
- * lifecycle closed, together with the key and lifetime of its registration.
- * @internal
- */
-export type AdoptServiceCleanup = (
-	serviceKey: string,
-	lifetime: ServiceLifetime,
-	cleanup: Promise<void>,
-) => void;
+import { ContainerDisposedError } from "../errors.js";
 
 /**
  * Resolves one declared constructor dependency. A key with multiple
@@ -67,7 +56,9 @@ export class ServiceWrapper {
 	 */
 	resolve(container: ServiceResolver): any {
 		if (!this._lifecycle) {
-			throw new Error(`Cannot resolve disposed service '${this._name}'`);
+			throw new ContainerDisposedError(
+				`Cannot resolve disposed service '${this._name}'`,
+			);
 		}
 
 		if (!this.isConstructorBased()) {
@@ -128,10 +119,12 @@ export class ServiceWrapper {
 	 * Stops new resolutions of an owned lifecycle before the container starts
 	 * its cleanup. A late cleanup is reported with this service's key.
 	 */
-	close(mode: DisposalMode, adopt: AdoptServiceCleanup): void {
+	close(
+		adopt?: (resolver: ServiceWrapper, cleanup: Promise<void>) => void,
+	): void {
 		if (this._lifecycle && this._ownsLifecycle) {
-			this._lifecycle.close?.(mode, (cleanup) =>
-				adopt(this._name, this._lifetime, cleanup),
+			this._lifecycle.close?.(
+				adopt ? (cleanup) => adopt(this, cleanup) : undefined,
 			);
 		}
 	}

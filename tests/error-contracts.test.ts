@@ -155,7 +155,7 @@ describe("resolution error contracts", () => {
 		expect(error).toMatchObject({ code: "CONTAINER_DISPOSED" });
 	});
 
-	it("reports a singleton of a disposed root container as CONTAINER_DISPOSED", () => {
+	it("wraps a singleton of a disposed root container for a live scope", () => {
 		const container = new ContainerBuilder()
 			.registerSingleton("logger", Logger)
 			.build();
@@ -164,8 +164,11 @@ describe("resolution error contracts", () => {
 
 		const error = captureError(() => scope.get("logger"));
 
-		expect(error).toBeInstanceOf(ContainerDisposedError);
-		expect(error).toMatchObject({ code: "CONTAINER_DISPOSED" });
+		expect(error).toBeInstanceOf(ServiceResolutionError);
+		expect(error).toMatchObject({ key: "logger" });
+		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
+			ContainerDisposedError,
+		);
 	});
 
 	it("keeps a code on circular dependency errors", () => {

@@ -3,6 +3,7 @@ import {
 	ContainerBuilder,
 	ContainerDisposedError,
 	DisposalError,
+	ServiceResolutionError,
 } from "../src";
 
 class Logger {}
@@ -25,6 +26,20 @@ const settle = (promise: Promise<unknown> | undefined): Promise<unknown> =>
 		() => undefined,
 		(error: unknown) => error,
 	);
+
+const settledWithin = (
+	promise: Promise<unknown> | undefined,
+	milliseconds: number,
+): Promise<"settled" | "pending"> =>
+	Promise.race([
+		Promise.resolve(promise).then(
+			() => "settled" as const,
+			() => "settled" as const,
+		),
+		new Promise<"pending">((resolve) =>
+			setTimeout(() => resolve("pending"), milliseconds),
+		),
+	]);
 
 const flushMicrotasks = async (): Promise<void> => {
 	for (let round = 0; round < 5; round++) {
@@ -186,26 +201,111 @@ describe("a factory that calls disposeAsync() on its own container", () => {
 		]);
 	});
 
-	it("reports a rejected factory Promise in the DisposalError", async () => {
-		const failure = new Error("connect failed");
+	it("settles when an async factory awaits disposeAsync() of its own container", async () => {
+		let pending: Promise<void> | undefined;
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("resource", async (current) => {
+				pending = current.disposeAsync();
+				await pending;
+				return {};
+			})
+			.build();
+
+		const error = captureError(() => container.get("resource"));
+
+		expect(error).toBeInstanceOf(ContainerDisposedError);
+		expect(await settledWithin(pending, 100)).toBe("settled");
+	});
+
+	it("does not wait for a Promise value and does not report its rejection", async () => {
 		let pending: Promise<void> | undefined;
 		const container = new ContainerBuilder()
 			.registerSingletonFactory("connection", (current) => {
 				pending = current.disposeAsync();
-				return Promise.reject(failure);
+				return Promise.reject(new Error("connect failed"));
 			})
 			.build();
 
 		captureError(() => container.get("connection"));
-		const disposalError = await settle(pending);
 
-		expect(disposalError).toBeInstanceOf(DisposalError);
-		expect((disposalError as DisposalError).errors).toContain(failure);
+		expect(await settle(pending)).toBeUndefined();
+	});
+
+	it("does not report a factory Promise that rejected before its cleanup started", async () => {
+		let rejectConnection: ((error: Error) => void) | undefined;
+		class Repository {
+			constructor(readonly connection: Promise<unknown>) {}
+			async [Symbol.asyncDispose](): Promise<void> {
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			}
+		}
+		const container = new ContainerBuilder()
+			.registerSingletonFactory(
+				"connection",
+				() =>
+					new Promise<unknown>((_, reject) => {
+						rejectConnection = reject;
+					}),
+			)
+			.registerSingleton("repository", Repository, "connection")
+			.build();
+		container.get("connection").catch(() => undefined);
+		container.get("repository");
+
+		const pending = container.disposeAsync();
+		rejectConnection?.(new Error("connect failed"));
+
+		expect(await settle(pending)).toBeUndefined();
+	});
+});
+
+describe("a factory that uses a disposed container", () => {
+	it("reports ContainerDisposedError when an earlier multi-registration entry disposed the container", () => {
+		const container = new ContainerBuilder()
+			.addTransientFactory("handlers", (current) => {
+				current.dispose();
+				return {};
+			})
+			.addSingletonFactory("handlers", () => ({}))
+			.build();
+
+		const error = captureError(() => container.getAll("handlers"));
+
+		expect(error).toBeInstanceOf(ContainerDisposedError);
+	});
+
+	it("wraps a ContainerDisposedError from another container with the requested key", () => {
+		const other = new ContainerBuilder()
+			.registerSingleton("logger", Logger)
+			.build();
+		other.dispose();
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("service", () => other.get("logger"))
+			.build();
+
+		const error = captureError(() => container.get("service"));
+
+		expect(error).toBeInstanceOf(ServiceResolutionError);
+		expect(error).toMatchObject({ key: "service" });
+		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
+			ContainerDisposedError,
+		);
+	});
+
+	it("returns the value of a transient factory that disposes its container", () => {
+		const container = new ContainerBuilder()
+			.registerTransientFactory("value", (current) => {
+				current.dispose();
+				return { id: 1 };
+			})
+			.build();
+
+		expect(container.get("value")).toEqual({ id: 1 });
 	});
 });
 
 describe("a closed container", () => {
-	it("rejects a root singleton in a scope once root disposal starts", async () => {
+	it("rejects a root singleton in a live scope once root disposal starts", async () => {
 		const container = new ContainerBuilder()
 			.registerSingleton("logger", Logger)
 			.registerSingleton("consumer", Consumer, "logger")
@@ -217,6 +317,30 @@ describe("a closed container", () => {
 		const error = captureError(() => scope.get("logger"));
 		await pending;
 
-		expect(error).toBeInstanceOf(ContainerDisposedError);
+		expect(error).toBeInstanceOf(ServiceResolutionError);
+		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
+			ContainerDisposedError,
+		);
+	});
+
+	it("rejects a borrowed singleton in a live scope once the borrower starts disposeAsync()", async () => {
+		const source = new ContainerBuilder()
+			.registerSingleton("logger", Logger)
+			.build();
+		const borrower = new ContainerBuilder()
+			.borrowSingletonFrom(source, "logger")
+			.registerSingleton("consumer", Consumer, "logger")
+			.build();
+		const scope = borrower.startScope();
+		scope.get("logger");
+
+		const pending = borrower.disposeAsync();
+		const error = captureError(() => scope.get("logger"));
+		await pending;
+
+		expect(error).toBeInstanceOf(ServiceResolutionError);
+		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
+			ContainerDisposedError,
+		);
 	});
 });
