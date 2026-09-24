@@ -1,5 +1,6 @@
 import { ContainerDisposedError } from "../errors.js";
 import {
+	continueWithoutWaiting,
 	invokeAsyncDispose,
 	invokeSyncDispose,
 	requireSynchronousDispose,
@@ -77,6 +78,10 @@ export class CachedInstance {
 		if (!this._initialized) {
 			// A factory error propagates unchanged. The container wraps it once.
 			const factoryValue = this._factory(...args);
+			if (this._isDisposed) {
+				// The factory disposed its own container. Nothing owns the new value.
+				throw this.discardValueCreatedAfterDisposal(factoryValue);
+			}
 			const instance = observePromiseRejection(factoryValue, () => {
 				if (!this._isDisposed && this._instance === instance) {
 					this._instance = undefined;
@@ -127,6 +132,24 @@ export class CachedInstance {
 		} finally {
 			this.clear();
 		}
+	}
+
+	/**
+	 * Cleans up a value that the factory returned after the lifecycle was
+	 * disposed, and returns the error for the resolution. A failing cleanup
+	 * becomes the cause. The cleanup of a Promise value starts here, but no
+	 * caller can observe its later failure.
+	 */
+	private discardValueCreatedAfterDisposal(
+		value: unknown,
+	): ContainerDisposedError {
+		const message = `Cannot resolve from a disposed ${this._lifetime} lifecycle`;
+		try {
+			continueWithoutWaiting(invokeSyncDispose(value));
+		} catch (error) {
+			return new ContainerDisposedError(message, { cause: error });
+		}
+		return new ContainerDisposedError(message);
 	}
 
 	private clear(): void {

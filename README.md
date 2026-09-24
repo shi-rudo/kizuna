@@ -979,6 +979,13 @@ try {
 A `DisposalError` from `dispose()` contains a `TypeError` for a service whose
 cleanup needs a Promise. Use `disposeAsync()` for such services.
 
+If a singleton or scoped factory disposes its own container or scope, Kizuna
+cleans up the value that the factory returns. The resolution then fails with a
+`ServiceResolutionError` whose `cause` is a `ContainerDisposedError`. If that
+cleanup throws, the cleanup error is the `cause` of the `ContainerDisposedError`.
+The cleanup of a Promise value starts after the resolution fails. Kizuna does not
+report a later failure of that cleanup.
+
 ### Promise Factory Values
 
 Factory methods are synchronous container operations. An `async` factory returns
