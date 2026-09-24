@@ -1,12 +1,27 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
+import { build } from "tsup";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 
+const KiB = 1024;
+
+// The documented size budgets. docs/feature-evidence.md lists the same values.
+const sizeBudgets = {
+	minifiedEsmGzip: 9 * KiB,
+	shippedEsmGzip: 20 * KiB,
+	packedTarball: 200 * KiB,
+	unpackedTarball: 900 * KiB,
+} as const;
+
 interface PackResult {
+	readonly size: number;
+	readonly unpackedSize: number;
 	readonly files: readonly { readonly path: string }[];
 }
 
@@ -16,8 +31,8 @@ interface PackageManifest {
 	readonly exports?: unknown;
 }
 
-// Reads the file list that npm would publish from the current dist directory.
-function packedFiles(): string[] {
+// Reads what npm would publish from the current dist directory.
+function packPackage(): PackResult {
 	// pnpm passes its own npm_config_* settings, which npm warns about.
 	const env = Object.fromEntries(
 		Object.entries(process.env).filter(
@@ -37,7 +52,31 @@ function packedFiles(): string[] {
 		},
 	);
 	const [result] = JSON.parse(output) as PackResult[];
-	return result?.files.map((file) => file.path) ?? [];
+	if (!result) {
+		throw new Error("npm pack returned no result");
+	}
+	return result;
+}
+
+// Returns the gzip size of the ESM bundle that a consumer build minifies.
+async function minifiedEsmGzipSize(): Promise<number> {
+	const outDir = mkdtempSync(join(tmpdir(), "kizuna-size-"));
+	try {
+		await build({
+			entry: { index: join(repositoryRoot, "src", "index.ts") },
+			format: ["esm"],
+			minify: true,
+			outDir,
+			config: false,
+			silent: true,
+			dts: false,
+			sourcemap: false,
+			outExtension: () => ({ js: ".mjs" }),
+		});
+		return gzipSync(readFileSync(join(outDir, "index.mjs"))).length;
+	} finally {
+		rmSync(outDir, { recursive: true, force: true });
+	}
 }
 
 function exportTargets(value: unknown): string[] {
@@ -68,6 +107,7 @@ function publishedBundles(): string[] {
 }
 
 describe("packed package", () => {
+	let pack: PackResult;
 	let files: string[] = [];
 
 	beforeAll(() => {
@@ -77,7 +117,8 @@ describe("packed package", () => {
 					"or run `pnpm test` from CI where build runs first.",
 			);
 		}
-		files = packedFiles();
+		pack = packPackage();
+		files = pack.files.map((file) => file.path);
 	});
 
 	it("ships every bundle that package.json publishes", () => {
@@ -102,5 +143,48 @@ describe("packed package", () => {
 		);
 
 		expect(unexpected).toEqual([]);
+	});
+
+	it("keeps the minified ESM bundle within its gzip budget", async () => {
+		const size = await minifiedEsmGzipSize();
+
+		expect(size, `minified ESM gzip: ${size} B`).toBeLessThanOrEqual(
+			sizeBudgets.minifiedEsmGzip,
+		);
+	});
+
+	it("keeps the shipped ESM bundle within its gzip budget", () => {
+		const size = gzipSync(
+			readFileSync(join(repositoryRoot, "dist", "index.mjs")),
+		).length;
+
+		expect(size, `shipped ESM gzip: ${size} B`).toBeLessThanOrEqual(
+			sizeBudgets.shippedEsmGzip,
+		);
+	});
+
+	it("keeps the packed tarball within its budget", () => {
+		expect(pack.size, `packed tarball: ${pack.size} B`).toBeLessThanOrEqual(
+			sizeBudgets.packedTarball,
+		);
+	});
+
+	it("keeps the unpacked package within its budget", () => {
+		expect(
+			pack.unpackedSize,
+			`unpacked package: ${pack.unpackedSize} B`,
+		).toBeLessThanOrEqual(sizeBudgets.unpackedTarball);
+	});
+
+	it("documents each size budget", () => {
+		const evidence = readFileSync(
+			join(repositoryRoot, "docs", "feature-evidence.md"),
+			"utf8",
+		);
+		const undocumented = Object.values(sizeBudgets)
+			.map((budget) => `${budget / KiB} KiB`)
+			.filter((budget) => !evidence.includes(`budget ${budget}`));
+
+		expect(undocumented).toEqual([]);
 	});
 });
