@@ -3,6 +3,7 @@ import type {
 	DisposalMode,
 	FactoryArguments,
 } from "../contracts.js";
+import type { UnawaitedFailureSink } from "../services/async-dispose.js";
 import { CachedInstance } from "./cached-instance.js";
 import type { ValueFactory } from "./lifecycle-factory.js";
 
@@ -161,8 +162,11 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	/**
 	 * Stops new resolutions before the owning container starts its cleanup.
 	 */
-	public close(mode: DisposalMode): void {
-		this._cache.close(mode);
+	public close(
+		mode: DisposalMode,
+		reportUnawaitedFailure: UnawaitedFailureSink,
+	): void {
+		this._cache.close(mode, reportUnawaitedFailure);
 	}
 
 	/**

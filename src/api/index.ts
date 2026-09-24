@@ -37,6 +37,17 @@
  */
 
 export type {
+	ContainerBuiltEvent,
+	ContainerDisposedEvent,
+	DiagnosticContainerKind,
+	DiagnosticEvent,
+	DiagnosticLevel,
+	DiagnosticListener,
+	ScopeStartedEvent,
+	ServiceCreatedEvent,
+	UnawaitedCleanupFailedEvent,
+} from "../core/diagnostics.js";
+export type {
 	RegistrationKind,
 	SingletonBorrowFailureReason,
 } from "../core/errors.js";
@@ -50,6 +61,10 @@ export {
 	ServiceResolutionError,
 	SingletonBorrowError,
 } from "../core/errors.js";
+export type {
+	ContainerBuildOptions,
+	DiagnosticsOptions,
+} from "./build-options.js";
 export type { DisposalFailure, DisposalOperation } from "./container.js";
 export {
 	CircularDependencyError,
@@ -67,7 +82,6 @@ export type { MultiRegistration } from "./contracts/types.js";
 export type { InterfaceToken } from "./interface-token.js";
 export { interfaceToken } from "./interface-token.js";
 export type {
-	ContainerBuildOptions,
 	ValidationIssue,
 	ValidationIssueCode,
 	ValidationPathSegment,

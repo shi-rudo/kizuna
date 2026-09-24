@@ -1,3 +1,4 @@
+import type { UnawaitedFailureSink } from "./services/async-dispose.js";
 import type { ServiceWrapper } from "./services/service-wrapper.js";
 
 /** Lifetime classification of a service lifecycle. */
@@ -29,9 +30,10 @@ export interface ServiceLifecycle {
 	/**
 	 * Stops new resolutions before the owning container starts its cleanup.
 	 * The mode tells a lifecycle how to clean up a value that a running factory
-	 * still returns.
+	 * still returns. `reportUnawaitedFailure` receives the failure of a cleanup
+	 * that no caller waits for.
 	 */
-	close(mode: DisposalMode): void;
+	close(mode: DisposalMode, reportUnawaitedFailure: UnawaitedFailureSink): void;
 	dispose(): void;
 	disposeAsync(): Promise<void>;
 }

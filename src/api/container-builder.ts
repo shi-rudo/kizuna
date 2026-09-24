@@ -12,6 +12,10 @@ import {
 	borrowableSourceCapability,
 	isBorrowedSingletonReference,
 } from "./borrowed-singleton-capability.js";
+import {
+	type ContainerBuildOptions,
+	diagnosticsReporterFor,
+} from "./build-options.js";
 import { Container } from "./container.js";
 import type { RootServiceContainer } from "./contracts/interfaces.js";
 import type {
@@ -30,10 +34,7 @@ import type {
 	RegisteredInterfaceToken,
 } from "./interface-token.js";
 import type { LiteralServiceKey } from "./literal-service-key.js";
-import {
-	type ContainerBuildOptions,
-	ContainerValidationError,
-} from "./validation.js";
+import { ContainerValidationError } from "./validation.js";
 
 type ServiceConstructor = new (...args: any[]) => any;
 
@@ -692,7 +693,8 @@ export class ContainerBuilder<
 	/**
 	 * Builds the fully type-safe service container.
 	 *
-	 * @param options - Selects eager or deferred graph validation
+	 * @param options - Selects eager or deferred graph validation and an
+	 * optional diagnostics listener
 	 * @returns The configured root container with complete type inference
 	 * @throws {ContainerValidationError} If eager validation finds an invalid graph
 	 * @throws {Error} If the builder has already been built
@@ -720,10 +722,12 @@ export class ContainerBuilder<
 
 		this.markAsBuilt();
 
+		const diagnostics = diagnosticsReporterFor(options.diagnostics);
 		return new Container<TRegistry>(
 			this.registrations,
 			this.multiRegistrations,
 			this.registrationOrder,
+			{ kind: "root", diagnostics },
 		) as unknown as RootServiceContainer<TRegistry>;
 	}
 

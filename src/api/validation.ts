@@ -56,15 +56,6 @@ export type ValidationIssueCode = ValidationIssue["code"];
 type WithoutPath<T> = T extends unknown ? Omit<T, "path"> : never;
 type ValidationIssueInput = WithoutPath<ValidationIssue>;
 
-/** Controls when the container validates its registered dependency graph. */
-export interface ContainerBuildOptions {
-	/**
-	 * `eager` rejects invalid graphs during `build()`. `deferred` skips static
-	 * graph validation. Actual lookup failures then occur during resolution.
-	 */
-	readonly validation?: "eager" | "deferred";
-}
-
 const toImmutableValidationIssue = (
 	issue: ValidationIssueInput | ValidationIssue,
 ): ValidationIssue => {

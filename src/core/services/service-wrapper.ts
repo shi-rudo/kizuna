@@ -4,7 +4,8 @@ import type {
 	ServiceLifetime,
 	ServiceValueOwnership,
 } from "../contracts.js";
-import { ContainerDisposedError } from "../errors.js";
+import type { DiagnosticsReporter } from "../diagnostics.js";
+import { ContainerDisposedError, type DisposalOperation } from "../errors.js";
 
 /**
  * Resolves one declared constructor dependency. A key with multiple
@@ -119,11 +120,16 @@ export class ServiceWrapper {
 
 	/**
 	 * Stops new resolutions of an owned lifecycle before the container starts
-	 * its cleanup.
+	 * its cleanup. A cleanup failure that no caller waits for goes to
+	 * `diagnostics`.
 	 */
-	close(mode: DisposalMode): void {
+	close(mode: DisposalMode, diagnostics: DiagnosticsReporter): void {
 		if (this._lifecycle && this._ownsLifecycle) {
-			this._lifecycle.close(mode);
+			const operation: DisposalOperation =
+				mode === "async" ? "disposeAsync" : "dispose";
+			this._lifecycle.close(mode, (error) =>
+				diagnostics.unawaitedCleanupFailed(this, operation, error),
+			);
 		}
 	}
 
