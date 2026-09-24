@@ -1,8 +1,20 @@
 import type {
+	DisposalMode,
 	ServiceLifecycle,
 	ServiceLifetime,
 	ServiceValueOwnership,
 } from "../contracts.js";
+
+/**
+ * Takes over the cleanup of a value that a factory returned after its
+ * lifecycle closed, together with the key and lifetime of its registration.
+ * @internal
+ */
+export type AdoptServiceCleanup = (
+	serviceKey: string,
+	lifetime: ServiceLifetime,
+	cleanup: Promise<void>,
+) => void;
 
 /**
  * Resolves one declared constructor dependency. A key with multiple
@@ -110,6 +122,18 @@ export class ServiceWrapper {
 			this._constructorFn,
 			!isShared,
 		);
+	}
+
+	/**
+	 * Stops new resolutions of an owned lifecycle before the container starts
+	 * its cleanup. A late cleanup is reported with this service's key.
+	 */
+	close(mode: DisposalMode, adopt: AdoptServiceCleanup): void {
+		if (this._lifecycle && this._ownsLifecycle) {
+			this._lifecycle.close?.(mode, (cleanup) =>
+				adopt(this._name, this._lifetime, cleanup),
+			);
+		}
 	}
 
 	/**

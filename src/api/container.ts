@@ -1,3 +1,4 @@
+import type { DisposalMode } from "../core/contracts.js";
 import {
 	CircularDependencyError,
 	ContainerDisposedError,
@@ -15,6 +16,7 @@ import {
 	createDisposalPlan,
 } from "../core/services/disposal-order.js";
 import {
+	type AdoptServiceCleanup,
 	resolveDependency,
 	type ServiceWrapper,
 } from "../core/services/service-wrapper.js";
@@ -179,7 +181,10 @@ export class Container<TRegistry extends ServiceRegistry>
 		try {
 			return this.trackResolution(key, () => resolver.resolve(this));
 		} catch (error) {
-			if (error instanceof CircularDependencyError) {
+			if (
+				error instanceof CircularDependencyError ||
+				error instanceof ContainerDisposedError
+			) {
 				throw error;
 			}
 			throw new ServiceResolutionError(key, error);
@@ -285,6 +290,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			return;
 		}
 		this._disposed = true;
+		this.closeOwnedLifecycles("sync", () => undefined);
 
 		const failures: DisposalFailure[] = [];
 		try {
@@ -322,10 +328,31 @@ export class Container<TRegistry extends ServiceRegistry>
 			return;
 		}
 		this._disposed = true;
+		const lateCleanups: Promise<DisposalFailure | undefined>[] = [];
+		this.closeOwnedLifecycles("async", (serviceKey, lifetime, cleanup) => {
+			lateCleanups.push(
+				cleanup.then(
+					() => undefined,
+					(error: unknown) =>
+						Object.freeze({
+							serviceKey,
+							lifetime,
+							operation: "disposeAsync" as const,
+							error,
+						}),
+				),
+			);
+		});
 
-		let failures: readonly DisposalFailure[] = [];
+		const failures: DisposalFailure[] = [];
 		try {
-			failures = await this.runDependencyAwareDisposeAsync();
+			failures.push(...(await this.runDependencyAwareDisposeAsync()));
+			// A factory that started this disposal can hand over a late cleanup.
+			for (const failure of await Promise.all(lateCleanups)) {
+				if (failure) {
+					failures.push(failure);
+				}
+			}
 		} finally {
 			this.clearRegistrations();
 		}
@@ -406,6 +433,19 @@ export class Container<TRegistry extends ServiceRegistry>
 		});
 	}
 
+	/**
+	 * Closes every owned lifecycle before any cleanup runs. A factory that
+	 * disposes its own container then cannot hand out a value.
+	 */
+	private closeOwnedLifecycles(
+		mode: DisposalMode,
+		adopt: AdoptServiceCleanup,
+	): void {
+		for (const resolver of this.registrationOrder) {
+			resolver.close(mode, adopt);
+		}
+	}
+
 	private createDisposalFailure(
 		resolver: ServiceWrapper,
 		operation: DisposalOperation,
@@ -450,7 +490,10 @@ export class Container<TRegistry extends ServiceRegistry>
 				resolvers.map((resolver) => resolver.resolve(this)),
 			);
 		} catch (error) {
-			if (error instanceof CircularDependencyError) {
+			if (
+				error instanceof CircularDependencyError ||
+				error instanceof ContainerDisposedError
+			) {
 				throw error;
 			}
 			throw new ServiceResolutionError(typeName, error, "multi");

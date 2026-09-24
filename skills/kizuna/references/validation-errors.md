@@ -151,6 +151,11 @@ Each error that the public API can throw has an exported class with a literal
 A `ServiceResolutionError` holds the original error as its `cause`. If a
 dependency fails, the `cause` is the error of that dependency.
 
+`dispose()` and `disposeAsync()` close the container before any cleanup runs.
+A resolution that meets a closed container throws `ContainerDisposedError`
+directly, never wrapped. If a factory disposes its own container, Kizuna cleans
+up the new value instead of returning it.
+
 ## Runtime consistency
 
 Kizuna does not read constructor source code or parameter names. It also does

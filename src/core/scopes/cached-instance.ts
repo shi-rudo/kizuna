@@ -1,3 +1,4 @@
+import type { AdoptLateCleanup, DisposalMode } from "../contracts.js";
 import { ContainerDisposedError } from "../errors.js";
 import {
 	continueWithoutWaiting,
@@ -9,6 +10,19 @@ import { observePromiseRejection } from "../services/promise-value.js";
 
 /** Lifetimes that keep one service value per lifecycle instance. */
 export type CachingLifetime = "singleton" | "scoped";
+
+interface ClosedState {
+	readonly mode: DisposalMode;
+	readonly adopt: AdoptLateCleanup;
+}
+
+/**
+ * Used when a lifecycle is disposed without a container, for example in a
+ * unit test. The cleanup still runs, but no caller waits for it.
+ */
+const ignoreLateCleanup: AdoptLateCleanup = (cleanup) => {
+	continueWithoutWaiting(cleanup);
+};
 
 /**
  * Creates one service value on the first request and keeps it until disposal.
@@ -25,9 +39,20 @@ export class CachedInstance {
 	private _initialized = false;
 	private _factory: ((...args: any[]) => any) | null = null;
 	private _isDisposed = false;
+	/** Set when the owning container starts its disposal. */
+	private _closed: ClosedState | null = null;
 
 	constructor(lifetime: CachingLifetime) {
 		this._lifetime = lifetime;
+	}
+
+	/**
+	 * Stops new resolutions. The owning container calls this method before it
+	 * starts any cleanup, so a factory that disposes its own container cannot
+	 * hand out a value.
+	 */
+	public close(mode: DisposalMode, adopt: AdoptLateCleanup): void {
+		this._closed ??= { mode, adopt };
 	}
 
 	public get isDisposed(): boolean {
@@ -66,10 +91,8 @@ export class CachedInstance {
 	 * hit does not copy them again.
 	 */
 	public getInstance<T>(args: readonly unknown[]): T {
-		if (this._isDisposed) {
-			throw new ContainerDisposedError(
-				`Cannot resolve from a disposed ${this._lifetime} lifecycle`,
-			);
+		if (this._closed) {
+			throw new ContainerDisposedError(this.disposedMessage());
 		}
 		if (!this._factory) {
 			throw new Error("No factory registered for this lifecycle");
@@ -78,12 +101,12 @@ export class CachedInstance {
 		if (!this._initialized) {
 			// A factory error propagates unchanged. The container wraps it once.
 			const factoryValue = this._factory(...args);
-			if (this._isDisposed) {
+			if (this._closed) {
 				// The factory disposed its own container. Nothing owns the new value.
-				throw this.discardValueCreatedAfterDisposal(factoryValue);
+				throw this.discardValueCreatedAfterClose(factoryValue, this._closed);
 			}
 			const instance = observePromiseRejection(factoryValue, () => {
-				if (!this._isDisposed && this._instance === instance) {
+				if (!this._closed && this._instance === instance) {
 					this._instance = undefined;
 					this._initialized = false;
 				}
@@ -104,6 +127,7 @@ export class CachedInstance {
 			return;
 		}
 		this._isDisposed = true;
+		this.close("sync", ignoreLateCleanup);
 
 		try {
 			if (this._initialized) {
@@ -124,6 +148,7 @@ export class CachedInstance {
 			return;
 		}
 		this._isDisposed = true;
+		this.close("async", ignoreLateCleanup);
 
 		try {
 			if (this._initialized) {
@@ -135,21 +160,33 @@ export class CachedInstance {
 	}
 
 	/**
-	 * Cleans up a value that the factory returned after the lifecycle was
-	 * disposed, and returns the error for the resolution. A failing cleanup
-	 * becomes the cause. The cleanup of a Promise value starts here, but no
-	 * caller can observe its later failure.
+	 * Cleans up a value that the factory returned after the lifecycle closed,
+	 * and returns the error for the resolution. The cleanup follows the
+	 * disposal path that closed the lifecycle: `dispose()` uses the synchronous
+	 * hook, and a failure becomes the cause; `disposeAsync()` hands the
+	 * asynchronous cleanup to the container, which waits for it.
 	 */
-	private discardValueCreatedAfterDisposal(
+	private discardValueCreatedAfterClose(
 		value: unknown,
+		closed: ClosedState,
 	): ContainerDisposedError {
-		const message = `Cannot resolve from a disposed ${this._lifetime} lifecycle`;
-		try {
-			continueWithoutWaiting(invokeSyncDispose(value));
-		} catch (error) {
-			return new ContainerDisposedError(message, { cause: error });
+		if (closed.mode === "async") {
+			closed.adopt(invokeAsyncDispose(value));
+			return new ContainerDisposedError(this.disposedMessage());
 		}
-		return new ContainerDisposedError(message);
+
+		try {
+			requireSynchronousDispose(invokeSyncDispose(value));
+		} catch (error) {
+			return new ContainerDisposedError(this.disposedMessage(), {
+				cause: error,
+			});
+		}
+		return new ContainerDisposedError(this.disposedMessage());
+	}
+
+	private disposedMessage(): string {
+		return `Cannot resolve from a disposed ${this._lifetime} lifecycle`;
 	}
 
 	private clear(): void {

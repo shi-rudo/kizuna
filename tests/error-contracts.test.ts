@@ -164,10 +164,8 @@ describe("resolution error contracts", () => {
 
 		const error = captureError(() => scope.get("logger"));
 
-		expect(error).toBeInstanceOf(ServiceResolutionError);
-		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
-			ContainerDisposedError,
-		);
+		expect(error).toBeInstanceOf(ContainerDisposedError);
+		expect(error).toMatchObject({ code: "CONTAINER_DISPOSED" });
 	});
 
 	it("keeps a code on circular dependency errors", () => {
