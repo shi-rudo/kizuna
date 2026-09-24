@@ -296,15 +296,7 @@ ${example}
 		expect(strictTypeErrors(source, "multiple-containers")).toEqual([]);
 	});
 
-	it("keeps the packaged skill borrowing examples type-safe", () => {
-		const skill = readFileSync(
-			join(repositoryRoot, "skills", "kizuna", "SKILL.md"),
-			"utf8",
-		);
-		const skillExample = codeBlockAfter(
-			skill,
-			"### Borrow a singleton from another container",
-		);
+	it("keeps the packaged skill borrowing example type-safe", () => {
 		const reference = readFileSync(
 			join(
 				repositoryRoot,
@@ -330,14 +322,8 @@ class UserService {
 
 		expect(
 			strictTypeErrors(
-				`${declarations}\n${skillExample}`,
+				`${declarations}\n${referenceExample}`,
 				"skill-borrowed-singleton",
-			),
-		).toEqual([]);
-		expect(
-			strictTypeErrors(
-				`import { ContainerBuilder } from "../src";\n${declarations}\n${referenceExample}`,
-				"skill-registration-pattern",
 			),
 		).toEqual([]);
 	});

@@ -96,12 +96,16 @@ these graph edges. An undeclared container lookup stays invisible.
 ## Borrowed singleton
 
 Borrowing fits an application that uses separate containers inside one process.
-A shared root container owns long-lived infrastructure. Another container
+A shared root container owns long-lived infrastructure. A domain container
 imports only the instances that its services need.
+
+Kizuna does not enforce domain boundaries. Separate registries restrict
+resolution to registered keys. Application code controls imports,
+cross-domain calls, and data ownership.
 
 Typical shared services include loggers, metrics collectors, configuration
 readers, and connection pools. Borrowing prevents duplicate resources and keeps
-the consumer registry small.
+the domain registry small.
 
 Borrowing creates a lifetime dependency. The source must outlive each borrower.
 When most registrations are shared, a single container is clearer. Borrowing
@@ -111,13 +115,23 @@ is not suitable for request state or communication between processes.
 token.
 
 ```typescript
-const shared = new ContainerBuilder()
+import { ContainerBuilder, interfaceToken } from '@shirudo/kizuna';
+
+interface Metrics {
+  increment(name: string): void;
+}
+
+const Metrics = interfaceToken<Metrics>()('metrics');
+
+const sharedContainer = new ContainerBuilder()
   .registerSingleton('logger', Logger)
+  .registerSingletonInterface(Metrics, MetricsCollector)
   .build();
 
-const domain = new ContainerBuilder()
-  .borrowSingletonFrom(shared, 'logger')
-  .registerScoped('userService', UserService, 'logger')
+const domainContainer = new ContainerBuilder()
+  .borrowSingletonFrom(sharedContainer, 'logger')
+  .borrowSingletonFrom(sharedContainer, Metrics)
+  .registerScoped('userService', UserService, 'logger', Metrics)
   .build();
 ```
 
@@ -126,7 +140,7 @@ You cannot borrow scoped, transient, multi-service, or borrowed registrations.
 A scope cannot lend a singleton. The source must outlive each borrower and its
 scopes.
 
-Dispose the domain container before you dispose `shared`.
+Dispose all borrowers and their scopes first. Then dispose the source.
 
 The source owns the value and runs its cleanup hook. The borrowed key remains a
 declared dependency. Validation can see this dependency.
@@ -184,6 +198,24 @@ loggers.forEach(l => l.log('Hello'));
 | Transient | `addTransient` | `addTransientFactory` |
 
 All methods return a new `ContainerBuilder` with an updated type registry, enabling chained registration with cumulative type inference.
+
+## Inspect registrations
+
+```typescript
+const builder = new ContainerBuilder()
+  .registerSingleton('logger', Logger)
+  .registerSingleton('database', DatabaseService, 'logger')
+  .registerScoped('userService', UserService, 'database', 'logger');
+
+builder.getRegisteredServiceNames(); // ['logger', 'database', 'userService']
+builder.isRegistered('database'); // true
+builder.keyCount; // 3 (a multi-registration key counts once)
+builder.registrationCount; // 3 (each add*() call counts)
+```
+
+Re-registering an existing `register*()` key throws. Create a new builder when
+you need a different registration set. This rule keeps the inferred registry in
+sync with runtime registrations.
 
 ## Factory types are inferred
 

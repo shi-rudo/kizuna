@@ -157,7 +157,17 @@ cleanup starts, but the API cannot wait for it. The `DisposalError` then
 contains a `TypeError`.
 
 `[Symbol.dispose]()` calls `dispose()`. `[Symbol.asyncDispose]()` calls
-`disposeAsync()`. These symbols support `using` and `await using`.
+`disposeAsync()`. These symbols support `using` and `await using`:
+
+```typescript
+{
+  await using scope = container.startScope();
+  // ...use scope...
+} // scope.disposeAsync() called automatically on block exit
+```
+
+`await using` requires TypeScript 5.2 or newer and a compatible runtime. On an
+older runtime, use `try` and `finally` with `disposeAsync()`.
 
 ### Cleanup order
 
@@ -199,8 +209,9 @@ If an active lifecycle stores a rejected Promise, it removes that Promise from
 the cache. The next resolution invokes the factory again. Consumers must handle
 the original rejection.
 
-If disposal starts before the Promise settles, the lifecycle keeps ownership.
-The async API reports a later rejection in its `DisposalError`.
+If the cleanup of that lifecycle starts before the Promise settles, the
+lifecycle keeps ownership. The async API reports a later rejection in its
+`DisposalError`.
 
 ### Errors and final state
 
