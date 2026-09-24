@@ -129,6 +129,28 @@ const container = builder.build({ validation: 'deferred' });
 This option disables build-time graph validation. Actual lookup failures occur
 during resolution. Unused dependency metadata does not trigger a lookup.
 
+## Runtime errors
+
+Each error that the public API can throw has an exported class with a literal
+`code`. Branch on `instanceof` or `code`, never on the message text.
+
+| Class | `code` | Fields |
+| --- | --- | --- |
+| `ServiceNotRegisteredError` | `SERVICE_NOT_REGISTERED` | `key` |
+| `RegistrationKindError` | `REGISTRATION_KIND_MISMATCH` | `key`, `registrationKind` |
+| `ServiceResolutionError` | `SERVICE_RESOLUTION_FAILED` | `key`, `cause` |
+| `CircularDependencyError` | `CIRCULAR_DEPENDENCY` | `chain` |
+| `ContainerDisposedError` | `CONTAINER_DISPOSED` | — |
+| `DisposalError` | `DISPOSAL_FAILED` | `errors`, `failures` |
+| `ContainerValidationError` | `CONTAINER_VALIDATION_FAILED` | `issues` |
+| `RegistrationConflictError` | `REGISTRATION_CONFLICT` | `key`, `existingKind`, `requestedKind` |
+| `BuilderAlreadyBuiltError` | `BUILDER_ALREADY_BUILT` | — |
+| `InvalidServiceKeyError` (extends `TypeError`) | `INVALID_SERVICE_KEY` | `key` |
+| `SingletonBorrowError` | `SINGLETON_BORROW_FAILED` | `key`, `reason` |
+
+A `ServiceResolutionError` holds the original error as its `cause`. If a
+dependency fails, the `cause` is the error of that dependency.
+
 ## Runtime consistency
 
 Kizuna does not read constructor source code or parameter names. It also does

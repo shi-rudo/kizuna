@@ -248,6 +248,11 @@ try {
 Use `build({ validation: 'deferred' })` only for a dynamic graph that must fail
 during resolution.
 
+Every runtime error has an exported class with a literal `code`, for example
+`ServiceNotRegisteredError` or `ServiceResolutionError` (its `cause` is the
+original error). Branch on `instanceof` or `code`, never on the message. See
+[validation-errors.md](references/validation-errors.md#runtime-errors).
+
 ### Disposal
 
 Kizuna cleans only values that it owns and tracks.
