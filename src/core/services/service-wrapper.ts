@@ -154,8 +154,9 @@ export class ServiceWrapper {
 		if (this._lifecycle && this._ownsLifecycle) {
 			const operation: DisposalOperation =
 				mode === "async" ? "disposeAsync" : "dispose";
-			this._lifecycle.close(mode, (error) =>
-				diagnostics.unawaitedCleanupFailed(this, operation, error),
+			this._lifecycle.close(
+				mode,
+				diagnostics.unawaitedFailureSink(this, operation),
 			);
 		}
 	}

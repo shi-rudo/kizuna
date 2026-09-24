@@ -4,6 +4,10 @@ import type {
 	ValidationMode,
 } from "./contracts.js";
 import type { DisposalOperation } from "./errors.js";
+import {
+	ignoreUnawaitedFailure,
+	type UnawaitedFailureSink,
+} from "./services/async-dispose.js";
 
 /**
  * Severity of a diagnostic event. The names match common logger methods, so a
@@ -105,11 +109,14 @@ export interface DiagnosticsReporter {
 		container: DiagnosticContainerKind,
 		resolutionStack: readonly string[],
 	): void;
-	unawaitedCleanupFailed(
+	/**
+	 * Returns the sink for cleanup failures of `service` that no caller waits
+	 * for. A silent reporter returns a shared sink that ignores them.
+	 */
+	unawaitedFailureSink(
 		service: DiagnosticSubject,
 		operation: DisposalOperation,
-		error: unknown,
-	): void;
+	): UnawaitedFailureSink;
 }
 
 /** Reports nothing. Used when `build()` receives no diagnostics option. @internal */
@@ -118,7 +125,7 @@ export const silentDiagnostics: DiagnosticsReporter = Object.freeze({
 	scopeStarted() {},
 	containerDisposed() {},
 	serviceCreated() {},
-	unawaitedCleanupFailed() {},
+	unawaitedFailureSink: () => ignoreUnawaitedFailure,
 });
 
 /**
@@ -191,17 +198,19 @@ export function createDiagnosticsReporter(
 				});
 			}
 		},
-		unawaitedCleanupFailed(service, operation, error) {
-			const serviceKey = service.getName();
-			deliver({
-				code: "UNAWAITED_CLEANUP_FAILED",
-				level: "error",
-				message: `Cleanup of '${serviceKey}' failed, and no caller waited for it`,
-				serviceKey,
-				lifetime: service.getLifetime(),
-				operation,
-				error,
-			});
+		unawaitedFailureSink(service, operation) {
+			return (error) => {
+				const serviceKey = service.getName();
+				deliver({
+					code: "UNAWAITED_CLEANUP_FAILED",
+					level: "error",
+					message: `Cleanup of '${serviceKey}' failed, and no caller waited for it`,
+					serviceKey,
+					lifetime: service.getLifetime(),
+					operation,
+					error,
+				});
+			};
 		},
 	};
 	return Object.freeze(reporter);
