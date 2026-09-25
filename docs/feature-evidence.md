@@ -28,6 +28,7 @@ The runtime suite runs through `pnpm test`. The type suite runs through
 | The published package has no runtime dependency entries. | [Package contract test](../tests/documentation-api.test.ts) | The package still has development and peer dependencies. |
 | CI covers Node.js, a packed Vite consumer build, and workerd through Miniflare. | [CI workflow](../.github/workflows/ci.yml), [package E2E workflow](../.github/workflows/e2e.yml), and [workerd tests](../tests/edge-compat.test.ts) | CI does not run a browser, Vercel Edge, Deno, Bun, or Node.js 18 runtime test. |
 | An optional listener receives typed diagnostic events, including cleanup failures that no caller waits for. | [Diagnostics tests](../tests/diagnostics.test.ts) and [diagnostics type tests](../tests/diagnostics.test-d.ts) | Events carry no durations, a cache hit produces no event, and Kizuna never writes events to the console. |
+| The package stays within the [size budgets](#package-size). | [Package contents tests](../tests/package-contents.test.ts) | The budgets measure the Kizuna package. A consumer bundle also contains application code, and the tarball size can vary with the npm version. |
 | Pull-request workflows run the listed gates for release-candidate changes. | [CI workflow](../.github/workflows/ci.yml) and [E2E workflow](../.github/workflows/e2e.yml) | The gates do not prove application fitness, load capacity, security, or production readiness. |
 
 ## Quality gates
@@ -55,3 +56,20 @@ These tests run the built ESM bundle through Miniflare without `nodejs_compat`.
 
 These quality gates do not certify an application for production use. A team
 must evaluate Kizuna against its runtime, load, security, and support needs.
+
+## Package size
+
+The [package contents tests](../tests/package-contents.test.ts) measure the
+built package in every CI run. A test fails when a value exceeds its budget.
+
+The values were measured on 2026-09-25:
+
+- Root entry, minified ESM, gzip: 7.9 KiB, budget 9 KiB
+- Shipped `dist/index.mjs`, gzip: 17.8 KiB, budget 20 KiB
+- Packed tarball: 171.5 KiB, budget 200 KiB
+- Unpacked package: 792.6 KiB, budget 900 KiB
+
+The minified value comes from an esbuild build of the root entry with all
+exports. A consumer bundle that uses fewer exports can be smaller. The unpacked
+package also contains the source maps, the type declarations, the README, and
+the agent skill.

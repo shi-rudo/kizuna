@@ -1149,6 +1149,10 @@ The Vite gate is a consumer build, not a browser-runtime test.
 The package build target is `esnext`. A consumer must transform this output for
 an older JavaScript target.
 
+The root entry with all exports is about 8 KiB after minification and gzip. CI
+fails when the package exceeds one of its
+[size budgets](https://github.com/shi-rudo/kizuna/blob/main/docs/feature-evidence.md#package-size).
+
 Read the
 [feature evidence matrix](https://github.com/shi-rudo/kizuna/blob/main/docs/feature-evidence.md)
 for the complete test boundary.
