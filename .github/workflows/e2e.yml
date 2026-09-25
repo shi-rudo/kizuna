@@ -51,7 +51,7 @@ jobs:
       - name: Check packed runtime exports
         run: |
           cd test-app
-          node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['BuilderAlreadyBuiltError','CircularDependencyError','ContainerBuilder','ContainerDisposedError','ContainerValidationError','DisposalError','InvalidServiceKeyError','RegistrationConflictError','RegistrationKindError','ServiceContainerToken','ServiceNotRegisteredError','ServiceProviderToken','ServiceResolutionError','SingletonBorrowError','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
+          node --input-type=module -e "import * as k from '@shirudo/kizuna'; const actual = Object.keys(k).sort(); const expected = ['BuilderAlreadyBuiltError','CircularDependencyError','ContainerBuilder','ContainerDisposedError','ContainerValidationError','DisposalError','InvalidBuildOptionsError','InvalidServiceKeyError','RegistrationConflictError','RegistrationKindError','ServiceContainerToken','ServiceNotRegisteredError','ServiceProviderToken','ServiceResolutionError','SingletonBorrowError','interfaceToken']; if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error('Unexpected exports: ' + actual.join(','));"
 
       - name: Check packed validation errors
         run: cd test-app && node package-validation.mjs

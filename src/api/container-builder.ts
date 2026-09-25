@@ -12,6 +12,10 @@ import {
 	borrowableSourceCapability,
 	isBorrowedSingletonReference,
 } from "./borrowed-singleton-capability.js";
+import {
+	type ContainerBuildOptions,
+	resolveBuildOptions,
+} from "./build-options.js";
 import { Container } from "./container.js";
 import type { RootServiceContainer } from "./contracts/interfaces.js";
 import type {
@@ -30,10 +34,7 @@ import type {
 	RegisteredInterfaceToken,
 } from "./interface-token.js";
 import type { LiteralServiceKey } from "./literal-service-key.js";
-import {
-	type ContainerBuildOptions,
-	ContainerValidationError,
-} from "./validation.js";
+import { ContainerValidationError } from "./validation.js";
 
 type ServiceConstructor = new (...args: any[]) => any;
 
@@ -692,8 +693,10 @@ export class ContainerBuilder<
 	/**
 	 * Builds the fully type-safe service container.
 	 *
-	 * @param options - Selects eager or deferred graph validation
+	 * @param options - Selects eager or deferred graph validation and an
+	 * optional diagnostics listener
 	 * @returns The configured root container with complete type inference
+	 * @throws {InvalidBuildOptionsError} If an option has an unsupported value
 	 * @throws {ContainerValidationError} If eager validation finds an invalid graph
 	 * @throws {Error} If the builder has already been built
 	 *
@@ -711,7 +714,8 @@ export class ContainerBuilder<
 	build(options: ContainerBuildOptions = {}): RootServiceContainer<TRegistry> {
 		this.ensureNotBuilt();
 
-		if (options.validation !== "deferred") {
+		const { validation, diagnostics } = resolveBuildOptions(options);
+		if (validation === "eager") {
 			const issues = this.validate();
 			if (issues.length > 0) {
 				throw new ContainerValidationError(issues);
@@ -720,10 +724,16 @@ export class ContainerBuilder<
 
 		this.markAsBuilt();
 
+		diagnostics.containerBuilt(
+			this.keyCount,
+			this.registrationCount,
+			validation,
+		);
 		return new Container<TRegistry>(
 			this.registrations,
 			this.multiRegistrations,
 			this.registrationOrder,
+			{ kind: "root", diagnostics },
 		) as unknown as RootServiceContainer<TRegistry>;
 	}
 

@@ -783,6 +783,7 @@ The package root exports these runtime values:
 - `RegistrationConflictError`
 - `BuilderAlreadyBuiltError`
 - `InvalidServiceKeyError`
+- `InvalidBuildOptionsError`
 - `SingletonBorrowError`
 
 It also exports these public types:
@@ -797,6 +798,16 @@ It also exports these public types:
 - `DisposalFailure`
 - `DisposalOperation`
 - `ContainerBuildOptions`
+- `DiagnosticsOptions`
+- `DiagnosticListener`
+- `DiagnosticLevel`
+- `DiagnosticEvent`
+- `DiagnosticContainerKind`
+- `UnawaitedCleanupFailedEvent`
+- `ContainerBuiltEvent`
+- `ScopeStartedEvent`
+- `ContainerDisposedEvent`
+- `ServiceCreatedEvent`
 - `ValidationIssue`
 - `ValidationIssueCode`
 - `ValidationPathSegment`
@@ -868,7 +879,7 @@ Scopes and borrowers cannot lend a registration.
 #### Container Management
 
 ```typescript
-.build(options?: { validation?: 'eager' | 'deferred' }): RootServiceContainer<TRegistry>
+.build(options?: ContainerBuildOptions): RootServiceContainer<TRegistry> // { validation?, diagnostics? }
 .validate(): readonly ValidationIssue[]                // Validate the dependency graph
 .keyCount: number                                      // Number of registered keys (a multi-registration key counts once)
 .registrationCount: number                             // Number of registrations (each add*() call counts)
@@ -954,6 +965,7 @@ a literal `code` and the fields that a caller needs. Check `instanceof` or
 | `RegistrationConflictError` | `REGISTRATION_CONFLICT` | `key`, `existingKind`, `requestedKind` | a registration reuses a key |
 | `BuilderAlreadyBuiltError` | `BUILDER_ALREADY_BUILT` | — | code registers a service after `build()` |
 | `InvalidServiceKeyError` | `INVALID_SERVICE_KEY` | `key` | a registration, dependency, or resolution key is not a valid string; extends `TypeError` |
+| `InvalidBuildOptionsError` | `INVALID_BUILD_OPTIONS` | `option`, `value` | `build()` receives an unsupported `validation` mode or `diagnostics` option; extends `TypeError` |
 | `SingletonBorrowError` | `SINGLETON_BORROW_FAILED` | `key`, `reason` | `borrowSingletonFrom()` cannot borrow the singleton |
 
 `registrationKind`, `existingKind`, and `requestedKind` have the type
@@ -1001,8 +1013,9 @@ throws a `ContainerDisposedError`:
   the `DisposalError`.
 - A Promise value is the exception. `disposeAsync()` does not wait for that
   value, so an `async` factory that calls `disposeAsync()` before its first
-  `await` and then waits for it cannot block it. Its cleanup starts, and a
-  later failure or rejection is not reported.
+  `await` and then waits for it cannot block it. Its cleanup starts. A later
+  failure or rejection reaches a [diagnostics listener](#diagnostics) as
+  `UNAWAITED_CLEANUP_FAILED`.
 
 `dispose()` cleans up all services before the factory can return, so after
 `dispose()` the value is cleaned up after its dependencies. A transient factory
@@ -1014,6 +1027,69 @@ scope after its first `await`. At that point, Kizuna caches the factory's
 Promise, and `disposeAsync()` waits for that Promise before it cleans up the
 value. A factory that then waits for `disposeAsync()` waits for itself, so
 neither Promise settles.
+
+### Diagnostics
+
+Kizuna never writes to the console. Pass a listener to `build()` to receive
+diagnostic events, for example in your application logger:
+
+```typescript
+const logger = pino(); // exists before the container
+
+const container = builder
+  .registerSingletonFactory('logger', () => logger)
+  .build({
+    diagnostics: {
+      level: 'debug', // optional, the default is 'error'
+      listener: (event) => logger[event.level](event, event.message),
+    },
+  });
+```
+
+Each event has a `code`, a `level`, and a `message`. The level names match
+common logger methods, so the listener above logs every event without knowing
+its code. The event object itself carries the structured fields.
+
+| `code` | `level` | Fields |
+| --- | --- | --- |
+| `UNAWAITED_CLEANUP_FAILED` | `error` | `serviceKey`, `lifetime`, `operation`, `error` |
+| `CONTAINER_BUILT` | `debug` | `keyCount`, `registrationCount`, `validation` |
+| `SCOPE_STARTED` | `debug` | none |
+| `CONTAINER_DISPOSED` | `debug` | `container`, `mode`, `failureCount` |
+| `SERVICE_CREATED` | `debug` | `serviceKey`, `lifetime`, `container`, `path` |
+
+- `UNAWAITED_CLEANUP_FAILED` reports a cleanup failure that no caller waits
+  for: the Promise value of a factory that disposed its own container with
+  `disposeAsync()`, or an asynchronous cleanup that `dispose()` started but
+  cannot wait for. No other channel reports these failures.
+- The `level` option is a threshold. The default `error` delivers only
+  `error` events. `debug` delivers all events.
+- `SERVICE_CREATED` reports each value that a lifecycle created. A cache hit
+  reports nothing. `path` is the resolution chain, for example
+  `['userService', 'database']`.
+- If `SCOPE_STARTED` events keep outnumbering `CONTAINER_DISPOSED` events
+  for `container: 'scope'`, the application does not dispose some scopes. The
+  events carry no scope identity, so they show that scopes leak, not which
+  ones.
+- Scopes report to the listener of their root container.
+- Events carry no durations. Some runtimes, such as Cloudflare Workers, do not
+  advance the clock during synchronous work.
+- Later versions can add event codes. To react to specific events, branch on
+  the codes you know and ignore the others:
+
+```typescript
+listener: (event) => {
+  if (event.code === 'UNAWAITED_CLEANUP_FAILED') {
+    alerts.notify(event.serviceKey, event.error);
+  }
+},
+```
+
+The listener runs inside Kizuna calls, for example inside `build()` and
+`get()`. Create its logger before `build()`, as above, and do not resolve
+services from the container inside the listener. If the listener throws,
+Kizuna completes its own operation and throws the listener error again in a
+microtask. In Node.js, an uncaught error ends the process.
 
 ### Promise Factory Values
 

@@ -146,6 +146,7 @@ Each error that the public API can throw has an exported class with a literal
 | `RegistrationConflictError` | `REGISTRATION_CONFLICT` | `key`, `existingKind`, `requestedKind` |
 | `BuilderAlreadyBuiltError` | `BUILDER_ALREADY_BUILT` | — |
 | `InvalidServiceKeyError` (extends `TypeError`) | `INVALID_SERVICE_KEY` | `key` |
+| `InvalidBuildOptionsError` (extends `TypeError`) | `INVALID_BUILD_OPTIONS` | `option`, `value` |
 | `SingletonBorrowError` | `SINGLETON_BORROW_FAILED` | `key`, `reason` |
 
 A `ServiceResolutionError` holds the original error as its `cause`. If a

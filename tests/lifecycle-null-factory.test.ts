@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ScopedLifecycle } from "../src/core/scopes/scoped";
 import { SingletonLifecycle } from "../src/core/scopes/singleton";
-
-const noArguments = (): readonly unknown[] => [];
+import { noArguments } from "./instance-request";
 
 describe("Lifecycle null factory return", () => {
 	describe("SingletonLifecycle", () => {

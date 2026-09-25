@@ -1,10 +1,13 @@
-import type { DisposalMode, FactoryArguments } from "../contracts.js";
+import type { DisposalMode, InstanceRequest } from "../contracts.js";
 import type { ContainerDisposedError } from "../errors.js";
 import {
+	ignoreUnawaitedFailure,
 	invokeAsyncDispose,
+	invokeAsyncDisposeWhenFulfilled,
 	invokeSyncDispose,
 	isPromiseLike,
 	requireSynchronousDispose,
+	type UnawaitedFailureSink,
 } from "../services/async-dispose.js";
 import { observePromiseRejection } from "../services/promise-value.js";
 import { LifecycleFactory, type ValueFactory } from "./lifecycle-factory.js";
@@ -36,6 +39,9 @@ export class CachedInstance {
 	 * close. `disposeAsync()` waits for it before dependencies are disposed.
 	 */
 	private _lateCleanup: Promise<void> | undefined;
+	/** Receives the failure of a cleanup that no caller waits for. */
+	private _reportUnawaitedFailure: UnawaitedFailureSink =
+		ignoreUnawaitedFailure;
 
 	constructor(lifetime: CachingLifetime) {
 		this._factory = new LifecycleFactory(lifetime);
@@ -46,8 +52,12 @@ export class CachedInstance {
 	 * starts any cleanup, so a factory that disposes its own container cannot
 	 * hand out a value.
 	 */
-	public close(mode: DisposalMode): void {
+	public close(
+		mode: DisposalMode,
+		reportUnawaitedFailure: UnawaitedFailureSink,
+	): void {
 		this._factory.close(mode);
+		this._reportUnawaitedFailure = reportUnawaitedFailure;
 	}
 
 	public get isDisposed(): boolean {
@@ -70,15 +80,16 @@ export class CachedInstance {
 	 * Returns the cached value, or creates it on the first request. It resolves
 	 * the factory arguments only when it creates the value.
 	 */
-	public getInstance<T>(resolveArguments: FactoryArguments): T {
+	public getInstance<T>(request: InstanceRequest): T {
 		this._factory.assertOpen();
 		if (!this._initialized) {
-			const args = resolveArguments();
+			const args = request.factoryArguments();
 			// Resolving the arguments can close this lifecycle, or create its value
 			// through another container.
 			const factory = this._factory.require();
 			if (!this._initialized) {
 				this.create(factory, args);
+				request.valueCreated();
 			}
 		}
 
@@ -123,7 +134,7 @@ export class CachedInstance {
 		try {
 			if (this._initialized) {
 				const result = invokeSyncDispose(this._instance);
-				requireSynchronousDispose(result);
+				requireSynchronousDispose(result, this._reportUnawaitedFailure);
 			}
 		} finally {
 			this.clear();
@@ -166,26 +177,32 @@ export class CachedInstance {
 	 * cleanup, and `disposeAsync()` of this lifecycle waits for it before its
 	 * dependencies are disposed. A Promise value is the exception: an `async`
 	 * factory that calls `disposeAsync()` before its first `await` can then
-	 * wait for it, so its cleanup starts without a waiter and a later failure is
-	 * not reported.
+	 * wait for it, so its cleanup starts without a waiter and a later failure
+	 * goes to the unawaited-failure sink.
 	 */
 	private discardValueCreatedAfterClose(
 		value: unknown,
 		closedBy: DisposalMode,
 	): ContainerDisposedError {
 		if (closedBy === "async") {
-			const isPromiseValue = isPromiseLike(value);
-			const cleanup = invokeAsyncDispose(value);
-			// Mark a rejection as handled now; disposeAsync() still awaits it.
-			void cleanup.catch(() => undefined);
-			if (!isPromiseValue) {
+			if (isPromiseLike(value)) {
+				void invokeAsyncDisposeWhenFulfilled(value).catch(
+					this._reportUnawaitedFailure,
+				);
+			} else {
+				const cleanup = invokeAsyncDispose(value);
+				// Mark a rejection as handled now; disposeAsync() still awaits it.
+				void cleanup.catch(() => undefined);
 				this._lateCleanup = cleanup;
 			}
 			return this._factory.disposedError();
 		}
 
 		try {
-			requireSynchronousDispose(invokeSyncDispose(value));
+			requireSynchronousDispose(
+				invokeSyncDispose(value),
+				this._reportUnawaitedFailure,
+			);
 		} catch (error) {
 			return this._factory.disposedError({ cause: error });
 		}
