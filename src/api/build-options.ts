@@ -1,9 +1,10 @@
-import type { ValidationMode } from "../core/contracts.js";
+import { type ValidationMode, validationModes } from "../core/contracts.js";
 import {
 	createDiagnosticsReporter,
 	type DiagnosticLevel,
 	type DiagnosticListener,
 	type DiagnosticsReporter,
+	diagnosticLevels,
 	silentDiagnostics,
 } from "../core/diagnostics.js";
 import { InvalidBuildOptionsError } from "../core/errors.js";
@@ -40,9 +41,6 @@ export interface ResolvedBuildOptions {
 	readonly diagnostics: DiagnosticsReporter;
 }
 
-const validationModes: readonly unknown[] = ["eager", "deferred"];
-const diagnosticLevels: readonly unknown[] = ["error", "debug"];
-
 /**
  * Checks the options of `build()` at runtime and applies their defaults.
  * TypeScript rejects these values already. The check protects JavaScript
@@ -54,8 +52,17 @@ const diagnosticLevels: readonly unknown[] = ["error", "debug"];
 export function resolveBuildOptions(
 	options: ContainerBuildOptions,
 ): ResolvedBuildOptions {
-	const validation = options.validation ?? "eager";
-	if (!validationModes.includes(validation)) {
+	if (!isObject(options)) {
+		throw new InvalidBuildOptionsError(
+			"options",
+			options,
+			"Build options must be an object.",
+		);
+	}
+	// Only undefined selects a default. null is an unsupported value.
+	const validation =
+		options.validation === undefined ? "eager" : options.validation;
+	if (!isOneOf(validationModes, validation)) {
 		throw new InvalidBuildOptionsError(
 			"validation",
 			options.validation,
@@ -69,21 +76,36 @@ export function resolveBuildOptions(
 	};
 }
 
+function isOneOf(values: readonly unknown[], value: unknown): boolean {
+	return values.includes(value);
+}
+
+function isObject(value: unknown): value is object {
+	return typeof value === "object" && value !== null;
+}
+
 function diagnosticsReporterFor(
 	options: DiagnosticsOptions | undefined,
 ): DiagnosticsReporter {
 	if (options === undefined) {
 		return silentDiagnostics;
 	}
-	if (typeof options?.listener !== "function") {
+	if (!isObject(options)) {
+		throw new InvalidBuildOptionsError(
+			"diagnostics",
+			options,
+			"Build option diagnostics must be an object with a listener.",
+		);
+	}
+	if (typeof options.listener !== "function") {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.listener",
-			options?.listener,
+			options.listener,
 			"Build option 'diagnostics.listener' must be a function.",
 		);
 	}
-	const level = options.level ?? "error";
-	if (!diagnosticLevels.includes(level)) {
+	const level = options.level === undefined ? "error" : options.level;
+	if (!isOneOf(diagnosticLevels, level)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.level",
 			options.level,

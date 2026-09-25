@@ -214,6 +214,25 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 
 		expect(cleanup).toHaveBeenCalledTimes(1);
 	});
+
+	it("keeps the failure sink of the first close, like its disposal mode", async () => {
+		const lifecycle = create();
+		const failure = new Error("flush failed");
+		const firstSink = vi.fn();
+		lifecycle.setFactory(() => ({
+			async [Symbol.asyncDispose]() {
+				throw failure;
+			},
+		}));
+		lifecycle.getInstance(noArguments);
+		lifecycle.close("sync", firstSink);
+		lifecycle.close("async", () => undefined);
+		captureError(() => lifecycle.dispose());
+
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(firstSink).toHaveBeenCalledWith(failure);
+	});
 });
 
 describe("singleton lifecycle scopes", () => {
