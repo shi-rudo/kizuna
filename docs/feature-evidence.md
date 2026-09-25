@@ -62,12 +62,12 @@ must evaluate Kizuna against its runtime, load, security, and support needs.
 The [package contents tests](../tests/package-contents.test.ts) measure the
 built package in every CI run. A test fails when a value exceeds its budget.
 
-The values were measured on 2026-09-24:
+The values were measured on 2026-09-25:
 
-- Root entry, minified ESM, gzip: 7.1 KiB, budget 9 KiB
-- Shipped `dist/index.mjs`, gzip: 16.4 KiB, budget 20 KiB
-- Packed tarball: 155.8 KiB, budget 200 KiB
-- Unpacked package: 730.7 KiB, budget 900 KiB
+- Root entry, minified ESM, gzip: 7.9 KiB, budget 9 KiB
+- Shipped `dist/index.mjs`, gzip: 17.8 KiB, budget 20 KiB
+- Packed tarball: 171.5 KiB, budget 200 KiB
+- Unpacked package: 792.6 KiB, budget 900 KiB
 
 The minified value comes from an esbuild build of the root entry with all
 exports. A consumer bundle that uses fewer exports can be smaller. The unpacked
