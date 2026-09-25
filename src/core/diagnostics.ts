@@ -9,11 +9,14 @@ import {
 	type UnawaitedFailureSink,
 } from "./services/async-dispose.js";
 
+/** The diagnostic levels, from the most to the least severe. */
+export const diagnosticLevels = ["error", "debug"] as const;
+
 /**
  * Severity of a diagnostic event. The names match common logger methods, so a
  * listener can call `logger[event.level](event, event.message)`.
  */
-export type DiagnosticLevel = "error" | "debug";
+export type DiagnosticLevel = (typeof diagnosticLevels)[number];
 
 /** The container that reports an event: a root container or one of its scopes. */
 export type DiagnosticContainerKind = "root" | "scope";

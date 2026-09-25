@@ -1,9 +1,10 @@
-import type { ValidationMode } from "../core/contracts.js";
+import { type ValidationMode, validationModes } from "../core/contracts.js";
 import {
 	createDiagnosticsReporter,
 	type DiagnosticLevel,
 	type DiagnosticListener,
 	type DiagnosticsReporter,
+	diagnosticLevels,
 	silentDiagnostics,
 } from "../core/diagnostics.js";
 import { InvalidBuildOptionsError } from "../core/errors.js";
@@ -40,9 +41,6 @@ export interface ResolvedBuildOptions {
 	readonly diagnostics: DiagnosticsReporter;
 }
 
-const validationModes: readonly unknown[] = ["eager", "deferred"];
-const diagnosticLevels: readonly unknown[] = ["error", "debug"];
-
 /**
  * Checks the options of `build()` at runtime and applies their defaults.
  * TypeScript rejects these values already. The check protects JavaScript
@@ -64,7 +62,7 @@ export function resolveBuildOptions(
 	// Only undefined selects a default. null is an unsupported value.
 	const validation =
 		options.validation === undefined ? "eager" : options.validation;
-	if (!validationModes.includes(validation)) {
+	if (!isOneOf(validationModes, validation)) {
 		throw new InvalidBuildOptionsError(
 			"validation",
 			options.validation,
@@ -76,6 +74,10 @@ export function resolveBuildOptions(
 		validation,
 		diagnostics: diagnosticsReporterFor(options.diagnostics),
 	};
+}
+
+function isOneOf(values: readonly unknown[], value: unknown): boolean {
+	return values.includes(value);
 }
 
 function isObject(value: unknown): value is object {
@@ -103,7 +105,7 @@ function diagnosticsReporterFor(
 		);
 	}
 	const level = options.level === undefined ? "error" : options.level;
-	if (!diagnosticLevels.includes(level)) {
+	if (!isOneOf(diagnosticLevels, level)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.level",
 			options.level,
