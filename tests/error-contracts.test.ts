@@ -341,6 +341,44 @@ describe("build option error contracts", () => {
 			option: "diagnostics.level",
 		});
 	});
+
+	it("reports build options that are not an object with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() => buildWith(null));
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "options",
+		});
+	});
+
+	it("reports a null validation mode with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() => buildWith({ validation: null }));
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "validation",
+		});
+	});
+
+	it("reports diagnostics that are not an object with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() => buildWith({ diagnostics: null }));
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "diagnostics",
+		});
+	});
+
+	it("reports a null diagnostics level with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() =>
+			buildWith({ diagnostics: { listener: () => undefined, level: null } }),
+		);
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "diagnostics.level",
+		});
+	});
 });
 
 describe("singleton borrowing error contracts", () => {

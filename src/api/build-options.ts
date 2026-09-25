@@ -54,7 +54,16 @@ const diagnosticLevels: readonly unknown[] = ["error", "debug"];
 export function resolveBuildOptions(
 	options: ContainerBuildOptions,
 ): ResolvedBuildOptions {
-	const validation = options.validation ?? "eager";
+	if (!isObject(options)) {
+		throw new InvalidBuildOptionsError(
+			"options",
+			options,
+			"Build options must be an object.",
+		);
+	}
+	// Only undefined selects a default. null is an unsupported value.
+	const validation =
+		options.validation === undefined ? "eager" : options.validation;
 	if (!validationModes.includes(validation)) {
 		throw new InvalidBuildOptionsError(
 			"validation",
@@ -69,20 +78,31 @@ export function resolveBuildOptions(
 	};
 }
 
+function isObject(value: unknown): value is object {
+	return typeof value === "object" && value !== null;
+}
+
 function diagnosticsReporterFor(
 	options: DiagnosticsOptions | undefined,
 ): DiagnosticsReporter {
 	if (options === undefined) {
 		return silentDiagnostics;
 	}
-	if (typeof options?.listener !== "function") {
+	if (!isObject(options)) {
+		throw new InvalidBuildOptionsError(
+			"diagnostics",
+			options,
+			"Build option diagnostics must be an object with a listener.",
+		);
+	}
+	if (typeof options.listener !== "function") {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.listener",
-			options?.listener,
+			options.listener,
 			"Build option 'diagnostics.listener' must be a function.",
 		);
 	}
-	const level = options.level ?? "error";
+	const level = options.level === undefined ? "error" : options.level;
 	if (!diagnosticLevels.includes(level)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.level",
