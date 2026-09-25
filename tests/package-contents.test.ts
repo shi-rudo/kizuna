@@ -11,6 +11,9 @@ const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const KiB = 1024;
 
+// npm pack and the tsup build start separate tools, which can be slow on a cold runner.
+const toolTimeout = 60_000;
+
 // The documented size budgets. docs/feature-evidence.md lists the same values.
 const sizeBudgets = {
 	minifiedEsmGzip: 9 * KiB,
@@ -119,7 +122,7 @@ describe("packed package", () => {
 		}
 		pack = packPackage();
 		files = pack.files.map((file) => file.path);
-	});
+	}, toolTimeout);
 
 	it("ships every bundle that package.json publishes", () => {
 		const missing = publishedBundles().filter(
@@ -145,13 +148,17 @@ describe("packed package", () => {
 		expect(unexpected).toEqual([]);
 	});
 
-	it("keeps the minified ESM bundle within its gzip budget", async () => {
-		const size = await minifiedEsmGzipSize();
+	it(
+		"keeps the minified ESM bundle within its gzip budget",
+		async () => {
+			const size = await minifiedEsmGzipSize();
 
-		expect(size, `minified ESM gzip: ${size} B`).toBeLessThanOrEqual(
-			sizeBudgets.minifiedEsmGzip,
-		);
-	});
+			expect(size, `minified ESM gzip: ${size} B`).toBeLessThanOrEqual(
+				sizeBudgets.minifiedEsmGzip,
+			);
+		},
+		toolTimeout,
+	);
 
 	it("keeps the shipped ESM bundle within its gzip budget", () => {
 		const size = gzipSync(
