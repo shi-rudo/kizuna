@@ -64,6 +64,10 @@ export interface ServiceCreatedEvent
 	extends DiagnosticEventBase<"SERVICE_CREATED", "debug"> {
 	readonly serviceKey: string;
 	readonly lifetime: ServiceLifetime;
+	/**
+	 * The container that resolved the value, not its owner. A singleton that a
+	 * scope resolves first reports `scope` and still belongs to the root.
+	 */
 	readonly container: DiagnosticContainerKind;
 	/** The resolution chain of the container that resolved the value. */
 	readonly path: readonly string[];

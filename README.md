@@ -1066,7 +1066,9 @@ its code. The event object itself carries the structured fields.
   `error` events. `debug` delivers all events.
 - `SERVICE_CREATED` reports each value that a lifecycle created. A cache hit
   reports nothing. `path` is the resolution chain, for example
-  `['userService', 'database']`.
+  `['userService', 'database']`. `container` names the container that
+  resolved the value, not its owner: a singleton that a scope resolves first
+  reports `scope` and still belongs to the root container.
 - If `SCOPE_STARTED` events keep outnumbering `CONTAINER_DISPOSED` events
   for `container: 'scope'`, the application does not dispose some scopes. The
   events carry no scope identity, so they show that scopes leak, not which

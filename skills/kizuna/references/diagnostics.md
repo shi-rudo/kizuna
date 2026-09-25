@@ -47,7 +47,10 @@ and creation events. Use `debug` for development and troubleshooting.
 
 `SERVICE_CREATED` reports each value that a lifecycle created. A cache hit
 reports nothing. `path` is the resolution chain of the container that resolved
-the value, for example `['userService', 'database']`.
+the value, for example `['userService', 'database']`. `container` names that
+resolving container, not the owner: a singleton that a scope resolves first
+reports `scope` and still belongs to the root container. Use `lifetime` to
+find the owner.
 
 ## React to one event
 
