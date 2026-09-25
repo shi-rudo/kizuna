@@ -24,8 +24,10 @@ export function invokeSyncDispose(instance: unknown): unknown {
 	}
 
 	if (isPromiseLike(instance)) {
-		return Promise.resolve(instance).then((resolved) =>
-			invokeSyncDispose(resolved),
+		// The rejection of the value belongs to its consumers, not to cleanup.
+		return Promise.resolve(instance).then(
+			(resolved) => invokeSyncDispose(resolved),
+			ignoreValueRejection,
 		);
 	}
 
@@ -50,15 +52,45 @@ export function invokeSyncDispose(instance: unknown): unknown {
 }
 
 /**
- * Lets an asynchronous cleanup result run without waiting for it. A rejection
- * handler prevents an unhandled rejection.
+ * A rejected Promise value has no value to clean up. Its consumers receive
+ * the rejection, so the cleanup ignores it.
+ */
+const ignoreValueRejection = (): undefined => undefined;
+
+/**
+ * Cleans up the resolved value of a Promise that no caller waits for. Only a
+ * failure of the cleanup hook rejects; a rejection of the value is ignored.
+ *
+ * @internal
+ */
+export function invokeAsyncDisposeWhenFulfilled(
+	value: PromiseLike<unknown>,
+): Promise<void> {
+	return Promise.resolve(value).then(
+		(resolved) => invokeAsyncDispose(resolved),
+		ignoreValueRejection,
+	);
+}
+
+/** Receives the failure of a cleanup that no caller waits for. @internal */
+export type UnawaitedFailureSink = (error: unknown) => void;
+
+/** Drops an unawaited cleanup failure. @internal */
+export const ignoreUnawaitedFailure: UnawaitedFailureSink = () => undefined;
+
+/**
+ * Lets an asynchronous cleanup result run without waiting for it. Its
+ * rejection goes to `onRejected`, so it never becomes an unhandled rejection.
  *
  * @returns True if the result was asynchronous
  * @internal
  */
-function continueWithoutWaiting(result: unknown): boolean {
+function continueWithoutWaiting(
+	result: unknown,
+	onRejected: UnawaitedFailureSink,
+): boolean {
 	if (isPromiseLike(result)) {
-		void Promise.resolve(result).catch(() => undefined);
+		void Promise.resolve(result).catch(onRejected);
 		return true;
 	}
 	return false;
@@ -68,12 +100,15 @@ function continueWithoutWaiting(result: unknown): boolean {
  * Reports cleanup that a synchronous disposal call cannot wait for.
  *
  * The caller receives a synchronous error and can use `disposeAsync()` for
- * future containers.
+ * future containers. A later rejection of that cleanup goes to `onRejected`.
  *
  * @internal
  */
-export function requireSynchronousDispose(result: unknown): void {
-	if (continueWithoutWaiting(result)) {
+export function requireSynchronousDispose(
+	result: unknown,
+	onRejected: UnawaitedFailureSink,
+): void {
+	if (continueWithoutWaiting(result, onRejected)) {
 		throw new TypeError(
 			"dispose() started asynchronous cleanup but cannot wait for it. Use disposeAsync() instead of dispose() for containers with asynchronous cleanup.",
 		);

@@ -5,6 +5,7 @@ import {
 	ContainerBuilder,
 	ContainerDisposedError,
 	DisposalError,
+	InvalidBuildOptionsError,
 	InvalidServiceKeyError,
 	RegistrationConflictError,
 	RegistrationKindError,
@@ -297,6 +298,48 @@ describe("registration error contracts", () => {
 		expect(error).toBeInstanceOf(InvalidServiceKeyError);
 		expect(error).toBeInstanceOf(TypeError);
 		expect(error).toMatchObject({ code: "INVALID_SERVICE_KEY", key });
+	});
+});
+
+describe("build option error contracts", () => {
+	const buildWith = (options: unknown): unknown => {
+		const builder = new ContainerBuilder();
+		return (builder.build as (options: unknown) => unknown).call(
+			builder,
+			options,
+		);
+	};
+
+	it("reports an unknown validation mode with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() => buildWith({ validation: "none" }));
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "validation",
+		});
+		expect(error).toBeInstanceOf(InvalidBuildOptionsError);
+	});
+
+	it("reports a diagnostics listener that is not a function with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() =>
+			buildWith({ diagnostics: { listner: () => undefined } }),
+		);
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "diagnostics.listener",
+		});
+	});
+
+	it("reports an unknown diagnostics level with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() =>
+			buildWith({ diagnostics: { listener: () => undefined, level: "info" } }),
+		);
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "diagnostics.level",
+		});
 	});
 });
 

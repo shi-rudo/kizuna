@@ -21,6 +21,7 @@ The package root now exports these runtime values:
 - `RegistrationConflictError`
 - `BuilderAlreadyBuiltError`
 - `InvalidServiceKeyError`
+- `InvalidBuildOptionsError`
 - `SingletonBorrowError`
 
 It also exports these public types:
@@ -35,6 +36,16 @@ It also exports these public types:
 - `DisposalFailure`
 - `DisposalOperation`
 - `ContainerBuildOptions`
+- `DiagnosticsOptions`
+- `DiagnosticListener`
+- `DiagnosticLevel`
+- `DiagnosticEvent`
+- `DiagnosticContainerKind`
+- `UnawaitedCleanupFailedEvent`
+- `ContainerBuiltEvent`
+- `ScopeStartedEvent`
+- `ContainerDisposedEvent`
+- `ServiceCreatedEvent`
 - `ValidationIssue`
 - `ValidationIssueCode`
 - `ValidationPathSegment`

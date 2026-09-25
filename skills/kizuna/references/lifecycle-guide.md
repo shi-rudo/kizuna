@@ -216,7 +216,9 @@ lifecycle keeps ownership. The async API reports a later rejection in its
 ### Errors and final state
 
 Both APIs attempt every cleanup operation. They report all failures in one
-`DisposalError`. Kizuna does not write cleanup errors to the console.
+`DisposalError`. Kizuna does not write cleanup errors to the console. A cleanup
+failure that no caller waits for reaches a
+[diagnostics listener](diagnostics.md).
 
 The `errors` property contains the original errors. The `failures` property
 identifies the service key, lifetime, cleanup operation, and original error.

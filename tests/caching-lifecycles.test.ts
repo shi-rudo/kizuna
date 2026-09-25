@@ -2,13 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { CircularDependencyError } from "../src/core/errors";
 import { ScopedLifecycle } from "../src/core/scopes/scoped";
 import { SingletonLifecycle } from "../src/core/scopes/singleton";
+import { noArguments, requestWith } from "./instance-request";
 
 const cachingLifecycles = [
 	{ lifetime: "singleton", create: () => new SingletonLifecycle() },
 	{ lifetime: "scoped", create: () => new ScopedLifecycle() },
 ] as const;
-
-const noArguments = (): readonly unknown[] => [];
 
 const captureError = (action: () => unknown): unknown => {
 	try {
@@ -45,8 +44,8 @@ describe.each(cachingLifecycles)("$lifetime lifecycle caching", ({
 		const factory = vi.fn((name: string) => ({ name }));
 		lifecycle.setFactory(factory);
 
-		const first = lifecycle.getInstance(() => ["first"]);
-		const second = lifecycle.getInstance(() => ["second"]);
+		const first = lifecycle.getInstance(requestWith("first"));
+		const second = lifecycle.getInstance(requestWith("second"));
 
 		expect(second).toBe(first);
 		expect(first).toEqual({ name: "first" });

@@ -1,7 +1,7 @@
 import type {
 	ConfigurableServiceLifecycle,
 	DisposalMode,
-	FactoryArguments,
+	InstanceRequest,
 } from "../contracts.js";
 import { LifecycleFactory, type ValueFactory } from "./lifecycle-factory.js";
 
@@ -90,7 +90,7 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * or reuse instances. Each call results in a completely new instance.
 	 *
 	 * @template T - The type of the service instance
-	 * @param resolveArguments - Resolves the factory arguments for this call
+	 * @param request - Resolves the factory arguments for this call and receives the created value
 	 * @returns {T} A new instance of the service
 	 * @throws {Error} If no factory has been registered
 	 * @throws {Error} If the factory function throws an error during instance creation
@@ -101,21 +101,23 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * lifecycle.setFactory((message) => new Logger(message, Date.now()));
 	 *
 	 * // Each call creates a new Logger with current timestamp
-	 * const logger1 = lifecycle.getInstance(() => ['First message']);
+	 * const logger1 = lifecycle.getInstance(requestWith('First message'));
 	 * await new Promise(resolve => setTimeout(resolve, 100));
-	 * const logger2 = lifecycle.getInstance(() => ['Second message']);
+	 * const logger2 = lifecycle.getInstance(requestWith('Second message'));
 	 *
 	 * console.log(logger1 === logger2); // false - different instances
 	 * console.log(logger1.timestamp !== logger2.timestamp); // true - different timestamps
 	 * ```
 	 */
-	public getInstance<T>(resolveArguments: FactoryArguments): T {
+	public getInstance<T>(request: InstanceRequest): T {
 		this._factory.assertOpen();
-		const args = resolveArguments();
+		const args = request.factoryArguments();
 		// Resolving the arguments can close this lifecycle.
 		const factory = this._factory.require();
 		// A factory error propagates unchanged. The container wraps it once.
-		return factory(...args) as T;
+		const value = factory(...args) as T;
+		request.valueCreated();
+		return value;
 	}
 
 	/**
@@ -145,14 +147,14 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * lifecycle.setFactory(() => new EventLogger());
 	 *
 	 * // Create instances in original lifecycle
-	 * const logger1 = lifecycle.getInstance(() => []);
-	 * const logger2 = lifecycle.getInstance(() => []);
+	 * const logger1 = lifecycle.getInstance(request);
+	 * const logger2 = lifecycle.getInstance(request);
 	 * console.log(logger1 === logger2); // false - different instances
 	 *
 	 * // Create a new scope
 	 * const newScope = lifecycle.createScope();
-	 * const logger3 = newScope.getInstance(() => []);
-	 * const logger4 = newScope.getInstance(() => []);
+	 * const logger3 = newScope.getInstance(request);
+	 * const logger4 = newScope.getInstance(request);
 	 *
 	 * // All instances are different (transient behavior)
 	 * console.log(logger1 === logger3); // false
@@ -182,8 +184,8 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * const lifecycle = new TransientLifecycle();
 	 * lifecycle.setFactory(() => new TemporaryService());
 	 *
-	 * const service1 = lifecycle.getInstance(() => []);
-	 * const service2 = lifecycle.getInstance(() => []);
+	 * const service1 = lifecycle.getInstance(request);
+	 * const service2 = lifecycle.getInstance(request);
 	 *
 	 * // Dispose the lifecycle
 	 * lifecycle.dispose();
@@ -192,7 +194,7 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * console.log(lifecycle.isDisposed); // true
 	 *
 	 * // This would throw an error
-	 * // lifecycle.getInstance(() => []); // Error: Cannot resolve from a disposed transient lifecycle
+	 * // lifecycle.getInstance(request); // Error: Cannot resolve from a disposed transient lifecycle
 	 *
 	 * // Note: service1 and service2 are still usable if they don't depend
 	 * // on the lifecycle being active
@@ -227,14 +229,14 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * console.log(lifecycle.isDisposed); // false
 	 *
 	 * lifecycle.setFactory(() => new Service());
-	 * const service = lifecycle.getInstance(() => []);
+	 * const service = lifecycle.getInstance(request);
 	 *
 	 * lifecycle.dispose();
 	 * console.log(lifecycle.isDisposed); // true
 	 *
 	 * // Trying to use disposed lifecycle throws error
 	 * try {
-	 *   lifecycle.getInstance(() => []);
+	 *   lifecycle.getInstance(request);
 	 * } catch (error) {
 	 *   console.log(error.message); // "Cannot resolve from a disposed transient lifecycle"
 	 * }

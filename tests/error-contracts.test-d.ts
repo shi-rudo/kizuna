@@ -5,6 +5,7 @@ import type {
 	ContainerDisposedError,
 	ContainerValidationError,
 	DisposalError,
+	InvalidBuildOptionsError,
 	InvalidServiceKeyError,
 	RegistrationConflictError,
 	RegistrationKind,
@@ -37,6 +38,9 @@ test("every error class exposes a literal code", () => {
 	expectTypeOf<
 		InvalidServiceKeyError["code"]
 	>().toEqualTypeOf<"INVALID_SERVICE_KEY">();
+	expectTypeOf<
+		InvalidBuildOptionsError["code"]
+	>().toEqualTypeOf<"INVALID_BUILD_OPTIONS">();
 	expectTypeOf<
 		SingletonBorrowError["code"]
 	>().toEqualTypeOf<"SINGLETON_BORROW_FAILED">();
@@ -73,4 +77,8 @@ test("fields that callers branch on have closed types", () => {
 
 test("an invalid key error is a TypeError", () => {
 	expectTypeOf<InvalidServiceKeyError>().toMatchTypeOf<TypeError>();
+});
+
+test("an invalid build options error is a TypeError", () => {
+	expectTypeOf<InvalidBuildOptionsError>().toMatchTypeOf<TypeError>();
 });

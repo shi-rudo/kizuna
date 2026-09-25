@@ -1,4 +1,8 @@
 import type { DisposalMode } from "../core/contracts.js";
+import type {
+	DiagnosticContainerKind,
+	DiagnosticsReporter,
+} from "../core/diagnostics.js";
 import {
 	CircularDependencyError,
 	ContainerDisposedError,
@@ -16,6 +20,7 @@ import {
 	createDisposalPlan,
 } from "../core/services/disposal-order.js";
 import {
+	reportValueCreated,
 	resolveDependency,
 	type ServiceWrapper,
 } from "../core/services/service-wrapper.js";
@@ -52,6 +57,16 @@ export const ServiceProviderToken: typeof ServiceContainerToken =
 	ServiceContainerToken;
 
 /**
+ * How a container relates to its root, and where it reports diagnostic events.
+ * Scopes inherit the reporter of their root.
+ * @internal
+ */
+export interface ContainerContext {
+	readonly kind: DiagnosticContainerKind;
+	readonly diagnostics: DiagnosticsReporter;
+}
+
+/**
  * Runtime container that resolves registered services.
  *
  * `ContainerBuilder.build()` creates the root container. `startScope()`
@@ -65,13 +80,14 @@ export class Container<TRegistry extends ServiceRegistry>
 	private readonly registrations: Map<string, ServiceWrapper>;
 	private readonly multiRegistrations: Map<string, ServiceWrapper[]>;
 	private readonly registrationOrder: ServiceWrapper[];
-	private readonly isRootContainer: boolean;
+	private readonly kind: DiagnosticContainerKind;
+	private readonly diagnostics: DiagnosticsReporter;
 	private _disposed = false;
 
 	get [Symbol.toStringTag]():
 		| "KizunaRootServiceContainer"
 		| "KizunaServiceScope" {
-		return this.isRootContainer
+		return this.kind === "root"
 			? "KizunaRootServiceContainer"
 			: "KizunaServiceScope";
 	}
@@ -84,27 +100,17 @@ export class Container<TRegistry extends ServiceRegistry>
 
 	constructor(
 		registrations: ReadonlyMap<string, ServiceWrapper>,
-		multiRegistrations: ReadonlyMap<
-			string,
-			readonly ServiceWrapper[]
-		> = new Map(),
-		registrationOrder?: readonly ServiceWrapper[],
-		isRootContainer = true,
+		multiRegistrations: ReadonlyMap<string, readonly ServiceWrapper[]>,
+		registrationOrder: readonly ServiceWrapper[],
+		context: ContainerContext,
 	) {
-		if (!registrations) {
-			throw new Error("Registrations cannot be null or undefined");
-		}
 		this.registrations = new Map(registrations);
 		this.multiRegistrations = new Map(
 			[...multiRegistrations].map(([key, resolvers]) => [key, [...resolvers]]),
 		);
-		this.isRootContainer = isRootContainer;
-		this.registrationOrder = registrationOrder
-			? [...registrationOrder]
-			: [
-					...this.registrations.values(),
-					...[...this.multiRegistrations.values()].flat(),
-				];
+		this.registrationOrder = [...registrationOrder];
+		this.kind = context.kind;
+		this.diagnostics = context.diagnostics;
 	}
 
 	/**
@@ -171,6 +177,15 @@ export class Container<TRegistry extends ServiceRegistry>
 			: this.resolveSingle(key);
 	}
 
+	/**
+	 * Reports a value that a lifecycle created during a resolution on this
+	 * container.
+	 * @internal
+	 */
+	[reportValueCreated](service: ServiceWrapper): void {
+		this.diagnostics.serviceCreated(service, this.kind, this._resolutionStack);
+	}
+
 	/** Resolves a key with one registration and wraps resolution failures. */
 	private resolveSingle(key: string): unknown {
 		const resolver = this.registrations.get(key);
@@ -215,12 +230,14 @@ export class Container<TRegistry extends ServiceRegistry>
 			.map((resolver) => scopedResolvers.get(resolver))
 			.filter((resolver): resolver is ServiceWrapper => resolver !== undefined);
 
-		return new Container<TRegistry>(
+		const scope = new Container<TRegistry>(
 			newRegistrations,
 			newMultiRegistrations,
 			scopedRegistrationOrder,
-			false,
+			{ kind: "scope", diagnostics: this.diagnostics },
 		);
+		this.diagnostics.scopeStarted();
+		return scope;
 	}
 
 	/**
@@ -230,7 +247,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	[borrowableSourceCapability](key: string): BorrowedSingletonReference {
 		this.ensureNotDisposed();
 
-		if (!this.isRootContainer) {
+		if (this.kind !== "root") {
 			throw new SingletonBorrowError(
 				key,
 				"SOURCE_IS_SCOPE",
@@ -306,7 +323,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			this.clearRegistrations();
 		}
 
-		this.throwDisposalFailures(failures);
+		this.finishDisposal("sync", failures);
 	}
 
 	/**
@@ -334,7 +351,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			this.clearRegistrations();
 		}
 
-		this.throwDisposalFailures(failures);
+		this.finishDisposal("async", failures);
 	}
 
 	/**
@@ -416,7 +433,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	 */
 	private closeOwnedLifecycles(mode: DisposalMode): void {
 		for (const resolver of this.registrationOrder) {
-			resolver.close(mode);
+			resolver.close(mode, this.diagnostics);
 		}
 	}
 
@@ -433,7 +450,12 @@ export class Container<TRegistry extends ServiceRegistry>
 		});
 	}
 
-	private throwDisposalFailures(failures: readonly DisposalFailure[]): void {
+	/** Reports the finished disposal, then throws its failures. */
+	private finishDisposal(
+		mode: DisposalMode,
+		failures: readonly DisposalFailure[],
+	): void {
+		this.diagnostics.containerDisposed(this.kind, mode, failures.length);
 		if (failures.length > 0) {
 			throw new DisposalError(
 				failures.map((failure) => failure.error),

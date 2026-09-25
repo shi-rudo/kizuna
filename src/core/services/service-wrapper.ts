@@ -1,10 +1,12 @@
 import type {
 	DisposalMode,
+	InstanceRequest,
 	ServiceLifecycle,
 	ServiceLifetime,
 	ServiceValueOwnership,
 } from "../contracts.js";
-import { ContainerDisposedError } from "../errors.js";
+import type { DiagnosticsReporter } from "../diagnostics.js";
+import { ContainerDisposedError, type DisposalOperation } from "../errors.js";
 
 /**
  * Resolves one declared constructor dependency. A key with multiple
@@ -15,9 +17,47 @@ export const resolveDependency: unique symbol = Symbol(
 	"kizuna.resolveDependency",
 );
 
-/** Minimal contract for dependency resolution within ServiceWrapper. */
+/**
+ * Reports that the lifecycle of a service created a value during a resolution.
+ * @internal
+ */
+export const reportValueCreated: unique symbol = Symbol(
+	"kizuna.reportValueCreated",
+);
+
+/** The container that resolves a service: its dependencies and its creations. */
 interface ServiceResolver {
 	[resolveDependency](key: string): unknown;
+	[reportValueCreated](service: ServiceWrapper): void;
+}
+
+/**
+ * The request that a service passes to its lifecycle for one resolution. It
+ * resolves the factory arguments through the resolving container and reports
+ * a created value to it.
+ */
+class ResolutionRequest implements InstanceRequest {
+	constructor(
+		private readonly service: ServiceWrapper,
+		private readonly container: ServiceResolver,
+	) {}
+
+	/**
+	 * Returns the container for a factory registration, or the resolved
+	 * dependencies for a constructor.
+	 */
+	factoryArguments(): readonly unknown[] {
+		if (!this.service.isConstructorBased()) {
+			return [this.container];
+		}
+		return this.service
+			.getDependencies()
+			.map((dependency) => this.container[resolveDependency](dependency));
+	}
+
+	valueCreated(): void {
+		this.container[reportValueCreated](this.service);
+	}
 }
 
 /**
@@ -52,7 +92,8 @@ export class ServiceWrapper {
 
 	/**
 	 * Resolves the service instance with its dependencies.
-	 * @param container The container or scope that resolves dependencies
+	 * @param container The container or scope that resolves dependencies and
+	 * receives each created value
 	 * @returns The resolved service instance
 	 */
 	resolve(container: ServiceResolver): any {
@@ -62,20 +103,7 @@ export class ServiceWrapper {
 			);
 		}
 
-		return this._lifecycle.getInstance(() => this.factoryArguments(container));
-	}
-
-	/**
-	 * Returns the arguments of a factory call: the container for a factory
-	 * registration, or the resolved dependencies for a constructor.
-	 */
-	private factoryArguments(container: ServiceResolver): readonly unknown[] {
-		if (!this.isConstructorBased()) {
-			return [container];
-		}
-		return this._dependencies.map((dependency) =>
-			container[resolveDependency](dependency),
-		);
+		return this._lifecycle.getInstance(new ResolutionRequest(this, container));
 	}
 
 	/**
@@ -119,11 +147,17 @@ export class ServiceWrapper {
 
 	/**
 	 * Stops new resolutions of an owned lifecycle before the container starts
-	 * its cleanup.
+	 * its cleanup. A cleanup failure that no caller waits for goes to
+	 * `diagnostics`.
 	 */
-	close(mode: DisposalMode): void {
+	close(mode: DisposalMode, diagnostics: DiagnosticsReporter): void {
 		if (this._lifecycle && this._ownsLifecycle) {
-			this._lifecycle.close(mode);
+			const operation: DisposalOperation =
+				mode === "async" ? "disposeAsync" : "dispose";
+			this._lifecycle.close(
+				mode,
+				diagnostics.unawaitedFailureSink(this, operation),
+			);
 		}
 	}
 

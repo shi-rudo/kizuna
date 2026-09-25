@@ -14,6 +14,8 @@ Later decisions amend parts of this ADR:
   parameter.
 - [ADR-011](./011-dependency-aware-disposal-order.md) defines cleanup order.
 - [ADR-012](./012-disposal-error-aggregation.md) defines cleanup errors.
+- [ADR-013](./013-diagnostic-events.md) defines the `diagnostics` build
+  option.
 
 ## Context
 
