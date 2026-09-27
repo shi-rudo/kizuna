@@ -9,11 +9,14 @@ import {
 	type UnawaitedFailureSink,
 } from "./services/async-dispose.js";
 
+/** The diagnostic levels, from the most to the least severe. */
+export const diagnosticLevels = ["error", "debug"] as const;
+
 /**
  * Severity of a diagnostic event. The names match common logger methods, so a
  * listener can call `logger[event.level](event, event.message)`.
  */
-export type DiagnosticLevel = "error" | "debug";
+export type DiagnosticLevel = (typeof diagnosticLevels)[number];
 
 /** The container that reports an event: a root container or one of its scopes. */
 export type DiagnosticContainerKind = "root" | "scope";
@@ -61,6 +64,10 @@ export interface ServiceCreatedEvent
 	extends DiagnosticEventBase<"SERVICE_CREATED", "debug"> {
 	readonly serviceKey: string;
 	readonly lifetime: ServiceLifetime;
+	/**
+	 * The container that resolved the value, not its owner. A singleton that a
+	 * scope resolves first reports `scope` and still belongs to the root.
+	 */
 	readonly container: DiagnosticContainerKind;
 	/** The resolution chain of the container that resolved the value. */
 	readonly path: readonly string[];

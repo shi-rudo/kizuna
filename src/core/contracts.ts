@@ -15,8 +15,11 @@ export interface BorrowedSingletonReference {
 /** The disposal path that closes a container: `dispose()` or `disposeAsync()`. */
 export type DisposalMode = "sync" | "async";
 
+/** The modes in which `build()` validates the dependency graph. */
+export const validationModes = ["eager", "deferred"] as const;
+
 /** When `build()` validates the dependency graph. */
-export type ValidationMode = "eager" | "deferred";
+export type ValidationMode = (typeof validationModes)[number];
 
 /**
  * One request for a service value. A lifecycle resolves the factory arguments

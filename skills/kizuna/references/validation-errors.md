@@ -149,6 +149,11 @@ Each error that the public API can throw has an exported class with a literal
 | `InvalidBuildOptionsError` (extends `TypeError`) | `INVALID_BUILD_OPTIONS` | `option`, `value` |
 | `SingletonBorrowError` | `SINGLETON_BORROW_FAILED` | `key`, `reason` |
 
+`InvalidBuildOptionsError` reports an unsupported `build()` option. Its
+`option` field is the path, for example `diagnostics.level`, or `options` when
+the options value itself is not a plain object. Only `undefined` selects a
+default; `null` is an unsupported value.
+
 A `ServiceResolutionError` holds the original error as its `cause`. If a
 dependency fails, the `cause` is the error of that dependency.
 

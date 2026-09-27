@@ -192,7 +192,10 @@ export class InvalidServiceKeyError extends TypeError {
 /** `build()` received an option value that it does not support. */
 export class InvalidBuildOptionsError extends TypeError {
 	public readonly code = "INVALID_BUILD_OPTIONS" as const;
-	/** The path of the rejected option, for example `diagnostics.level`. */
+	/**
+	 * The path of the rejected option, for example `diagnostics.level`. The
+	 * value `options` stands for the options object itself.
+	 */
 	public readonly option: string;
 	/** The rejected value. */
 	public readonly value: unknown;

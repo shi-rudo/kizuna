@@ -1,9 +1,10 @@
-import type { ValidationMode } from "../core/contracts.js";
+import { type ValidationMode, validationModes } from "../core/contracts.js";
 import {
 	createDiagnosticsReporter,
 	type DiagnosticLevel,
 	type DiagnosticListener,
 	type DiagnosticsReporter,
+	diagnosticLevels,
 	silentDiagnostics,
 } from "../core/diagnostics.js";
 import { InvalidBuildOptionsError } from "../core/errors.js";
@@ -40,13 +41,10 @@ export interface ResolvedBuildOptions {
 	readonly diagnostics: DiagnosticsReporter;
 }
 
-const validationModes: readonly unknown[] = ["eager", "deferred"];
-const diagnosticLevels: readonly unknown[] = ["error", "debug"];
-
 /**
  * Checks the options of `build()` at runtime and applies their defaults.
  * TypeScript rejects these values already. The check protects JavaScript
- * callers and unsafe casts.
+ * callers and unsafe casts, so it reads every value as `unknown`.
  *
  * @throws {InvalidBuildOptionsError} If an option has an unsupported value
  * @internal
@@ -54,41 +52,75 @@ const diagnosticLevels: readonly unknown[] = ["error", "debug"];
 export function resolveBuildOptions(
 	options: ContainerBuildOptions,
 ): ResolvedBuildOptions {
-	const validation = options.validation ?? "eager";
-	if (!validationModes.includes(validation)) {
+	const received: unknown = options;
+	if (!isPlainObject(received)) {
+		throw new InvalidBuildOptionsError(
+			"options",
+			received,
+			"Build options must be a plain object.",
+		);
+	}
+	// Only undefined selects a default. null is an unsupported value.
+	const validation =
+		received.validation === undefined ? "eager" : received.validation;
+	if (!isOneOf(validationModes, validation)) {
 		throw new InvalidBuildOptionsError(
 			"validation",
-			options.validation,
-			"Build option 'validation' must be 'eager' or 'deferred'.",
+			received.validation,
+			`Build option 'validation' must be ${alternatives(validationModes)}.`,
 		);
 	}
 
 	return {
 		validation,
-		diagnostics: diagnosticsReporterFor(options.diagnostics),
+		diagnostics: diagnosticsReporterFor(received.diagnostics),
 	};
 }
 
-function diagnosticsReporterFor(
-	options: DiagnosticsOptions | undefined,
-): DiagnosticsReporter {
+function diagnosticsReporterFor(options: unknown): DiagnosticsReporter {
 	if (options === undefined) {
 		return silentDiagnostics;
 	}
-	if (typeof options?.listener !== "function") {
+	if (!isPlainObject(options)) {
+		throw new InvalidBuildOptionsError(
+			"diagnostics",
+			options,
+			"Build option 'diagnostics' must be a plain object with a listener.",
+		);
+	}
+	const { listener } = options;
+	if (!isListener(listener)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.listener",
-			options?.listener,
+			listener,
 			"Build option 'diagnostics.listener' must be a function.",
 		);
 	}
-	const level = options.level ?? "error";
-	if (!diagnosticLevels.includes(level)) {
+	const level = options.level === undefined ? "error" : options.level;
+	if (!isOneOf(diagnosticLevels, level)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.level",
 			options.level,
-			"Build option 'diagnostics.level' must be 'error' or 'debug'.",
+			`Build option 'diagnostics.level' must be ${alternatives(diagnosticLevels)}.`,
 		);
 	}
-	return createDiagnosticsReporter(options.listener, level);
+	return createDiagnosticsReporter(listener, level);
+}
+
+/** True for an object literal or a class instance. Arrays, maps, and null are not. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return Object.prototype.toString.call(value) === "[object Object]";
+}
+
+function isOneOf<T>(values: readonly T[], value: unknown): value is T {
+	return (values as readonly unknown[]).includes(value);
+}
+
+function isListener(value: unknown): value is DiagnosticListener {
+	return typeof value === "function";
+}
+
+/** Lists the allowed values for an error message, for example `'eager' or 'deferred'`. */
+function alternatives(values: readonly string[]): string {
+	return values.map((value) => `'${value}'`).join(" or ");
 }

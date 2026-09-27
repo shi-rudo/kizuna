@@ -965,7 +965,7 @@ a literal `code` and the fields that a caller needs. Check `instanceof` or
 | `RegistrationConflictError` | `REGISTRATION_CONFLICT` | `key`, `existingKind`, `requestedKind` | a registration reuses a key |
 | `BuilderAlreadyBuiltError` | `BUILDER_ALREADY_BUILT` | — | code registers a service after `build()` |
 | `InvalidServiceKeyError` | `INVALID_SERVICE_KEY` | `key` | a registration, dependency, or resolution key is not a valid string; extends `TypeError` |
-| `InvalidBuildOptionsError` | `INVALID_BUILD_OPTIONS` | `option`, `value` | `build()` receives an unsupported `validation` mode or `diagnostics` option; extends `TypeError` |
+| `InvalidBuildOptionsError` | `INVALID_BUILD_OPTIONS` | `option`, `value` | `build()` receives options or a `diagnostics` option that is not a plain object, a `null` value, an unsupported `validation` mode or `diagnostics.level`, or a `diagnostics.listener` that is not a function. `option` is the path, or `options` for the object itself; extends `TypeError` |
 | `SingletonBorrowError` | `SINGLETON_BORROW_FAILED` | `key`, `reason` | `borrowSingletonFrom()` cannot borrow the singleton |
 
 `registrationKind`, `existingKind`, and `requestedKind` have the type
@@ -1066,7 +1066,9 @@ its code. The event object itself carries the structured fields.
   `error` events. `debug` delivers all events.
 - `SERVICE_CREATED` reports each value that a lifecycle created. A cache hit
   reports nothing. `path` is the resolution chain, for example
-  `['userService', 'database']`.
+  `['userService', 'database']`. `container` names the container that
+  resolved the value, not its owner: a singleton that a scope resolves first
+  reports `scope` and still belongs to the root container.
 - If `SCOPE_STARTED` events keep outnumbering `CONTAINER_DISPOSED` events
   for `container: 'scope'`, the application does not dispose some scopes. The
   events carry no scope identity, so they show that scopes leak, not which

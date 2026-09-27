@@ -50,14 +50,15 @@ export class CachedInstance {
 	/**
 	 * Stops new resolutions. The owning container calls this method before it
 	 * starts any cleanup, so a factory that disposes its own container cannot
-	 * hand out a value.
+	 * hand out a value. The first close keeps its mode and its failure sink.
 	 */
 	public close(
 		mode: DisposalMode,
 		reportUnawaitedFailure: UnawaitedFailureSink,
 	): void {
-		this._factory.close(mode);
-		this._reportUnawaitedFailure = reportUnawaitedFailure;
+		if (this._factory.close(mode)) {
+			this._reportUnawaitedFailure = reportUnawaitedFailure;
+		}
 	}
 
 	public get isDisposed(): boolean {

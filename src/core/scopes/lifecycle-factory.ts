@@ -52,9 +52,15 @@ export class LifecycleFactory {
 	/**
 	 * Stops new resolutions. The owning container calls this method before it
 	 * starts any cleanup. The first disposal path that closes it is kept.
+	 *
+	 * @returns True if this call closed the lifecycle, false if it was closed
 	 */
-	public close(mode: DisposalMode): void {
-		this._closedBy ??= mode;
+	public close(mode: DisposalMode): boolean {
+		if (this._closedBy) {
+			return false;
+		}
+		this._closedBy = mode;
+		return true;
 	}
 
 	/** Closes the lifecycle for good and releases the factory. */
