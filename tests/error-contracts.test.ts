@@ -351,6 +351,24 @@ describe("build option error contracts", () => {
 		});
 	});
 
+	it("reports build options that are an array with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() => buildWith(["deferred"]));
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "options",
+		});
+	});
+
+	it("reports diagnostics that are an array with INVALID_BUILD_OPTIONS", () => {
+		const error = captureError(() => buildWith({ diagnostics: [] }));
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "diagnostics",
+		});
+	});
+
 	it("reports a null validation mode with INVALID_BUILD_OPTIONS", () => {
 		const error = captureError(() => buildWith({ validation: null }));
 

@@ -44,7 +44,7 @@ export interface ResolvedBuildOptions {
 /**
  * Checks the options of `build()` at runtime and applies their defaults.
  * TypeScript rejects these values already. The check protects JavaScript
- * callers and unsafe casts.
+ * callers and unsafe casts, so it reads every value as `unknown`.
  *
  * @throws {InvalidBuildOptionsError} If an option has an unsupported value
  * @internal
@@ -52,55 +52,47 @@ export interface ResolvedBuildOptions {
 export function resolveBuildOptions(
 	options: ContainerBuildOptions,
 ): ResolvedBuildOptions {
-	if (!isObject(options)) {
+	const received: unknown = options;
+	if (!isPlainObject(received)) {
 		throw new InvalidBuildOptionsError(
 			"options",
-			options,
-			"Build options must be an object.",
+			received,
+			"Build options must be a plain object.",
 		);
 	}
 	// Only undefined selects a default. null is an unsupported value.
 	const validation =
-		options.validation === undefined ? "eager" : options.validation;
+		received.validation === undefined ? "eager" : received.validation;
 	if (!isOneOf(validationModes, validation)) {
 		throw new InvalidBuildOptionsError(
 			"validation",
-			options.validation,
-			"Build option 'validation' must be 'eager' or 'deferred'.",
+			received.validation,
+			`Build option 'validation' must be ${alternatives(validationModes)}.`,
 		);
 	}
 
 	return {
 		validation,
-		diagnostics: diagnosticsReporterFor(options.diagnostics),
+		diagnostics: diagnosticsReporterFor(received.diagnostics),
 	};
 }
 
-function isOneOf(values: readonly unknown[], value: unknown): boolean {
-	return values.includes(value);
-}
-
-function isObject(value: unknown): value is object {
-	return typeof value === "object" && value !== null;
-}
-
-function diagnosticsReporterFor(
-	options: DiagnosticsOptions | undefined,
-): DiagnosticsReporter {
+function diagnosticsReporterFor(options: unknown): DiagnosticsReporter {
 	if (options === undefined) {
 		return silentDiagnostics;
 	}
-	if (!isObject(options)) {
+	if (!isPlainObject(options)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics",
 			options,
-			"Build option diagnostics must be an object with a listener.",
+			"Build option 'diagnostics' must be a plain object with a listener.",
 		);
 	}
-	if (typeof options.listener !== "function") {
+	const { listener } = options;
+	if (!isListener(listener)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.listener",
-			options.listener,
+			listener,
 			"Build option 'diagnostics.listener' must be a function.",
 		);
 	}
@@ -109,8 +101,26 @@ function diagnosticsReporterFor(
 		throw new InvalidBuildOptionsError(
 			"diagnostics.level",
 			options.level,
-			"Build option 'diagnostics.level' must be 'error' or 'debug'.",
+			`Build option 'diagnostics.level' must be ${alternatives(diagnosticLevels)}.`,
 		);
 	}
-	return createDiagnosticsReporter(options.listener, level);
+	return createDiagnosticsReporter(listener, level);
+}
+
+/** True for an object literal or a class instance. Arrays, maps, and null are not. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return Object.prototype.toString.call(value) === "[object Object]";
+}
+
+function isOneOf<T>(values: readonly T[], value: unknown): value is T {
+	return (values as readonly unknown[]).includes(value);
+}
+
+function isListener(value: unknown): value is DiagnosticListener {
+	return typeof value === "function";
+}
+
+/** Lists the allowed values for an error message, for example `'eager' or 'deferred'`. */
+function alternatives(values: readonly string[]): string {
+	return values.map((value) => `'${value}'`).join(" or ");
 }
