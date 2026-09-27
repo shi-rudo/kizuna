@@ -49,8 +49,10 @@ and creation events. Use `debug` for development and troubleshooting.
 reports nothing. `path` is the resolution chain of the container that resolved
 the value, for example `['userService', 'database']`. `container` names that
 resolving container, not the owner: a singleton that a scope resolves first
-reports `scope` and still belongs to the root container. Use `lifetime` to
-find the owner.
+reports `scope` and still belongs to the root container. `lifetime` names the
+owner only for a singleton: the root container. A scoped value belongs to a
+scope that the event does not identify, and Kizuna does not own transient
+values.
 
 ## React to one event
 
