@@ -56,11 +56,9 @@ export class CachedInstance {
 		mode: DisposalMode,
 		reportUnawaitedFailure: UnawaitedFailureSink,
 	): void {
-		if (this._factory.closedBy) {
-			return;
+		if (this._factory.close(mode)) {
+			this._reportUnawaitedFailure = reportUnawaitedFailure;
 		}
-		this._factory.close(mode);
-		this._reportUnawaitedFailure = reportUnawaitedFailure;
 	}
 
 	public get isDisposed(): boolean {
