@@ -39,4 +39,5 @@ An undeclared container lookup does not add an edge. Applications must declare f
 - Multi-registration dependencies use the same order as single registrations.
 - A cycle cannot have a valid internal disposal order. Services in the cycle start in registration order.
 - The graph plan takes `O((V + E) log V)` time and `O(V + E)` memory.
+- A built container computes the plan once. The root and its scopes share it. A container skips the registrations that it does not own, but an edge through such a registration still orders the services around it.
 - Declared factory dependencies use the same cleanup order as constructor dependencies.

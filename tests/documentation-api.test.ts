@@ -430,6 +430,12 @@ ${example}
 		);
 
 		expect(adr).toContain(
+			"It does not look up services in its parent, and it creates its own wrapper for each registration that it resolves.",
+		);
+		expect(adr).toContain(
+			"A scope creates the wrapper of a registration when it resolves the key for the first time, and keeps it for later lookups.",
+		);
+		expect(adr).not.toContain(
 			"Each scope gets a new wrapper for each registration.",
 		);
 		expect(adr).toContain(
