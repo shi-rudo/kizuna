@@ -16,8 +16,11 @@ import {
 	SingletonBorrowError,
 } from "../core/errors.js";
 import {
-	createDisposalLayers,
 	createDisposalPlan,
+	createDisposalSequence,
+	type DisposalAttempt,
+	disposeByPlan,
+	disposeInSequence,
 } from "../core/services/disposal-order.js";
 import {
 	reportValueCreated,
@@ -308,19 +311,15 @@ export class Container<TRegistry extends ServiceRegistry>
 		this._disposed = true;
 		this.closeOwnedLifecycles("sync");
 
-		const failures: DisposalFailure[] = [];
+		let failures: readonly DisposalFailure[] = [];
 		try {
-			for (const layer of createDisposalLayers(this.registrationOrder)) {
-				for (const resolver of layer) {
-					try {
-						resolver.dispose();
-					} catch (error) {
-						failures.push(
-							this.createDisposalFailure(resolver, "dispose", error),
-						);
-					}
-				}
-			}
+			const sequence = createDisposalSequence(
+				createDisposalPlan(this.registrationOrder),
+			);
+			failures = this.toDisposalFailures(
+				disposeInSequence(sequence, (index) => this.ownedAt(index)),
+				"dispose",
+			);
 		} finally {
 			this.clearRegistrations();
 		}
@@ -348,7 +347,13 @@ export class Container<TRegistry extends ServiceRegistry>
 
 		let failures: readonly DisposalFailure[] = [];
 		try {
-			failures = await this.runDependencyAwareDisposeAsync();
+			failures = this.toDisposalFailures(
+				await disposeByPlan(
+					createDisposalPlan(this.registrationOrder),
+					(index) => this.ownedAt(index),
+				),
+				"disposeAsync",
+			);
 		} finally {
 			this.clearRegistrations();
 		}
@@ -370,63 +375,9 @@ export class Container<TRegistry extends ServiceRegistry>
 		await this.disposeAsync();
 	}
 
-	private async runDependencyAwareDisposeAsync(): Promise<
-		readonly DisposalFailure[]
-	> {
-		const plan = createDisposalPlan(this.registrationOrder);
-		if (plan.groups.length === 0) {
-			return [];
-		}
-
-		const failuresByResolver = new Map<ServiceWrapper, DisposalFailure>();
-
-		const remainingConsumerGroups = plan.groups.map(
-			(group) => group.consumerGroupCount,
-		);
-
-		await new Promise<void>((resolve) => {
-			let completedGroups = 0;
-
-			const startGroup = (groupIndex: number): void => {
-				const tasks = plan.groups[groupIndex].resolvers.map(
-					async (resolver) => {
-						try {
-							await resolver.disposeAsync();
-						} catch (error) {
-							failuresByResolver.set(
-								resolver,
-								this.createDisposalFailure(resolver, "disposeAsync", error),
-							);
-						}
-					},
-				);
-
-				void Promise.all(tasks).then(() => {
-					completedGroups++;
-
-					for (const dependencyGroup of plan.groups[groupIndex]
-						.dependencyGroups) {
-						remainingConsumerGroups[dependencyGroup]--;
-						if (remainingConsumerGroups[dependencyGroup] === 0) {
-							startGroup(dependencyGroup);
-						}
-					}
-
-					if (completedGroups === plan.groups.length) {
-						resolve();
-					}
-				});
-			};
-
-			for (const groupIndex of plan.rootGroups) {
-				startGroup(groupIndex);
-			}
-		});
-
-		return this.registrationOrder.flatMap((resolver) => {
-			const failure = failuresByResolver.get(resolver);
-			return failure ? [failure] : [];
-		});
+	/** The service that this container owns at a registration index. */
+	private ownedAt(index: number): ServiceWrapper | undefined {
+		return this.registrationOrder[index];
 	}
 
 	/**
@@ -439,17 +390,18 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 	}
 
-	private createDisposalFailure(
-		resolver: ServiceWrapper,
+	private toDisposalFailures(
+		attempts: readonly DisposalAttempt<ServiceWrapper>[],
 		operation: DisposalOperation,
-		error: unknown,
-	): DisposalFailure {
-		return Object.freeze({
-			serviceKey: resolver.getName(),
-			lifetime: resolver.getLifetime(),
-			operation,
-			error,
-		});
+	): readonly DisposalFailure[] {
+		return attempts.map(({ service, error }) =>
+			Object.freeze({
+				serviceKey: service.getName(),
+				lifetime: service.getLifetime(),
+				operation,
+				error,
+			}),
+		);
 	}
 
 	/** Reports the finished disposal, then throws its failures. */
