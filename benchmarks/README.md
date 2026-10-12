@@ -13,6 +13,7 @@ machines.
 | Warm resolve | Get one pre-resolved singleton from a container with other registrations. |
 | Deep resolve | Resolve a transient dependency chain. Every lookup creates the full chain. |
 | Scope creation | Start a scope from a container with singleton, scoped, and transient registrations. |
+| Scope request | Start a scope, get one singleton, one scoped, and one transient service, and dispose the scope. |
 | Multi-resolution | Get all pre-resolved singleton registrations for one key. |
 | Synchronous disposal | Dispose resolved singleton resources with `Symbol.dispose` hooks. Pool creation is outside the measurement. |
 | Asynchronous disposal | Dispose resolved singleton resources with `Symbol.asyncDispose` hooks. Pool creation is outside the measurement. |
