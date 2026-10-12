@@ -196,7 +196,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 
 		try {
-			return this.trackResolution(key, () => resolver.resolve(this));
+			return this._resolution.track(key, () => resolver.resolve(this));
 		} catch (error) {
 			if (this.passesThrough(error)) {
 				throw error;
@@ -484,7 +484,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		resolvers: readonly ServiceWrapper[],
 	): any[] {
 		try {
-			return this.trackResolution(typeName, () =>
+			return this._resolution.track(typeName, () =>
 				resolvers.map((resolver) => resolver.resolve(this)),
 			);
 		} catch (error) {
@@ -505,23 +505,5 @@ export class Container<TRegistry extends ServiceRegistry>
 			error instanceof CircularDependencyError ||
 			(error instanceof ContainerDisposedError && this._disposed)
 		);
-	}
-
-	/**
-	 * Runs a resolution step with cycle protection: while `fn` executes,
-	 * `typeName` is on the resolution stack; re-entering it (directly or via
-	 * transitive dependencies and factories) throws a CircularDependencyError
-	 * instead of recursing until the call stack overflows.
-	 */
-	private trackResolution<T>(typeName: string, fn: () => T): T {
-		if (this._resolution.includes(typeName)) {
-			throw new CircularDependencyError([...this._resolution.path, typeName]);
-		}
-		this._resolution.push(typeName);
-		try {
-			return fn();
-		} finally {
-			this._resolution.pop();
-		}
 	}
 }

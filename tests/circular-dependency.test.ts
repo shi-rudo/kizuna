@@ -164,6 +164,13 @@ describe("Circular dependency detection in deep resolution chains", () => {
 		expect(() => container.get("node-0")).not.toThrow();
 	});
 
+	it("resolves a chain deeper than 16 levels again without a false cycle", () => {
+		const container = chain(20).build({ validation: "deferred" });
+		container.get("node-0");
+
+		expect(() => container.get("node-0")).not.toThrow();
+	});
+
 	it("detects a shallow cycle after a deep resolution", () => {
 		const container = chain(20)
 			.registerTransientFactory("a", (c) => c.get("b"))
