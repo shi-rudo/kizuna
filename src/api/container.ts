@@ -111,7 +111,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	 */
 	private readonly _resolution = new ResolutionStack();
 
-	private constructor(
+	protected constructor(
 		catalog: ServiceCatalog,
 		ownership: ServiceOwnership,
 		context: ContainerContext,
