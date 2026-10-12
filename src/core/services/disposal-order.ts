@@ -28,11 +28,11 @@ export interface DisposalAttempt<TService> {
 	readonly error: unknown;
 }
 
-/**
- * Returns the service that a container owns at a registration index, or
- * undefined when the container owns none there.
- */
-export type OwnedServiceAt<TService> = (index: number) => TService | undefined;
+/** The services that one container disposes, by registration index. */
+export interface DisposalOwner<TService> {
+	/** Returns the owned service at a registration index, if there is one. */
+	ownedAt(index: number): TService | undefined;
+}
 
 /**
  * Creates the stable sync disposal order in consumer-before-dependency layers.
@@ -162,11 +162,11 @@ export function createDisposalPlan(
  */
 export function disposeInSequence<TService extends { dispose(): void }>(
 	sequence: readonly number[],
-	ownedAt: OwnedServiceAt<TService>,
+	owner: DisposalOwner<TService>,
 ): readonly DisposalAttempt<TService>[] {
 	const failures: DisposalAttempt<TService>[] = [];
 	for (const index of sequence) {
-		const service = ownedAt(index);
+		const service = owner.ownedAt(index);
 		if (service === undefined) {
 			continue;
 		}
@@ -181,14 +181,16 @@ export function disposeInSequence<TService extends { dispose(): void }>(
 
 /**
  * Disposes the owned services along the plan. Root groups start in parallel.
- * A group starts after all of its consumer groups settle. A rejection does
- * not stop other cleanup. The failures follow registration order.
+ * A group starts after all of its consumer groups settle. A group without
+ * owned services settles at once, so it passes the order on without waiting.
+ * A rejection does not stop other cleanup. The failures follow registration
+ * order.
  */
 export async function disposeByPlan<
 	TService extends { disposeAsync(): Promise<void> },
 >(
 	plan: DisposalPlan,
-	ownedAt: OwnedServiceAt<TService>,
+	owner: DisposalOwner<TService>,
 ): Promise<readonly DisposalAttempt<TService>[]> {
 	if (plan.groups.length === 0) {
 		return [];
@@ -198,44 +200,62 @@ export async function disposeByPlan<
 	const remainingConsumerGroups = plan.groups.map(
 		(group) => group.consumerGroupCount,
 	);
+	const ready = [...plan.rootGroups];
+	let nextReady = 0;
+	let settledGroups = 0;
+
+	const settle = (groupIndex: number): void => {
+		settledGroups++;
+		for (const dependencyGroup of plan.groups[groupIndex].dependencyGroups) {
+			remainingConsumerGroups[dependencyGroup]--;
+			if (remainingConsumerGroups[dependencyGroup] === 0) {
+				ready.push(dependencyGroup);
+			}
+		}
+	};
 
 	await new Promise<void>((resolve) => {
-		let completedGroups = 0;
-
-		const startGroup = (groupIndex: number): void => {
-			const tasks = plan.groups[groupIndex].members.map(async (index) => {
-				const service = ownedAt(index);
-				if (service === undefined) {
-					return;
-				}
-				try {
-					await service.disposeAsync();
-				} catch (error) {
-					failures.push({ index, service, error });
-				}
-			});
-
-			void Promise.all(tasks).then(() => {
-				completedGroups++;
-
-				for (const dependencyGroup of plan.groups[groupIndex]
-					.dependencyGroups) {
-					remainingConsumerGroups[dependencyGroup]--;
-					if (remainingConsumerGroups[dependencyGroup] === 0) {
-						startGroup(dependencyGroup);
+		// A loop instead of recursion: a long chain of groups without owned
+		// services settles in one pass without growing the call stack.
+		const startReadyGroups = (): void => {
+			while (nextReady < ready.length) {
+				const groupIndex = ready[nextReady++];
+				const tasks: Promise<void>[] = [];
+				for (const index of plan.groups[groupIndex].members) {
+					const service = owner.ownedAt(index);
+					if (service !== undefined) {
+						tasks.push(disposeOne(index, service, failures));
 					}
 				}
-
-				if (completedGroups === plan.groups.length) {
-					resolve();
+				if (tasks.length === 0) {
+					settle(groupIndex);
+					continue;
 				}
-			});
+				void Promise.all(tasks).then(() => {
+					settle(groupIndex);
+					startReadyGroups();
+				});
+			}
+			if (settledGroups === plan.groups.length) {
+				resolve();
+			}
 		};
 
-		for (const groupIndex of plan.rootGroups) {
-			startGroup(groupIndex);
-		}
+		startReadyGroups();
 	});
 
 	return failures.sort((left, right) => left.index - right.index);
+}
+
+/** Awaits one async cleanup and records its failure. */
+async function disposeOne<TService extends { disposeAsync(): Promise<void> }>(
+	index: number,
+	service: TService,
+	failures: DisposalAttempt<TService>[],
+): Promise<void> {
+	try {
+		await service.disposeAsync();
+	} catch (error) {
+		failures.push({ index, service, error });
+	}
 }
