@@ -83,6 +83,105 @@ describe("Circular dependency detection at resolve time", () => {
 	});
 });
 
+describe("Circular dependency detection in deep resolution chains", () => {
+	// The chain keys are generated, and the typed builder accepts only fixed
+	// string literals, so these tests use an untyped view of the builder.
+	interface UntypedBuilder {
+		registerTransientFactory(
+			key: string,
+			factory: (container: { get(key: string): unknown }) => unknown,
+		): UntypedBuilder;
+		build(options: { validation: "deferred" }): { get(key: string): unknown };
+	}
+
+	// Registers node-0 -> node-1 -> ... -> node-(depth - 1). The last node
+	// resolves `lastDependency` when one is given.
+	const chain = (
+		depth: number,
+		lastDependency?: string,
+		builder = new ContainerBuilder() as unknown as UntypedBuilder,
+	): UntypedBuilder => {
+		let current = builder;
+		for (let index = 0; index < depth; index++) {
+			const next = index + 1 < depth ? `node-${index + 1}` : lastDependency;
+			current = current.registerTransientFactory(`node-${index}`, (c) => ({
+				next: next === undefined ? undefined : c.get(next),
+			}));
+		}
+		return current;
+	};
+
+	// 16 keys use the linear scan. The 17th key starts the set index.
+	it.each([
+		{ depth: 16, target: "node-0" },
+		{ depth: 17, target: "node-16" },
+		{ depth: 18, target: "node-16" },
+		{ depth: 18, target: "node-17" },
+	])("detects a cycle at depth $depth back to $target at once", ({
+		depth,
+		target,
+	}) => {
+		const container = chain(depth, target).build({ validation: "deferred" });
+
+		const error = (() => {
+			try {
+				container.get("node-0");
+			} catch (caught) {
+				return caught;
+			}
+		})();
+
+		expect((error as CircularDependencyError).chain).toEqual([
+			...Array.from({ length: depth }, (_, index) => `node-${index}`),
+			target,
+		]);
+	});
+
+	it("detects a cycle deeper than 16 levels with the full chain", () => {
+		const container = chain(20, "node-0").build({ validation: "deferred" });
+
+		const error = (() => {
+			try {
+				container.get("node-0");
+			} catch (caught) {
+				return caught;
+			}
+		})();
+
+		expect(error).toBeInstanceOf(CircularDependencyError);
+		expect((error as CircularDependencyError).chain).toEqual([
+			...Array.from({ length: 20 }, (_, index) => `node-${index}`),
+			"node-0",
+		]);
+	});
+
+	it("resolves a shared dependency twice deeper than 16 levels without a false cycle", () => {
+		const container = chain(20, "fork")
+			.registerTransientFactory("fork", (c) => [c.get("leaf"), c.get("leaf")])
+			.registerTransientFactory("leaf", () => ({}))
+			.build({ validation: "deferred" });
+
+		expect(() => container.get("node-0")).not.toThrow();
+	});
+
+	it("resolves a chain deeper than 16 levels again without a false cycle", () => {
+		const container = chain(20).build({ validation: "deferred" });
+		container.get("node-0");
+
+		expect(() => container.get("node-0")).not.toThrow();
+	});
+
+	it("detects a shallow cycle after a deep resolution", () => {
+		const container = chain(20)
+			.registerTransientFactory("a", (c) => c.get("b"))
+			.registerTransientFactory("b", (c) => c.get("a"))
+			.build({ validation: "deferred" });
+		container.get("node-0");
+
+		expect(() => container.get("a")).toThrowError(CircularDependencyError);
+	});
+});
+
 describe("Circular dependency detection in validate()", () => {
 	it("reports a real cycle exactly once and no phantom cycles for dependents of cycle members", () => {
 		const builder = new ContainerBuilder()
