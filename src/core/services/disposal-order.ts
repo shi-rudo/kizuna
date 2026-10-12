@@ -56,7 +56,9 @@ export function createDisposalSequence(plan: DisposalPlan): readonly number[] {
 		);
 
 		for (const groupIndex of ready) {
-			sequence.push(...plan.groups[groupIndex].members);
+			for (const index of plan.groups[groupIndex].members) {
+				sequence.push(index);
+			}
 		}
 
 		const next: number[] = [];
