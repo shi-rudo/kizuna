@@ -126,14 +126,19 @@ export interface DiagnosticsReporter {
 	): UnawaitedFailureSink;
 }
 
-/** Reports nothing. Used when `build()` receives no diagnostics option. @internal */
-export const silentDiagnostics: DiagnosticsReporter = Object.freeze({
-	containerBuilt() {},
-	scopeStarted() {},
-	containerDisposed() {},
-	serviceCreated() {},
-	unawaitedFailureSink: () => ignoreUnawaitedFailure,
-});
+/**
+ * Reports nothing. Used when `build()` receives no diagnostics option. The
+ * pure annotation lets a consumer bundle drop it when nothing uses it.
+ * @internal
+ */
+export const silentDiagnostics: DiagnosticsReporter =
+	/* @__PURE__ */ Object.freeze({
+		containerBuilt() {},
+		scopeStarted() {},
+		containerDisposed() {},
+		serviceCreated() {},
+		unawaitedFailureSink: () => ignoreUnawaitedFailure,
+	});
 
 /**
  * Creates a reporter that passes events at or above `level` to `listener`. A

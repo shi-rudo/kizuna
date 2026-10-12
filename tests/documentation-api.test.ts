@@ -695,6 +695,7 @@ describe("published feature evidence", () => {
 		expect(e2e).toContain("pnpm run build");
 		expect(e2e).toContain("'ContainerValidationError'");
 		expect(e2e).toContain("node package-validation.mjs");
+		expect(e2e).toContain("node check-tree-shaking.mjs");
 		expect(packedValidation).toContain(
 			"error instanceof ContainerValidationError",
 		);

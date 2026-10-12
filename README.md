@@ -1140,7 +1140,9 @@ The CI workflow builds and tests Kizuna on these Node.js versions:
 - `24.x`
 
 The package test installs the packed tarball in a Vite React TypeScript project.
-It checks the ESM, CommonJS, NodeNext, and consumer-build paths.
+It checks the ESM, CommonJS, NodeNext, and consumer-build paths. A second
+Vite build imports only `interfaceToken` and checks that the bundle keeps none
+of the container code.
 
 The edge test runs the built ESM bundle in workerd through Miniflare. It does
 not enable `nodejs_compat`.
