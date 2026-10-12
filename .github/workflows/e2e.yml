@@ -64,3 +64,10 @@ jobs:
 
       - name: Build test app
         run: cd test-app && pnpm run build
+
+      - name: Check tree shaking
+        run: |
+          cp -f tests/fixtures/tree-shaking-consumer.js tests/fixtures/vite.tree-shaking.config.mjs tests/fixtures/check-tree-shaking.mjs test-app/
+          cd test-app
+          pnpm exec vite build --config vite.tree-shaking.config.mjs
+          node check-tree-shaking.mjs
