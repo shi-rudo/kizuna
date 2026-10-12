@@ -84,6 +84,8 @@ describe("Circular dependency detection at resolve time", () => {
 });
 
 describe("Circular dependency detection in deep resolution chains", () => {
+	// The chain keys are generated, and the typed builder accepts only fixed
+	// string literals, so these tests use an untyped view of the builder.
 	interface UntypedBuilder {
 		registerTransientFactory(
 			key: string,
@@ -108,6 +110,32 @@ describe("Circular dependency detection in deep resolution chains", () => {
 		}
 		return current;
 	};
+
+	// 16 keys use the linear scan. The 17th key starts the set index.
+	it.each([
+		{ depth: 16, target: "node-0" },
+		{ depth: 17, target: "node-16" },
+		{ depth: 18, target: "node-16" },
+		{ depth: 18, target: "node-17" },
+	])("detects a cycle at depth $depth back to $target at once", ({
+		depth,
+		target,
+	}) => {
+		const container = chain(depth, target).build({ validation: "deferred" });
+
+		const error = (() => {
+			try {
+				container.get("node-0");
+			} catch (caught) {
+				return caught;
+			}
+		})();
+
+		expect((error as CircularDependencyError).chain).toEqual([
+			...Array.from({ length: depth }, (_, index) => `node-${index}`),
+			target,
+		]);
+	});
 
 	it("detects a cycle deeper than 16 levels with the full chain", () => {
 		const container = chain(20, "node-0").build({ validation: "deferred" });
