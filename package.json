@@ -15,6 +15,9 @@
 		"JavaScript"
 	],
 	"type": "module",
+	"engines": {
+		"node": ">=22.12.0"
+	},
 	"sideEffects": false,
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",

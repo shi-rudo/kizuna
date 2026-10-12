@@ -1133,11 +1133,15 @@ transient Promise factory.
 
 ## 🌍 Runtime Support
 
+Kizuna supports the Node.js release lines that the Node.js project still
+maintains, and the current release. `package.json` declares `"node": ">=22.12.0"`.
 The CI workflow builds and tests Kizuna on these Node.js versions:
 
-- `20.19.x`
-- `22.12.x`
-- `24.x`
+- `22.12.x`, the lowest supported version (Node.js 22, maintenance LTS)
+- `24.x` (Node.js 24, LTS)
+- `26.x` (Node.js 26, current release)
+
+A test keeps `engines` and the CI matrix in sync.
 
 The package test installs the packed tarball in a Vite React TypeScript project.
 It checks the ESM, CommonJS, NodeNext, and consumer-build paths. A second
@@ -1148,7 +1152,8 @@ this repository pins.
 The edge test runs the built ESM bundle in workerd through Miniflare. It does
 not enable `nodejs_compat`.
 
-CI does not run Kizuna in a browser, Vercel Edge, Deno, Bun, or Node.js 18.
+CI does not run Kizuna in a browser, Vercel Edge, Deno, Bun, or a Node.js
+version before 22.12.
 The Vite gate is a consumer build, not a browser-runtime test.
 
 The package build target is `esnext`. A consumer must transform this output for
