@@ -41,6 +41,7 @@ import type {
 	InterfaceTokenService,
 	RegisteredInterfaceToken,
 } from "./interface-token.js";
+import { ResolutionStack } from "./resolution-stack.js";
 
 export type { DisposalFailure, DisposalOperation } from "../core/errors.js";
 
@@ -93,10 +94,11 @@ export class Container<TRegistry extends ServiceRegistry>
 	}
 
 	/**
-	 * Keys currently being resolved on this container. Guards against
-	 * dependency cycles at resolve time (see {@link CircularDependencyError}).
+	 * Keys currently being resolved on this container, in resolution order.
+	 * It detects dependency cycles at resolve time (see
+	 * {@link CircularDependencyError}) and provides the path of a created value.
 	 */
-	private readonly _resolutionStack: string[] = [];
+	private readonly _resolution = new ResolutionStack();
 
 	constructor(
 		registrations: ReadonlyMap<string, ServiceWrapper>,
@@ -183,7 +185,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * @internal
 	 */
 	[reportValueCreated](service: ServiceWrapper): void {
-		this.diagnostics.serviceCreated(service, this.kind, this._resolutionStack);
+		this.diagnostics.serviceCreated(service, this.kind, this._resolution.path);
 	}
 
 	/** Resolves a key with one registration and wraps resolution failures. */
@@ -512,14 +514,14 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * instead of recursing until the call stack overflows.
 	 */
 	private trackResolution<T>(typeName: string, fn: () => T): T {
-		if (this._resolutionStack.includes(typeName)) {
-			throw new CircularDependencyError([...this._resolutionStack, typeName]);
+		if (this._resolution.includes(typeName)) {
+			throw new CircularDependencyError([...this._resolution.path, typeName]);
 		}
-		this._resolutionStack.push(typeName);
+		this._resolution.push(typeName);
 		try {
 			return fn();
 		} finally {
-			this._resolutionStack.pop();
+			this._resolution.pop();
 		}
 	}
 }
