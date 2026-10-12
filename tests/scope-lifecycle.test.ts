@@ -16,8 +16,9 @@ const recordingAsyncResource = (events: string[], name: string) => ({
 	},
 });
 
-const failingAsyncResource = (name: string) => ({
+const failingAsyncResource = (name: string, delay: number) => ({
 	async [Symbol.asyncDispose](): Promise<void> {
+		await new Promise((resolve) => setTimeout(resolve, delay));
 		throw new Error(name);
 	},
 });
@@ -78,6 +79,7 @@ describe("Scope disposal", () => {
 			)
 			.build();
 		const scope = container.startScope();
+		scope.get("d");
 		scope.get("a");
 
 		scope.dispose();
@@ -104,6 +106,7 @@ describe("Scope disposal", () => {
 			)
 			.build();
 		const scope = container.startScope();
+		scope.get("d");
 		scope.get("a");
 
 		await scope.disposeAsync();
@@ -128,10 +131,10 @@ describe("Scope disposal", () => {
 		expect(events).toEqual(["first", "second"]);
 	});
 
-	it("reports async cleanup failures in registration order, not in resolution order", async () => {
+	it("reports async cleanup failures in registration order, not in resolution or completion order", async () => {
 		const container = new ContainerBuilder()
-			.registerScopedFactory("first", () => failingAsyncResource("first"))
-			.registerScopedFactory("second", () => failingAsyncResource("second"))
+			.registerScopedFactory("first", () => failingAsyncResource("first", 10))
+			.registerScopedFactory("second", () => failingAsyncResource("second", 0))
 			.build();
 		const scope = container.startScope();
 		scope.get("second");
