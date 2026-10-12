@@ -678,7 +678,7 @@ describe("published feature evidence", () => {
 		expect(readme).not.toContain("production use is encouraged");
 		expect(readme).not.toContain("The API surface is finalized");
 		expect(readme).toContain("[Feature claims and evidence]");
-		for (const version of ["20.19.x", "22.12.x", "24.x"]) {
+		for (const version of ["22.12.x", "24.x", "26.x"]) {
 			expect(ci).toContain(version);
 			expect(evidence).toContain(`\`${version}\``);
 		}

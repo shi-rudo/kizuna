@@ -26,7 +26,7 @@ The runtime suite runs through `pnpm test`. The type suite runs through
 | A domain container can borrow selected root-owned singletons without cleanup ownership. | [Borrowing tests](../tests/borrowed-singleton.test.ts) and [domain ownership tests](../tests/example-container-ownership.test.ts) | Kizuna does not enforce domain boundaries or cross-domain communication rules. |
 | Test containers can replace service contracts without `any`. | [Documentation contract test](../tests/documentation-api.test.ts) | This check requires strict TypeScript and cannot protect JavaScript or unsafe casts. |
 | The published package has no runtime dependency entries. | [Package contract test](../tests/documentation-api.test.ts) | The package still has development and peer dependencies. |
-| CI covers Node.js, a packed Vite consumer build, and workerd through Miniflare. | [CI workflow](../.github/workflows/ci.yml), [package E2E workflow](../.github/workflows/e2e.yml), and [workerd tests](../tests/edge-compat.test.ts) | CI does not run a browser, Vercel Edge, Deno, Bun, or Node.js 18 runtime test. |
+| CI covers Node.js, a packed Vite consumer build, and workerd through Miniflare. | [CI workflow](../.github/workflows/ci.yml), [package E2E workflow](../.github/workflows/e2e.yml), and [workerd tests](../tests/edge-compat.test.ts) | CI does not run a browser, Vercel Edge, Deno, Bun, or Node.js before 22.12. |
 | An optional listener receives typed diagnostic events, including cleanup failures that no caller waits for. | [Diagnostics tests](../tests/diagnostics.test.ts) and [diagnostics type tests](../tests/diagnostics.test-d.ts) | Events carry no durations, a cache hit produces no event, and Kizuna never writes events to the console. |
 | A consumer bundle that imports only `interfaceToken` keeps none of the container, resolution, diagnostics, validation, or borrowing code. | [Tree-shaking test](../tests/tree-shaking.test.ts), [package E2E workflow](../.github/workflows/e2e.yml), and [tree-shaking check](../tests/fixtures/check-tree-shaking.mjs) | The test uses the Vite version that the repository pins, and the E2E workflow uses the current Vite release. Both build one partial import. Another bundler or another import can keep more code. |
 | The package stays within the [size budgets](#package-size). | [Package contents tests](../tests/package-contents.test.ts) | The budgets measure the Kizuna package. A consumer bundle also contains application code, and the tarball size can vary with the npm version. |
@@ -35,7 +35,9 @@ The runtime suite runs through `pnpm test`. The type suite runs through
 ## Quality gates
 
 The [CI workflow](../.github/workflows/ci.yml) runs these commands on Node.js
-`20.19.x`, `22.12.x`, and `24.x`:
+`22.12.x`, `24.x`, and `26.x`. `package.json` declares the same lower bound in
+`engines`, and the [runtime support test](../tests/runtime-support.test.ts) keeps
+both in sync:
 
 - `pnpm build`
 - `pnpm test`
