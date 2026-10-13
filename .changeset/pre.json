@@ -5,11 +5,34 @@
     "@shirudo/kizuna": "1.0.0-rc.3"
   },
   "changesets": [
+    "aggregate-disposal-errors",
+    "compile-published-examples",
+    "container-naming",
+    "deep-chain-cycle-check",
+    "dependency-aware-disposal",
+    "diagnostic-events",
+    "dispose-async-factory-values",
+    "dispose-during-creation",
+    "dispose-function-values",
+    "lazy-cached-dependencies",
+    "lazy-scope-services",
+    "node-support",
+    "public-api-hardening",
+    "quiet-empty-build",
     "quiet-tools-release",
+    "retry-rejected-factory-promises",
+    "root-bundle-only",
+    "scope-stops-with-root",
     "separate-service-provider-token",
     "single-interface-key",
+    "skill-progressive-disclosure",
     "stable-string-resolution",
     "strict-interface-keys",
-    "typed-constructor-dependencies"
+    "strict-multi-resolution",
+    "structured-graph-validation",
+    "tree-shaking",
+    "typed-constructor-dependencies",
+    "typed-errors",
+    "typed-interface-dependencies"
   ]
 }
