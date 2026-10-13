@@ -1,6 +1,11 @@
-import type { DisposalOwner } from "./disposal-order.js";
-import { ScopeTemplate, type ServiceCatalog } from "./service-catalog.js";
+import type { DisposalOwner, DisposalPlan } from "./disposal-order.js";
+import type { ServiceCatalog } from "./service-catalog.js";
 import type { ServiceWrapper } from "./service-wrapper.js";
+
+const emptyPlan: DisposalPlan = Object.freeze({
+	groups: Object.freeze([]),
+	rootGroups: Object.freeze([]),
+});
 
 /**
  * Which service a container uses for each registration, and which services it
@@ -21,8 +26,12 @@ export interface ServiceOwnership extends DisposalOwner<ServiceWrapper> {
 		key: string,
 		roots: readonly ServiceWrapper[],
 	): readonly ServiceWrapper[];
-	/** The owned services. */
+	/** The owned services, for closing them. */
 	owned(): Iterable<ServiceWrapper>;
+	/** The registration indices of the owned services in sync disposal order. */
+	disposalSequence(): readonly number[];
+	/** The plan for async disposal of the owned services. */
+	disposalPlan(): DisposalPlan;
 	/** Creates the ownership of a new scope of this container. */
 	forNewScope(): ServiceOwnership;
 	/** Drops the services after disposal. */
@@ -31,25 +40,29 @@ export interface ServiceOwnership extends DisposalOwner<ServiceWrapper> {
 
 /**
  * The root uses and owns the wrapper of every registration from the start. It
- * also disposes a singleton that only a scope resolved. Its maps are the maps
- * of the catalog, so it obtains nothing later.
+ * also disposes a singleton that only a scope resolved.
  *
  * @internal
  */
 export class RootOwnership implements ServiceOwnership {
 	readonly services: ReadonlyMap<string, ServiceWrapper>;
 	readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>;
-	private scopeTemplate: ScopeTemplate | undefined;
 
 	constructor(private readonly catalog: ServiceCatalog) {
 		this.services = catalog.singles;
 		this.groups = catalog.groups;
 	}
 
+	/**
+	 * The maps of the root are the maps of the catalog, so they already hold
+	 * every registered key, and the container does not reach this method for
+	 * the root. The root would use the catalog wrapper.
+	 */
 	obtainSingle(_key: string, root: ServiceWrapper): ServiceWrapper {
 		return root;
 	}
 
+	/** Not reached for the root, like {@link RootOwnership.obtainSingle}. */
 	obtainGroup(
 		_key: string,
 		roots: readonly ServiceWrapper[],
@@ -65,10 +78,16 @@ export class RootOwnership implements ServiceOwnership {
 		return this.catalog.order;
 	}
 
-	/** Creates the scope template on the first scope, while the root is open. */
+	disposalSequence(): readonly number[] {
+		return this.catalog.disposalSequence();
+	}
+
+	disposalPlan(): DisposalPlan {
+		return this.catalog.disposalPlan();
+	}
+
 	forNewScope(): ServiceOwnership {
-		this.scopeTemplate ??= new ScopeTemplate(this.catalog);
-		return new ScopeOwnership(this.catalog, this.scopeTemplate);
+		return new ScopeOwnership(this.catalog);
 	}
 
 	/** The catalog keeps the root wrappers for the scopes that still live. */
@@ -76,23 +95,22 @@ export class RootOwnership implements ServiceOwnership {
 }
 
 /**
- * A scope owns only the services that it created, each on the first
- * resolution of its key.
+ * A scope owns only the services that it created, each from the root wrapper
+ * on the first resolution of its key. Once the root is disposed, the scope
+ * cannot create services anymore (ADR-006).
  *
  * @internal
  */
 export class ScopeOwnership implements ServiceOwnership {
 	private readonly ownServices = new Map<string, ServiceWrapper>();
 	private readonly ownGroups = new Map<string, readonly ServiceWrapper[]>();
-	private readonly createdByRoot = new Map<ServiceWrapper, ServiceWrapper>();
+	/** The created services by registration index. */
+	private readonly created = new Map<number, ServiceWrapper>();
 	readonly services: ReadonlyMap<string, ServiceWrapper> = this.ownServices;
 	readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]> =
 		this.ownGroups;
 
-	constructor(
-		private readonly catalog: ServiceCatalog,
-		private readonly template: ScopeTemplate,
-	) {}
+	constructor(private readonly catalog: ServiceCatalog) {}
 
 	obtainSingle(key: string, root: ServiceWrapper): ServiceWrapper {
 		const service = this.create(root);
@@ -110,21 +128,38 @@ export class ScopeOwnership implements ServiceOwnership {
 	}
 
 	ownedAt(index: number): ServiceWrapper | undefined {
-		return this.createdByRoot.get(this.catalog.order[index]);
+		return this.created.get(index);
 	}
 
 	owned(): Iterable<ServiceWrapper> {
-		return this.createdByRoot.values();
+		return this.created.values();
+	}
+
+	/** Sorts only the created services by their place in the shared order. */
+	disposalSequence(): readonly number[] {
+		const ranks = this.catalog.disposalRanks();
+		return [...this.created.keys()].sort(
+			(left, right) => ranks[left] - ranks[right],
+		);
+	}
+
+	/**
+	 * The shared plan, so an edge through a service that the scope did not
+	 * create still orders the services around it. Without created services,
+	 * there is nothing to walk.
+	 */
+	disposalPlan(): DisposalPlan {
+		return this.created.size === 0 ? emptyPlan : this.catalog.disposalPlan();
 	}
 
 	forNewScope(): ServiceOwnership {
-		return new ScopeOwnership(this.catalog, this.template);
+		return new ScopeOwnership(this.catalog);
 	}
 
 	release(): void {
 		this.ownServices.clear();
 		this.ownGroups.clear();
-		this.createdByRoot.clear();
+		this.created.clear();
 	}
 
 	/**
@@ -132,8 +167,8 @@ export class ScopeOwnership implements ServiceOwnership {
 	 * a factory that disposes its own scope closes the service that it runs in.
 	 */
 	private create(root: ServiceWrapper): ServiceWrapper {
-		const service = this.template.createService(root);
-		this.createdByRoot.set(root, service);
+		const service = root.createScope();
+		this.created.set(this.catalog.indexOf(root), service);
 		return service;
 	}
 }

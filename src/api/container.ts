@@ -10,6 +10,7 @@ import {
 	type DisposalFailure,
 	type DisposalOperation,
 	InvalidServiceKeyError,
+	type RegistrationKind,
 	RegistrationKindError,
 	ServiceNotRegisteredError,
 	ServiceResolutionError,
@@ -88,9 +89,13 @@ export class Container<TRegistry extends ServiceRegistry>
 {
 	private readonly catalog: ServiceCatalog;
 	private readonly ownership: ServiceOwnership;
-	/** The services of keys with one registration that this container has. */
+	/**
+	 * The services of keys with one registration that this container has. It is
+	 * the map of the ownership itself, read once here so that a warm `get()`
+	 * costs one map lookup and no call. The ownership clears it, never replaces it.
+	 */
 	private readonly services: ReadonlyMap<string, ServiceWrapper>;
-	/** The services of keys with multiple registrations that this container has. */
+	/** The services of keys with multiple registrations, held like `services`. */
 	private readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>;
 	private readonly kind: DiagnosticContainerKind;
 	private readonly diagnostics: DiagnosticsReporter;
@@ -213,10 +218,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		try {
 			return this._resolution.track(key, () => service.resolve(this));
 		} catch (error) {
-			if (this.passesThrough(error)) {
-				throw error;
-			}
-			throw new ServiceResolutionError(key, error);
+			throw this.resolutionFailure(key, error);
 		}
 	}
 
@@ -228,7 +230,11 @@ export class Container<TRegistry extends ServiceRegistry>
 				? new RegistrationKindError(key, "multi")
 				: new ServiceNotRegisteredError(key);
 		}
-		return this.ownership.obtainSingle(key, root);
+		try {
+			return this.ownership.obtainSingle(key, root);
+		} catch (error) {
+			throw this.resolutionFailure(key, error);
+		}
 	}
 
 	/** Takes the services of a key with multiple registrations on its first use. */
@@ -239,7 +245,11 @@ export class Container<TRegistry extends ServiceRegistry>
 				? new RegistrationKindError(key, "single")
 				: new ServiceNotRegisteredError(key);
 		}
-		return this.ownership.obtainGroup(key, roots);
+		try {
+			return this.ownership.obtainGroup(key, roots);
+		} catch (error) {
+			throw this.resolutionFailure(key, error, "multi");
+		}
 	}
 
 	startScope(): ServiceContainer<TRegistry> {
@@ -323,7 +333,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		let failures: readonly DisposalFailure[] = [];
 		try {
 			failures = this.toDisposalFailures(
-				disposeInSequence(this.catalog.disposalSequence(), this.ownership),
+				disposeInSequence(this.ownership.disposalSequence(), this.ownership),
 				"dispose",
 			);
 		} finally {
@@ -354,7 +364,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		let failures: readonly DisposalFailure[] = [];
 		try {
 			failures = this.toDisposalFailures(
-				await disposeByPlan(this.catalog.disposalPlan(), this.ownership),
+				await disposeByPlan(this.ownership.disposalPlan(), this.ownership),
 				"disposeAsync",
 			);
 		} finally {
@@ -432,22 +442,26 @@ export class Container<TRegistry extends ServiceRegistry>
 				resolvers.map((resolver) => resolver.resolve(this)),
 			);
 		} catch (error) {
-			if (this.passesThrough(error)) {
-				throw error;
-			}
-			throw new ServiceResolutionError(typeName, error, "multi");
+			throw this.resolutionFailure(typeName, error, "multi");
 		}
 	}
 
 	/**
-	 * A cycle error keeps its chain unwrapped. A disposal error stays unwrapped
-	 * only when this container itself is disposed; otherwise the caller needs
-	 * the key of the service that met another disposed container.
+	 * Returns the error to throw for a failed resolution of a key. A cycle error
+	 * keeps its chain unwrapped. A disposal error stays unwrapped only when this
+	 * container itself is disposed; otherwise the caller needs the key of the
+	 * service that met another disposed container.
 	 */
-	private passesThrough(error: unknown): boolean {
-		return (
+	private resolutionFailure(
+		key: string,
+		error: unknown,
+		registrationKind: RegistrationKind = "single",
+	): unknown {
+		const passesThrough =
 			error instanceof CircularDependencyError ||
-			(error instanceof ContainerDisposedError && this._disposed)
-		);
+			(error instanceof ContainerDisposedError && this._disposed);
+		return passesThrough
+			? error
+			: new ServiceResolutionError(key, error, registrationKind);
 	}
 }

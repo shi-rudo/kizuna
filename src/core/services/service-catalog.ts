@@ -7,8 +7,8 @@ import type { ServiceWrapper } from "./service-wrapper.js";
 
 /**
  * The registrations of one built container, with the service wrappers of its
- * root. A root and all of its scopes share the catalog. It holds the maps of
- * the builder, which no longer change after `build()`.
+ * root. A root and all of its scopes share the catalog, and it never changes:
+ * it copies the collections of the builder.
  *
  * The disposal plan depends only on the keys and declared dependencies, so the
  * catalog computes it once on first use. It covers every registration, also
@@ -18,17 +18,42 @@ import type { ServiceWrapper } from "./service-wrapper.js";
  * @internal
  */
 export class ServiceCatalog {
+	/** The root wrappers of keys with one registration. */
+	readonly singles: ReadonlyMap<string, ServiceWrapper>;
+	/** The root wrappers of keys with multiple registrations. */
+	readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>;
+	/** All root wrappers in registration order. A disposal plan names them by index. */
+	readonly order: readonly ServiceWrapper[];
+	private indices: ReadonlyMap<ServiceWrapper, number> | undefined;
 	private plan: DisposalPlan | undefined;
 	private sequence: readonly number[] | undefined;
+	private ranks: readonly number[] | undefined;
 
 	constructor(
-		/** The root wrappers of keys with one registration. */
-		readonly singles: ReadonlyMap<string, ServiceWrapper>,
-		/** The root wrappers of keys with multiple registrations. */
-		readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>,
-		/** All root wrappers in registration order. A disposal plan names them by index. */
-		readonly order: readonly ServiceWrapper[],
-	) {}
+		registrations: ReadonlyMap<string, ServiceWrapper>,
+		multiRegistrations: ReadonlyMap<string, readonly ServiceWrapper[]>,
+		registrationOrder: readonly ServiceWrapper[],
+	) {
+		this.singles = new Map(registrations);
+		this.groups = new Map(
+			[...multiRegistrations].map(([key, services]) => [key, [...services]]),
+		);
+		this.order = [...registrationOrder];
+	}
+
+	/** The registration index of a root wrapper. */
+	indexOf(root: ServiceWrapper): number {
+		this.indices ??= new Map(
+			this.order.map((service, position) => [service, position]),
+		);
+		const index = this.indices.get(root);
+		if (index === undefined) {
+			throw new Error(
+				`Registration '${root.getName()}' is missing from the registration order`,
+			);
+		}
+		return index;
+	}
 
 	/** The async disposal plan over all registrations. */
 	disposalPlan(): DisposalPlan {
@@ -41,35 +66,16 @@ export class ServiceCatalog {
 		this.sequence ??= createDisposalSequence(this.disposalPlan());
 		return this.sequence;
 	}
-}
 
-/**
- * The prototypes from which scopes create their services: one per
- * registration, replicated from the root wrapper by the rules of ADR-006.
- *
- * A prototype is never resolved, closed, or disposed. It therefore keeps its
- * factory after the root is disposed, and a live scope can still create a
- * scoped service for the first time.
- *
- * @internal
- */
-export class ScopeTemplate {
-	private readonly prototypes: ReadonlyMap<ServiceWrapper, ServiceWrapper>;
-
-	constructor(catalog: ServiceCatalog) {
-		this.prototypes = new Map(
-			catalog.order.map((root) => [root, root.createScope()]),
-		);
-	}
-
-	/** Creates the service of one registration for a new scope. */
-	createService(root: ServiceWrapper): ServiceWrapper {
-		const prototype = this.prototypes.get(root);
-		if (!prototype) {
-			throw new Error(
-				`Registration '${root.getName()}' is missing from the scope template`,
-			);
+	/** The position of each registration index in the sync disposal order. */
+	disposalRanks(): readonly number[] {
+		if (!this.ranks) {
+			const ranks = new Array<number>(this.order.length);
+			this.disposalSequence().forEach((index, rank) => {
+				ranks[index] = rank;
+			});
+			this.ranks = ranks;
 		}
-		return prototype.createScope();
+		return this.ranks;
 	}
 }

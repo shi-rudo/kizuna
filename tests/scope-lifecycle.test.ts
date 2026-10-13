@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { DisposalError } from "../src/api/container";
 import { ContainerBuilder } from "../src/api/container-builder";
+import {
+	ContainerDisposedError,
+	ServiceResolutionError,
+} from "../src/core/errors";
 
 class RequestContext {}
 
@@ -24,14 +28,28 @@ const failingAsyncResource = (name: string, delay: number) => ({
 });
 
 describe("Scope independence", () => {
-	it("resolves a scoped service for the first time after the root is disposed", () => {
+	// ADR-006: the application disposes every scope before the root. A scope
+	// that outlives its root cannot create services anymore.
+	it("rejects the first resolution of a scoped service after the root is disposed", () => {
 		const container = new ContainerBuilder()
 			.registerScoped("request", RequestContext)
 			.build();
 		const scope = container.startScope();
 		container.dispose();
 
-		expect(scope.get("request")).toBeInstanceOf(RequestContext);
+		const error = (() => {
+			try {
+				scope.get("request");
+			} catch (caught) {
+				return caught;
+			}
+		})();
+
+		expect(error).toBeInstanceOf(ServiceResolutionError);
+		expect(error).toMatchObject({ key: "request" });
+		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
+			ContainerDisposedError,
+		);
 	});
 
 	it("resolves a scoped service for the first time after its parent scope is disposed", () => {
