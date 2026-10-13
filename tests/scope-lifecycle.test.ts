@@ -8,6 +8,19 @@ import {
 
 class RequestContext {}
 
+class RequestConsumer {
+	constructor(readonly request: RequestContext) {}
+}
+
+const captureError = (action: () => unknown): unknown => {
+	try {
+		action();
+	} catch (error) {
+		return error;
+	}
+	return undefined;
+};
+
 const recordingResource = (events: string[], name: string) => ({
 	dispose(): void {
 		events.push(name);
@@ -37,16 +50,27 @@ describe("Scope independence", () => {
 		const scope = container.startScope();
 		container.dispose();
 
-		const error = (() => {
-			try {
-				scope.get("request");
-			} catch (caught) {
-				return caught;
-			}
-		})();
+		const error = captureError(() => scope.get("request"));
 
 		expect(error).toBeInstanceOf(ServiceResolutionError);
 		expect(error).toMatchObject({ key: "request" });
+		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
+			ContainerDisposedError,
+		);
+	});
+
+	it("rejects the first resolution of a scoped service as soon as root disposeAsync() starts", async () => {
+		const container = new ContainerBuilder()
+			.registerScoped("request", RequestContext)
+			.registerScoped("consumer", RequestConsumer, "request")
+			.build();
+		const scope = container.startScope();
+		const disposal = container.disposeAsync();
+
+		const error = captureError(() => scope.get("request"));
+		await disposal;
+
+		expect(error).toBeInstanceOf(ServiceResolutionError);
 		expect((error as ServiceResolutionError).cause).toBeInstanceOf(
 			ContainerDisposedError,
 		);
@@ -167,5 +191,71 @@ describe("Scope disposal", () => {
 		expect(
 			(error as DisposalError).failures.map((failure) => failure.serviceKey),
 		).toEqual(["first", "second"]);
+	});
+
+	it("starts independent async cleanup in a scope without waiting for each other", async () => {
+		const events: string[] = [];
+		let finishSlow!: () => void;
+		const slowGate = new Promise<void>((resolve) => {
+			finishSlow = resolve;
+		});
+		const container = new ContainerBuilder()
+			.registerScopedFactory("slow", () => ({
+				async [Symbol.asyncDispose](): Promise<void> {
+					events.push("slow started");
+					await slowGate;
+					events.push("slow finished");
+				},
+			}))
+			.registerScopedFactory("fast", () =>
+				recordingAsyncResource(events, "fast"),
+			)
+			.build();
+		const scope = container.startScope();
+		scope.get("slow");
+		scope.get("fast");
+
+		const disposal = scope.disposeAsync();
+		await Promise.resolve();
+		finishSlow();
+		await disposal;
+
+		expect(events).toEqual(["slow started", "fast", "slow finished"]);
+	});
+
+	it("keeps the declared order after the root is disposed", () => {
+		const events: string[] = [];
+		const container = new ContainerBuilder()
+			.registerScopedFactory("d", () => recordingResource(events, "d"))
+			.registerScopedFactory("a", () => recordingResource(events, "a"), "d")
+			.build();
+		const scope = container.startScope();
+		scope.get("d");
+		scope.get("a");
+		container.dispose();
+
+		scope.dispose();
+
+		expect(events).toEqual(["a", "d"]);
+	});
+
+	it("keeps the declared order after the root is disposed in disposeAsync()", async () => {
+		const events: string[] = [];
+		const container = new ContainerBuilder()
+			.registerScopedFactory("d", () => recordingAsyncResource(events, "d"))
+			.registerScopedFactory(
+				"a",
+				() => recordingAsyncResource(events, "a"),
+				"d",
+			)
+			.build();
+		const scope = container.startScope();
+		scope.get("d");
+		scope.get("a");
+		await container.disposeAsync();
+
+		await scope.disposeAsync();
+
+		expect(events).toEqual(["a", "d"]);
 	});
 });

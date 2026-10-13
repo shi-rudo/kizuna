@@ -28,6 +28,15 @@ export interface DisposalAttempt<TService> {
 	readonly error: unknown;
 }
 
+/** Orders numbers from low to high. */
+const ascending = (left: number, right: number): number => left - right;
+
+/** Orders group indices by the registration index of their groups. */
+const byRegistration =
+	(groups: readonly DisposalGroup[]) =>
+	(left: number, right: number): number =>
+		groups[left].registrationIndex - groups[right].registrationIndex;
+
 /** The services that one container disposes, by registration index. */
 export interface DisposalOwner<TService> {
 	/** Returns the owned service at a registration index, if there is one. */
@@ -49,11 +58,7 @@ export function createDisposalSequence(plan: DisposalPlan): readonly number[] {
 	const sequence: number[] = [];
 
 	while (ready.length > 0) {
-		ready.sort(
-			(left, right) =>
-				plan.groups[left].registrationIndex -
-				plan.groups[right].registrationIndex,
-		);
+		ready.sort(byRegistration(plan.groups));
 
 		for (const groupIndex of ready) {
 			for (const index of plan.groups[groupIndex].members) {
@@ -115,7 +120,7 @@ export function createDisposalPlan(
 	const components = findStronglyConnectedComponents(edges, reverseEdges);
 	const componentByNode = new Array<number>(registrationOrder.length);
 	components.forEach((component, componentIndex) => {
-		component.sort((left, right) => left - right);
+		component.sort(ascending);
 		for (const node of component) {
 			componentByNode[node] = componentIndex;
 		}
@@ -150,10 +155,92 @@ export function createDisposalPlan(
 	const rootGroups = groups
 		.map((_, index) => index)
 		.filter((index) => groups[index].consumerGroupCount === 0)
-		.sort(
-			(left, right) =>
-				groups[left].registrationIndex - groups[right].registrationIndex,
-		);
+		.sort(byRegistration(groups));
+
+	return { groups, rootGroups };
+}
+
+/** Maps each registration index to the index of its group in the plan. */
+export function createGroupIndex(plan: DisposalPlan): readonly number[] {
+	const registrationCount = plan.groups.reduce(
+		(count, group) => count + group.members.length,
+		0,
+	);
+	const groupOf = new Array<number>(registrationCount);
+	plan.groups.forEach((group, groupIndex) => {
+		for (const index of group.members) {
+			groupOf[index] = groupIndex;
+		}
+	});
+	return groupOf;
+}
+
+/**
+ * Reduces a plan to the groups that hold one of the given registrations. A
+ * group of the reduced plan depends on each selected group that the full plan
+ * reaches from it through unselected groups only, so an edge through a
+ * registration that is not selected still orders the selected ones. The work
+ * grows with the part of the graph that the selected groups reach, not with
+ * the whole plan.
+ */
+export function createDisposalSubplan(
+	plan: DisposalPlan,
+	groupOf: readonly number[],
+	selected: Iterable<number>,
+): DisposalPlan {
+	const membersByGroup = new Map<number, number[]>();
+	for (const index of [...selected].sort(ascending)) {
+		const groupIndex = groupOf[index];
+		const members = membersByGroup.get(groupIndex);
+		if (members) {
+			members.push(index);
+		} else {
+			membersByGroup.set(groupIndex, [index]);
+		}
+	}
+
+	const selectedGroups = [...membersByGroup.keys()].sort(
+		byRegistration(plan.groups),
+	);
+	const localIndexOf = new Map(
+		selectedGroups.map((groupIndex, localIndex) => [groupIndex, localIndex]),
+	);
+	const consumerGroupCounts = selectedGroups.map(() => 0);
+
+	const dependencyGroups = selectedGroups.map((groupIndex) => {
+		// Each group is visited once, so each selected group is reached once.
+		const reached: number[] = [];
+		const visited = new Set<number>();
+		const pending = [...plan.groups[groupIndex].dependencyGroups];
+		for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+			if (visited.has(next)) {
+				continue;
+			}
+			visited.add(next);
+			const localIndex = localIndexOf.get(next);
+			if (localIndex === undefined) {
+				for (const dependencyGroup of plan.groups[next].dependencyGroups) {
+					pending.push(dependencyGroup);
+				}
+			} else {
+				reached.push(localIndex);
+			}
+		}
+		for (const localIndex of reached) {
+			consumerGroupCounts[localIndex]++;
+		}
+		return reached.sort(ascending);
+	});
+
+	const groups = selectedGroups.map((groupIndex, localIndex) => ({
+		members: membersByGroup.get(groupIndex) ?? [],
+		dependencyGroups: dependencyGroups[localIndex],
+		consumerGroupCount: consumerGroupCounts[localIndex],
+		registrationIndex: plan.groups[groupIndex].registrationIndex,
+	}));
+	const rootGroups = groups
+		.map((_, localIndex) => localIndex)
+		.filter((localIndex) => groups[localIndex].consumerGroupCount === 0);
 
 	return { groups, rootGroups };
 }

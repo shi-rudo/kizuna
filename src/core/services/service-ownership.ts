@@ -1,11 +1,15 @@
-import type { DisposalOwner, DisposalPlan } from "./disposal-order.js";
+import type { DisposalMode } from "../contracts.js";
+import type { DiagnosticsReporter } from "../diagnostics.js";
+import { ContainerDisposedError } from "../errors.js";
+import {
+	createDisposalSubplan,
+	type DisposalOwner,
+	type DisposalPlan,
+} from "./disposal-order.js";
 import type { ServiceCatalog } from "./service-catalog.js";
 import type { ServiceWrapper } from "./service-wrapper.js";
 
-const emptyPlan: DisposalPlan = Object.freeze({
-	groups: Object.freeze([]),
-	rootGroups: Object.freeze([]),
-});
+const emptyPlan: DisposalPlan = { groups: [], rootGroups: [] };
 
 /**
  * Which service a container uses for each registration, and which services it
@@ -19,15 +23,18 @@ export interface ServiceOwnership extends DisposalOwner<ServiceWrapper> {
 	readonly services: ReadonlyMap<string, ServiceWrapper>;
 	/** The services of keys with multiple registrations that the container has. */
 	readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>;
-	/** Returns the service for a key that `services` does not hold yet. */
-	obtainSingle(key: string, root: ServiceWrapper): ServiceWrapper;
-	/** Returns the services for a key that `groups` does not hold yet. */
-	obtainGroup(
-		key: string,
-		roots: readonly ServiceWrapper[],
-	): readonly ServiceWrapper[];
-	/** The owned services, for closing them. */
-	owned(): Iterable<ServiceWrapper>;
+	/**
+	 * Returns the service for a key that `services` does not hold, or undefined
+	 * when the key has no single registration.
+	 */
+	obtainSingle(key: string): ServiceWrapper | undefined;
+	/**
+	 * Returns the services for a key that `groups` does not hold, or undefined
+	 * when the key has no multi-registration.
+	 */
+	obtainGroup(key: string): readonly ServiceWrapper[] | undefined;
+	/** Stops new resolutions of the owned services before cleanup starts. */
+	close(mode: DisposalMode, diagnostics: DiagnosticsReporter): void;
 	/** The registration indices of the owned services in sync disposal order. */
 	disposalSequence(): readonly number[];
 	/** The plan for async disposal of the owned services. */
@@ -38,44 +45,51 @@ export interface ServiceOwnership extends DisposalOwner<ServiceWrapper> {
 	release(): void;
 }
 
+/** Whether the root still lets its scopes create services. */
+interface RootState {
+	readonly isClosed: boolean;
+}
+
 /**
  * The root uses and owns the wrapper of every registration from the start. It
  * also disposes a singleton that only a scope resolved.
  *
  * @internal
  */
-export class RootOwnership implements ServiceOwnership {
+export class RootOwnership implements ServiceOwnership, RootState {
 	readonly services: ReadonlyMap<string, ServiceWrapper>;
 	readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>;
+	private closed = false;
 
 	constructor(private readonly catalog: ServiceCatalog) {
 		this.services = catalog.singles;
 		this.groups = catalog.groups;
 	}
 
-	/**
-	 * The maps of the root are the maps of the catalog, so they already hold
-	 * every registered key, and the container does not reach this method for
-	 * the root. The root would use the catalog wrapper.
-	 */
-	obtainSingle(_key: string, root: ServiceWrapper): ServiceWrapper {
-		return root;
+	/** True once the root starts its disposal. Its scopes then create nothing. */
+	get isClosed(): boolean {
+		return this.closed;
 	}
 
-	/** Not reached for the root, like {@link RootOwnership.obtainSingle}. */
-	obtainGroup(
-		_key: string,
-		roots: readonly ServiceWrapper[],
-	): readonly ServiceWrapper[] {
-		return roots;
+	/** The root holds every registration, so a key it does not hold has none. */
+	obtainSingle(): undefined {
+		return undefined;
+	}
+
+	/** The root holds every registration, so a key it does not hold has none. */
+	obtainGroup(): undefined {
+		return undefined;
 	}
 
 	ownedAt(index: number): ServiceWrapper | undefined {
 		return this.catalog.order[index];
 	}
 
-	owned(): Iterable<ServiceWrapper> {
-		return this.catalog.order;
+	close(mode: DisposalMode, diagnostics: DiagnosticsReporter): void {
+		this.closed = true;
+		for (const service of this.catalog.order) {
+			service.close(mode, diagnostics);
+		}
 	}
 
 	disposalSequence(): readonly number[] {
@@ -87,17 +101,18 @@ export class RootOwnership implements ServiceOwnership {
 	}
 
 	forNewScope(): ServiceOwnership {
-		return new ScopeOwnership(this.catalog);
+		return new ScopeOwnership(this.catalog, this);
 	}
 
-	/** The catalog keeps the root wrappers for the scopes that still live. */
-	release(): void {}
+	release(): void {
+		this.catalog.release();
+	}
 }
 
 /**
  * A scope owns only the services that it created, each from the root wrapper
- * on the first resolution of its key. Once the root is disposed, the scope
- * cannot create services anymore (ADR-006).
+ * on the first resolution of its key. Once the root starts its disposal, the
+ * scope cannot create services anymore (ADR-006).
  *
  * @internal
  */
@@ -110,19 +125,34 @@ export class ScopeOwnership implements ServiceOwnership {
 	readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]> =
 		this.ownGroups;
 
-	constructor(private readonly catalog: ServiceCatalog) {}
+	constructor(
+		private readonly catalog: ServiceCatalog,
+		private readonly root: RootState,
+	) {}
 
-	obtainSingle(key: string, root: ServiceWrapper): ServiceWrapper {
-		const service = this.create(root);
+	obtainSingle(key: string): ServiceWrapper | undefined {
+		this.ensureRootOpen();
+		const root = this.catalog.singles.get(key);
+		if (!root) {
+			return undefined;
+		}
+		const service = root.createScope();
+		this.record(root, service);
 		this.ownServices.set(key, service);
 		return service;
 	}
 
-	obtainGroup(
-		key: string,
-		roots: readonly ServiceWrapper[],
-	): readonly ServiceWrapper[] {
-		const group = roots.map((root) => this.create(root));
+	/** Creates all services of the group before it records any of them. */
+	obtainGroup(key: string): readonly ServiceWrapper[] | undefined {
+		this.ensureRootOpen();
+		const roots = this.catalog.groups.get(key);
+		if (!roots) {
+			return undefined;
+		}
+		const group = roots.map((root) => root.createScope());
+		roots.forEach((root, position) => {
+			this.record(root, group[position]);
+		});
 		this.ownGroups.set(key, group);
 		return group;
 	}
@@ -131,8 +161,14 @@ export class ScopeOwnership implements ServiceOwnership {
 		return this.created.get(index);
 	}
 
-	owned(): Iterable<ServiceWrapper> {
-		return this.created.values();
+	/** Closes the created services in registration order. */
+	close(mode: DisposalMode, diagnostics: DiagnosticsReporter): void {
+		const indices = [...this.created.keys()].sort(
+			(left, right) => left - right,
+		);
+		for (const index of indices) {
+			this.created.get(index)?.close(mode, diagnostics);
+		}
 	}
 
 	/** Sorts only the created services by their place in the shared order. */
@@ -144,16 +180,23 @@ export class ScopeOwnership implements ServiceOwnership {
 	}
 
 	/**
-	 * The shared plan, so an edge through a service that the scope did not
-	 * create still orders the services around it. Without created services,
-	 * there is nothing to walk.
+	 * Reduces the shared plan to the created services, so an edge through a
+	 * service that the scope did not create still orders the services around
+	 * it, and the work follows what the scope created.
 	 */
 	disposalPlan(): DisposalPlan {
-		return this.created.size === 0 ? emptyPlan : this.catalog.disposalPlan();
+		if (this.created.size === 0) {
+			return emptyPlan;
+		}
+		return createDisposalSubplan(
+			this.catalog.disposalPlan(),
+			this.catalog.disposalGroupOf(),
+			this.created.keys(),
+		);
 	}
 
 	forNewScope(): ServiceOwnership {
-		return new ScopeOwnership(this.catalog);
+		return new ScopeOwnership(this.catalog, this.root);
 	}
 
 	release(): void {
@@ -162,13 +205,17 @@ export class ScopeOwnership implements ServiceOwnership {
 		this.created.clear();
 	}
 
+	private ensureRootOpen(): void {
+		if (this.root.isClosed) {
+			throw new ContainerDisposedError();
+		}
+	}
+
 	/**
-	 * Creates the service and records it before the container resolves it, so
-	 * a factory that disposes its own scope closes the service that it runs in.
+	 * Records a service before the container resolves it, so a factory that
+	 * disposes its own scope closes the service that it runs in.
 	 */
-	private create(root: ServiceWrapper): ServiceWrapper {
-		const service = root.createScope();
+	private record(root: ServiceWrapper, service: ServiceWrapper): void {
 		this.created.set(this.catalog.indexOf(root), service);
-		return service;
 	}
 }

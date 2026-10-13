@@ -224,32 +224,34 @@ export class Container<TRegistry extends ServiceRegistry>
 
 	/** Takes the service of a key with one registration on its first use. */
 	private obtainSingle(key: string): ServiceWrapper {
-		const root = this.catalog.singles.get(key);
-		if (!root) {
+		let service: ServiceWrapper | undefined;
+		try {
+			service = this.ownership.obtainSingle(key);
+		} catch (error) {
+			throw this.resolutionFailure(key, error);
+		}
+		if (!service) {
 			throw this.catalog.groups.has(key)
 				? new RegistrationKindError(key, "multi")
 				: new ServiceNotRegisteredError(key);
 		}
-		try {
-			return this.ownership.obtainSingle(key, root);
-		} catch (error) {
-			throw this.resolutionFailure(key, error);
-		}
+		return service;
 	}
 
 	/** Takes the services of a key with multiple registrations on its first use. */
 	private obtainGroup(key: string): readonly ServiceWrapper[] {
-		const roots = this.catalog.groups.get(key);
-		if (!roots) {
+		let group: readonly ServiceWrapper[] | undefined;
+		try {
+			group = this.ownership.obtainGroup(key);
+		} catch (error) {
+			throw this.resolutionFailure(key, error, "multi");
+		}
+		if (!group) {
 			throw this.catalog.singles.has(key)
 				? new RegistrationKindError(key, "single")
 				: new ServiceNotRegisteredError(key);
 		}
-		try {
-			return this.ownership.obtainGroup(key, roots);
-		} catch (error) {
-			throw this.resolutionFailure(key, error, "multi");
-		}
+		return group;
 	}
 
 	startScope(): ServiceContainer<TRegistry> {
@@ -393,9 +395,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * disposes its own container then cannot hand out a value.
 	 */
 	private closeOwnedLifecycles(mode: DisposalMode): void {
-		for (const service of this.ownership.owned()) {
-			service.close(mode, this.diagnostics);
-		}
+		this.ownership.close(mode, this.diagnostics);
 	}
 
 	private toDisposalFailures(

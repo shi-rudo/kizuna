@@ -129,9 +129,7 @@ export class ServiceWrapper {
 	 */
 	createScope(): ServiceWrapper {
 		if (!this._lifecycle) {
-			throw new ContainerDisposedError(
-				`Cannot create service '${this._name}' for a scope of a disposed container`,
-			);
+			throw new ContainerDisposedError();
 		}
 
 		const scopedLifecycle = this._lifecycle.createScope();
