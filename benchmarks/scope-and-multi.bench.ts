@@ -39,6 +39,24 @@ describe("scope request", () => {
 	}
 });
 
+describe("asynchronous scope request", () => {
+	for (const benchmarkCase of scenarioCases("scope-request-async")) {
+		const { operationsPerSample, size: registrationCount } = benchmarkCase;
+		const container = createScopeContainer(registrationCount);
+		bench(benchmarkName(benchmarkCase, "registrations"), async () => {
+			let lastResult: unknown;
+			for (let index = 0; index < operationsPerSample; index++) {
+				const scope = container.startScope();
+				scope.get("service-0");
+				scope.get("service-1");
+				lastResult = scope.get("service-2");
+				await scope.disposeAsync();
+			}
+			consume(lastResult);
+		});
+	}
+});
+
 describe("multi-resolution", () => {
 	for (const benchmarkCase of scenarioCases("get-all")) {
 		const { operationsPerSample, size: registrationCount } = benchmarkCase;

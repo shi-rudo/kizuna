@@ -31,6 +31,9 @@ three suite runs.
 | scope-request | 10 | 200 | 0.7479 |
 | scope-request | 100 | 20 | 0.6690 |
 | scope-request | 1000 | 4 | 1.3548 |
+| scope-request-async | 10 | 200 | 1.2920 |
+| scope-request-async | 100 | 20 | 1.1652 |
+| scope-request-async | 1000 | 2 | 1.2267 |
 | get-all | 10 | 10000 | 0.8516 |
 | get-all | 100 | 1500 | 0.9524 |
 | get-all | 1000 | 150 | 1.0965 |
@@ -49,5 +52,6 @@ three suite runs.
 | graph-independent-cycles | 2000 | 1 | 1.1467 |
 | graph-independent-cycles | 4000 | 1 | 2.5578 |
 
-The `scope-request` rows came later. They were recorded on 2026-10-12 with the
-same method on commit `5f30ecc`, before scopes created their services lazily.
+The `scope-request` and `scope-request-async` rows came later. They were
+recorded on 2026-10-12 and 2026-10-13 with the same method on commit
+`5f30ecc`, before scopes created their services lazily.
