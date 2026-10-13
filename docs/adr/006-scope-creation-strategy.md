@@ -46,6 +46,10 @@ does not reach a built container. The root and all of its scopes share the
 catalog. The order includes single registrations and all entries in
 multi-registration groups.
 
+When the root is disposed, the catalog drops the registrations. It keeps the
+disposal plan, which the scopes that outlive the root still need to dispose
+the services that they created.
+
 ### Wrappers on first resolution
 
 A scope creates the wrapper of a registration when it resolves the key for the
@@ -56,12 +60,13 @@ The scope creates the wrapper from the root wrapper of the registration, with
 the replication rules above. A child scope does the same, so it does not
 depend on its parent scope.
 
-A scope cannot create a wrapper after the root is disposed: the root wrapper
-has released its lifecycle. The resolution then fails with a
-`ServiceResolutionError` whose cause is a `ContainerDisposedError`, as a
-shared singleton of a disposed root already did. The services that the scope
-created before keep resolving, except a shared singleton, which the root
-disposed.
+A scope cannot create a wrapper once the root starts its disposal. The root
+marks this state before it closes its own lifecycles, so every first
+resolution in its scopes fails from that moment on, in the sync and the async
+path alike. The resolution fails with a `ServiceResolutionError` whose cause
+is a `ContainerDisposedError`, as a shared singleton of a disposed root
+already did. The services that the scope created before keep resolving,
+except a shared singleton, which the root disposes.
 
 ### Ownership
 
@@ -114,9 +119,10 @@ the disposal plan and the sync order once. An edge through a registration that
 the scope did not create still orders the services around it.
 
 Sync disposal sorts the services that the scope created by their place in the
-shared order. Async disposal walks the shared plan and skips the registrations
-that the scope did not create. A scope that created nothing has nothing to
-walk.
+shared order. Async disposal reduces the shared plan to the groups of the
+created services. A reduced group depends on each created group that the
+shared plan reaches from it through groups without created services, so the
+order stays exact. A scope that created nothing has nothing to dispose.
 
 ## Consequences
 
@@ -128,10 +134,10 @@ wrappers and lookup maps.
 The first resolution of a key in a scope creates its wrapper. Later lookups
 take one map lookup, as in the root.
 
-Scope disposal does not build a graph. Sync disposal takes `O(k log k)` time
-for the k services that the scope created. Async disposal takes time linear in
-the registry size once the scope created a service, because an exact order
-needs the paths through the registrations that the scope did not create.
+Scope disposal does not build the full graph. Sync disposal takes
+`O(k log k)` time for the k services that the scope created. Async disposal
+takes time that grows with the part of the graph that the created services
+reach, not with the registry size.
 
 The root walks the same plan. In the benchmarks, the one-time disposal of a
 root took up to about a fifth longer for sync disposal from 100 services on,
