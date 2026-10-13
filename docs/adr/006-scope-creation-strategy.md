@@ -133,10 +133,11 @@ for the k services that the scope created. Async disposal takes time linear in
 the registry size once the scope created a service, because an exact order
 needs the paths through the registrations that the scope did not create.
 
-The root walks the same plan. In the benchmarks, the one-time sync disposal of
-a root with 100 or more services took up to about a fifth longer than with a
-plan built inside the container, although the plan code did not change. A root
-disposes once, so this cost stays in the order of microseconds.
+The root walks the same plan. In the benchmarks, the one-time disposal of a
+root took up to about a fifth longer for sync disposal from 100 services on,
+and up to about a tenth longer for async disposal, than with a plan built
+inside the container, although the plan code did not change. A root disposes
+once, so this cost stays in the order of microseconds.
 
 Singleton identity stays stable across scopes. Scoped values stay isolated.
 Transient values remain new for each resolution.
