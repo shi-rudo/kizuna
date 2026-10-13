@@ -435,6 +435,9 @@ ${example}
 		expect(adr).toContain(
 			"A scope creates the wrapper of a registration when it resolves the key for the first time, and keeps it for later lookups.",
 		);
+		expect(adr).toContain(
+			"A scope that outlives its root cannot create services anymore.",
+		);
 		expect(adr).not.toContain(
 			"Each scope gets a new wrapper for each registration.",
 		);

@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted. Revised on 2026-10-12: a scope creates its services on their first
-resolution instead of when the scope starts.
+Accepted. Revised on 2026-10-13: a scope creates its services on their first
+resolution instead of when the scope starts, and a scope that outlives its
+root cannot create services anymore.
 
 This ADR defines registration replication for `startScope()`. ADR-003 defines
 the public builder and container types.
@@ -39,10 +40,11 @@ clean a singleton or borrowed singleton value.
 
 ### Shared catalog
 
-`build()` creates one catalog of the registrations. It holds the lookup maps
-and the registration order of the builder, which no longer change after
-`build()`. The root and all of its scopes share it. The order includes single
-registrations and all entries in multi-registration groups.
+`build()` creates one catalog of the registrations. It copies the lookup maps
+and the registration order of the builder, so a later change to the builder
+does not reach a built container. The root and all of its scopes share the
+catalog. The order includes single registrations and all entries in
+multi-registration groups.
 
 ### Wrappers on first resolution
 
@@ -50,11 +52,16 @@ A scope creates the wrapper of a registration when it resolves the key for the
 first time, and keeps it for later lookups. `startScope()` therefore does not
 depend on the registry size.
 
-The scope creates the wrapper from a prototype. The root creates one prototype
-for each registration on its first `startScope()`, with the replication rules
-above, and all scopes share them. A prototype is never resolved, closed, or
-disposed. It therefore keeps its factory after the root is disposed, and a live
-scope can still create a scoped service for the first time.
+The scope creates the wrapper from the root wrapper of the registration, with
+the replication rules above. A child scope does the same, so it does not
+depend on its parent scope.
+
+A scope cannot create a wrapper after the root is disposed: the root wrapper
+has released its lifecycle. The resolution then fails with a
+`ServiceResolutionError` whose cause is a `ContainerDisposedError`, as a
+shared singleton of a disposed root already did. The services that the scope
+created before keep resolving, except a shared singleton, which the root
+disposed.
 
 ### Ownership
 
@@ -86,13 +93,14 @@ firstScope.get('command') === firstScope.get('command'); // false
 The root container is also a scope for scoped values. A scoped value in the
 root differs from the value in each child scope.
 
-A scope can create another scope. The new scope uses the same catalog and
-prototypes as its source scope.
+A scope can create another scope. The new scope uses the same catalog as its
+source scope, and it keeps working after its source scope is disposed.
 
 ## Ownership and disposal
 
 The container does not track its child scopes. The application must dispose each
-child scope before it disposes the root container.
+child scope before it disposes the root container. A scope that outlives its
+root cannot create services anymore.
 
 Scope disposal cleans owned scoped values. It clears transient lifecycle
 configuration, but it cannot clean transient values because it does not track
@@ -102,32 +110,33 @@ Scope disposal does not clean shared singleton values. The root owner cleans
 these values. A borrower never cleans a borrowed singleton.
 
 The disposal order follows ADR-011 over the full catalog. The catalog computes
-the disposal plan once. A scope walks this plan and skips the registrations
-that it did not create. An edge through such a registration still orders the
-services around it.
+the disposal plan and the sync order once. An edge through a registration that
+the scope did not create still orders the services around it.
+
+Sync disposal sorts the services that the scope created by their place in the
+shared order. Async disposal walks the shared plan and skips the registrations
+that the scope did not create. A scope that created nothing has nothing to
+walk.
 
 ## Consequences
 
 Resolution does not need a parent-container lookup. Each scope has its own
 wrappers and lookup maps.
 
-`startScope()` takes constant time. The first scope of a root also creates the
-prototypes, once for each registration. `build()` does not copy the
-registration maps.
+`startScope()` takes constant time, also for the first scope of a root.
 
 The first resolution of a key in a scope creates its wrapper. Later lookups
 take one map lookup, as in the root.
 
-Scope disposal does not build a graph. It walks the shared plan, which takes
-time linear in the registry size.
+Scope disposal does not build a graph. Sync disposal takes `O(k log k)` time
+for the k services that the scope created. Async disposal takes time linear in
+the registry size once the scope created a service, because an exact order
+needs the paths through the registrations that the scope did not create.
 
 The root walks the same plan. In the benchmarks, the one-time sync disposal of
 a root with 100 or more services took up to about a fifth longer than with a
 plan built inside the container, although the plan code did not change. A root
 disposes once, so this cost stays in the order of microseconds.
-
-The prototypes keep the registration factories alive for as long as the root
-or a scope can reach the catalog.
 
 Singleton identity stays stable across scopes. Scoped values stay isolated.
 Transient values remain new for each resolution.
