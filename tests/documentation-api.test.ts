@@ -421,6 +421,29 @@ ${example}
 		);
 	});
 
+	it("documents a shutdown that lets running requests finish first", () => {
+		const readme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+		);
+		const middleware = readFileSync(
+			join(
+				repositoryRoot,
+				"skills",
+				"kizuna",
+				"references",
+				"scoping-and-middleware.md",
+			),
+			"utf8",
+		);
+
+		expect(readme).toContain(
+			"Dispose the root container only after the running requests have finished.",
+		);
+		expect(middleware).toContain("server.close(");
+		expect(middleware).toContain("onApplicationShutdown");
+		expect(middleware).not.toContain("kizunaContainer.dispose();");
+	});
+
 	it("documents the current scope replication contract", () => {
 		const adr = normalizedMarkdown(
 			readFileSync(

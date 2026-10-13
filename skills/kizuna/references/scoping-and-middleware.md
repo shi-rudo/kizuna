@@ -104,11 +104,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Graceful shutdown — awaits async singleton cleanup (DB pools etc.)
-// before exiting.
-process.on('SIGTERM', async () => {
-  await container.disposeAsync();
-  process.exit(0);
+// Graceful shutdown: stop accepting requests, let the running requests
+// finish and dispose their scopes, then dispose the root. Once the root starts
+// its disposal, a scope cannot create new services.
+const server = app.listen(3000);
+process.on('SIGTERM', () => {
+  server.close(async () => {
+    await container.disposeAsync(); // Awaits async singleton cleanup (DB pools).
+    process.exit(0);
+  });
 });
 
 // TypeScript: extend the Request type
@@ -302,17 +306,29 @@ export class UsersController {
 ```typescript
 // main.ts — graceful shutdown
 import { NestFactory } from '@nestjs/core';
-import { kizunaContainer } from './lib/kizuna-container';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // On SIGTERM, Nest closes the HTTP server and then calls
+  // onApplicationShutdown(). Running requests can finish first.
   app.enableShutdownHooks();
-  process.on('SIGTERM', () => {
-    kizunaContainer.dispose();
-  });
 
   await app.listen(3000);
+}
+```
+
+```typescript
+// kizuna-shutdown.service.ts — register it as a provider in AppModule
+import { Injectable, type OnApplicationShutdown } from '@nestjs/common';
+import { kizunaContainer } from './lib/kizuna-container';
+
+@Injectable()
+export class KizunaShutdown implements OnApplicationShutdown {
+  async onApplicationShutdown(): Promise<void> {
+    // A scope cannot create new services once the root starts its disposal.
+    await kizunaContainer.disposeAsync();
+  }
 }
 ```
 
