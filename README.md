@@ -462,6 +462,13 @@ before its root container. With borrowed singletons, use this shutdown order:
 2. Borrower root containers
 3. The source root container
 
+Dispose the root container only after the running requests have finished. Once
+the root starts its disposal, a scope cannot create a service that it has not
+resolved yet. The scope then throws a `ServiceResolutionError` whose cause is a
+`ContainerDisposedError`. At shutdown, stop accepting new requests and wait
+until the running requests have disposed their scopes. Then dispose the root
+container.
+
 #### Choose the disposal API
 
 Choose one disposal API for each container.

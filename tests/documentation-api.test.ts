@@ -421,6 +421,29 @@ ${example}
 		);
 	});
 
+	it("documents a shutdown that lets running requests finish first", () => {
+		const readme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+		);
+		const middleware = readFileSync(
+			join(
+				repositoryRoot,
+				"skills",
+				"kizuna",
+				"references",
+				"scoping-and-middleware.md",
+			),
+			"utf8",
+		);
+
+		expect(readme).toContain(
+			"Dispose the root container only after the running requests have finished.",
+		);
+		expect(middleware).toContain("server.close(");
+		expect(middleware).toContain("onApplicationShutdown");
+		expect(middleware).not.toContain("kizunaContainer.dispose();");
+	});
+
 	it("documents the current scope replication contract", () => {
 		const adr = normalizedMarkdown(
 			readFileSync(
@@ -430,6 +453,15 @@ ${example}
 		);
 
 		expect(adr).toContain(
+			"It does not look up services in its parent, and it creates its own wrapper for each registration that it resolves.",
+		);
+		expect(adr).toContain(
+			"A scope creates the wrapper of a registration when it resolves the key for the first time, and keeps it for later lookups.",
+		);
+		expect(adr).toContain(
+			"A scope that outlives its root cannot create services anymore.",
+		);
+		expect(adr).not.toContain(
 			"Each scope gets a new wrapper for each registration.",
 		);
 		expect(adr).toContain(

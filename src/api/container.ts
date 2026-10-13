@@ -10,15 +10,22 @@ import {
 	type DisposalFailure,
 	type DisposalOperation,
 	InvalidServiceKeyError,
+	type RegistrationKind,
 	RegistrationKindError,
 	ServiceNotRegisteredError,
 	ServiceResolutionError,
 	SingletonBorrowError,
 } from "../core/errors.js";
 import {
-	createDisposalLayers,
-	createDisposalPlan,
+	type DisposalAttempt,
+	disposeByPlan,
+	disposeInSequence,
 } from "../core/services/disposal-order.js";
+import type { ServiceCatalog } from "../core/services/service-catalog.js";
+import {
+	RootOwnership,
+	type ServiceOwnership,
+} from "../core/services/service-ownership.js";
 import {
 	reportValueCreated,
 	resolveDependency,
@@ -71,16 +78,25 @@ export interface ContainerContext {
  * Runtime container that resolves registered services.
  *
  * `ContainerBuilder.build()` creates the root container. `startScope()`
- * creates a scope with the same registrations.
+ * creates a scope with the same registrations. A container takes the service
+ * of a registration from its {@link ServiceOwnership} on the first resolution
+ * and keeps it for later lookups.
  *
  * @template TRegistry - The service registry type mapping string keys to service types
  */
 export class Container<TRegistry extends ServiceRegistry>
 	implements ServiceContainer<TRegistry>, BorrowableSingletonSource
 {
-	private readonly registrations: Map<string, ServiceWrapper>;
-	private readonly multiRegistrations: Map<string, ServiceWrapper[]>;
-	private readonly registrationOrder: ServiceWrapper[];
+	private readonly catalog: ServiceCatalog;
+	private readonly ownership: ServiceOwnership;
+	/**
+	 * The services of keys with one registration that this container has. It is
+	 * the map of the ownership itself, read once here so that a warm `get()`
+	 * costs one map lookup and no call. The ownership clears it, never replaces it.
+	 */
+	private readonly services: ReadonlyMap<string, ServiceWrapper>;
+	/** The services of keys with multiple registrations, held like `services`. */
+	private readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>;
 	private readonly kind: DiagnosticContainerKind;
 	private readonly diagnostics: DiagnosticsReporter;
 	private _disposed = false;
@@ -100,19 +116,28 @@ export class Container<TRegistry extends ServiceRegistry>
 	 */
 	private readonly _resolution = new ResolutionStack();
 
-	constructor(
-		registrations: ReadonlyMap<string, ServiceWrapper>,
-		multiRegistrations: ReadonlyMap<string, readonly ServiceWrapper[]>,
-		registrationOrder: readonly ServiceWrapper[],
+	protected constructor(
+		catalog: ServiceCatalog,
+		ownership: ServiceOwnership,
 		context: ContainerContext,
 	) {
-		this.registrations = new Map(registrations);
-		this.multiRegistrations = new Map(
-			[...multiRegistrations].map(([key, resolvers]) => [key, [...resolvers]]),
-		);
-		this.registrationOrder = [...registrationOrder];
+		this.catalog = catalog;
+		this.ownership = ownership;
+		this.services = ownership.services;
+		this.groups = ownership.groups;
 		this.kind = context.kind;
 		this.diagnostics = context.diagnostics;
+	}
+
+	/** Creates the root container of a catalog. */
+	static createRoot<TRootRegistry extends ServiceRegistry>(
+		catalog: ServiceCatalog,
+		diagnostics: DiagnosticsReporter,
+	): Container<TRootRegistry> {
+		return new Container<TRootRegistry>(catalog, new RootOwnership(catalog), {
+			kind: "root",
+			diagnostics,
+		});
 	}
 
 	/**
@@ -139,11 +164,10 @@ export class Container<TRegistry extends ServiceRegistry>
 			);
 		}
 
-		if (this.multiRegistrations.has(keyOrType)) {
-			throw new RegistrationKindError(keyOrType, "multi");
-		}
-
-		return this.resolveSingle(keyOrType);
+		return this.resolveSingle(
+			keyOrType,
+			this.services.get(keyOrType) ?? this.obtainSingle(keyOrType),
+		);
 	}
 
 	getAll<K extends string & MultiRegistrationKey<TRegistry>>(
@@ -153,16 +177,10 @@ export class Container<TRegistry extends ServiceRegistry>
 		this.ensureNotDisposed();
 		const typeName = String(key);
 
-		const multiResolvers = this.multiRegistrations.get(typeName);
-		if (multiResolvers) {
-			return this.resolveMulti(typeName, multiResolvers);
-		}
-
-		if (this.registrations.has(typeName)) {
-			throw new RegistrationKindError(typeName, "single");
-		}
-
-		throw new ServiceNotRegisteredError(typeName);
+		return this.resolveMulti(
+			typeName,
+			this.groups.get(typeName) ?? this.obtainGroup(typeName),
+		);
 	}
 
 	/**
@@ -173,10 +191,17 @@ export class Container<TRegistry extends ServiceRegistry>
 	[resolveDependency](key: string): unknown {
 		this.ensureNotDisposed();
 
-		const multiResolvers = this.multiRegistrations.get(key);
-		return multiResolvers
-			? this.resolveMulti(key, multiResolvers)
-			: this.resolveSingle(key);
+		const service = this.services.get(key);
+		if (service) {
+			return this.resolveSingle(key, service);
+		}
+		const group = this.groups.get(key);
+		if (group) {
+			return this.resolveMulti(key, group);
+		}
+		return this.catalog.groups.has(key)
+			? this.resolveMulti(key, this.obtainGroup(key))
+			: this.resolveSingle(key, this.obtainSingle(key));
 	}
 
 	/**
@@ -189,53 +214,52 @@ export class Container<TRegistry extends ServiceRegistry>
 	}
 
 	/** Resolves a key with one registration and wraps resolution failures. */
-	private resolveSingle(key: string): unknown {
-		const resolver = this.registrations.get(key);
-		if (!resolver) {
-			throw new ServiceNotRegisteredError(key);
-		}
-
+	private resolveSingle(key: string, service: ServiceWrapper): unknown {
 		try {
-			return this._resolution.track(key, () => resolver.resolve(this));
+			return this._resolution.track(key, () => service.resolve(this));
 		} catch (error) {
-			if (this.passesThrough(error)) {
-				throw error;
-			}
-			throw new ServiceResolutionError(key, error);
+			throw this.resolutionFailure(key, error);
 		}
+	}
+
+	/** Takes the service of a key with one registration on its first use. */
+	private obtainSingle(key: string): ServiceWrapper {
+		let service: ServiceWrapper | undefined;
+		try {
+			service = this.ownership.obtainSingle(key);
+		} catch (error) {
+			throw this.resolutionFailure(key, error);
+		}
+		if (!service) {
+			throw this.catalog.groups.has(key)
+				? new RegistrationKindError(key, "multi")
+				: new ServiceNotRegisteredError(key);
+		}
+		return service;
+	}
+
+	/** Takes the services of a key with multiple registrations on its first use. */
+	private obtainGroup(key: string): readonly ServiceWrapper[] {
+		let group: readonly ServiceWrapper[] | undefined;
+		try {
+			group = this.ownership.obtainGroup(key);
+		} catch (error) {
+			throw this.resolutionFailure(key, error, "multi");
+		}
+		if (!group) {
+			throw this.catalog.singles.has(key)
+				? new RegistrationKindError(key, "single")
+				: new ServiceNotRegisteredError(key);
+		}
+		return group;
 	}
 
 	startScope(): ServiceContainer<TRegistry> {
 		this.ensureNotDisposed();
 
-		const newRegistrations = new Map<string, ServiceWrapper>();
-		const scopedResolvers = new Map<ServiceWrapper, ServiceWrapper>();
-		this.registrations.forEach((resolver, key) => {
-			const scopedResolver = resolver.createScope();
-			newRegistrations.set(key, scopedResolver);
-			scopedResolvers.set(resolver, scopedResolver);
-		});
-
-		const newMultiRegistrations = new Map<string, ServiceWrapper[]>();
-		this.multiRegistrations.forEach((resolvers, key) => {
-			newMultiRegistrations.set(
-				key,
-				resolvers.map((resolver) => {
-					const scopedResolver = resolver.createScope();
-					scopedResolvers.set(resolver, scopedResolver);
-					return scopedResolver;
-				}),
-			);
-		});
-
-		const scopedRegistrationOrder = this.registrationOrder
-			.map((resolver) => scopedResolvers.get(resolver))
-			.filter((resolver): resolver is ServiceWrapper => resolver !== undefined);
-
 		const scope = new Container<TRegistry>(
-			newRegistrations,
-			newMultiRegistrations,
-			scopedRegistrationOrder,
+			this.catalog,
+			this.ownership.forNewScope(),
 			{ kind: "scope", diagnostics: this.diagnostics },
 		);
 		this.diagnostics.scopeStarted();
@@ -257,7 +281,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			);
 		}
 
-		if (this.multiRegistrations.has(key)) {
+		if (this.catalog.groups.has(key)) {
 			throw new SingletonBorrowError(
 				key,
 				"MULTI_REGISTRATION",
@@ -265,7 +289,7 @@ export class Container<TRegistry extends ServiceRegistry>
 			);
 		}
 
-		const registration = this.registrations.get(key);
+		const registration = this.catalog.singles.get(key);
 		if (!registration) {
 			throw new SingletonBorrowError(
 				key,
@@ -308,21 +332,14 @@ export class Container<TRegistry extends ServiceRegistry>
 		this._disposed = true;
 		this.closeOwnedLifecycles("sync");
 
-		const failures: DisposalFailure[] = [];
+		let failures: readonly DisposalFailure[] = [];
 		try {
-			for (const layer of createDisposalLayers(this.registrationOrder)) {
-				for (const resolver of layer) {
-					try {
-						resolver.dispose();
-					} catch (error) {
-						failures.push(
-							this.createDisposalFailure(resolver, "dispose", error),
-						);
-					}
-				}
-			}
+			failures = this.toDisposalFailures(
+				disposeInSequence(this.ownership.disposalSequence(), this.ownership),
+				"dispose",
+			);
 		} finally {
-			this.clearRegistrations();
+			this.ownership.release();
 		}
 
 		this.finishDisposal("sync", failures);
@@ -348,9 +365,12 @@ export class Container<TRegistry extends ServiceRegistry>
 
 		let failures: readonly DisposalFailure[] = [];
 		try {
-			failures = await this.runDependencyAwareDisposeAsync();
+			failures = this.toDisposalFailures(
+				await disposeByPlan(this.ownership.disposalPlan(), this.ownership),
+				"disposeAsync",
+			);
 		} finally {
-			this.clearRegistrations();
+			this.ownership.release();
 		}
 
 		this.finishDisposal("async", failures);
@@ -370,86 +390,26 @@ export class Container<TRegistry extends ServiceRegistry>
 		await this.disposeAsync();
 	}
 
-	private async runDependencyAwareDisposeAsync(): Promise<
-		readonly DisposalFailure[]
-	> {
-		const plan = createDisposalPlan(this.registrationOrder);
-		if (plan.groups.length === 0) {
-			return [];
-		}
-
-		const failuresByResolver = new Map<ServiceWrapper, DisposalFailure>();
-
-		const remainingConsumerGroups = plan.groups.map(
-			(group) => group.consumerGroupCount,
-		);
-
-		await new Promise<void>((resolve) => {
-			let completedGroups = 0;
-
-			const startGroup = (groupIndex: number): void => {
-				const tasks = plan.groups[groupIndex].resolvers.map(
-					async (resolver) => {
-						try {
-							await resolver.disposeAsync();
-						} catch (error) {
-							failuresByResolver.set(
-								resolver,
-								this.createDisposalFailure(resolver, "disposeAsync", error),
-							);
-						}
-					},
-				);
-
-				void Promise.all(tasks).then(() => {
-					completedGroups++;
-
-					for (const dependencyGroup of plan.groups[groupIndex]
-						.dependencyGroups) {
-						remainingConsumerGroups[dependencyGroup]--;
-						if (remainingConsumerGroups[dependencyGroup] === 0) {
-							startGroup(dependencyGroup);
-						}
-					}
-
-					if (completedGroups === plan.groups.length) {
-						resolve();
-					}
-				});
-			};
-
-			for (const groupIndex of plan.rootGroups) {
-				startGroup(groupIndex);
-			}
-		});
-
-		return this.registrationOrder.flatMap((resolver) => {
-			const failure = failuresByResolver.get(resolver);
-			return failure ? [failure] : [];
-		});
-	}
-
 	/**
 	 * Closes every owned lifecycle before any cleanup runs. A factory that
 	 * disposes its own container then cannot hand out a value.
 	 */
 	private closeOwnedLifecycles(mode: DisposalMode): void {
-		for (const resolver of this.registrationOrder) {
-			resolver.close(mode, this.diagnostics);
-		}
+		this.ownership.close(mode, this.diagnostics);
 	}
 
-	private createDisposalFailure(
-		resolver: ServiceWrapper,
+	private toDisposalFailures(
+		attempts: readonly DisposalAttempt<ServiceWrapper>[],
 		operation: DisposalOperation,
-		error: unknown,
-	): DisposalFailure {
-		return Object.freeze({
-			serviceKey: resolver.getName(),
-			lifetime: resolver.getLifetime(),
-			operation,
-			error,
-		});
+	): readonly DisposalFailure[] {
+		return attempts.map(({ service, error }) =>
+			Object.freeze({
+				serviceKey: service.getName(),
+				lifetime: service.getLifetime(),
+				operation,
+				error,
+			}),
+		);
 	}
 
 	/** Reports the finished disposal, then throws its failures. */
@@ -467,12 +427,6 @@ export class Container<TRegistry extends ServiceRegistry>
 		}
 	}
 
-	private clearRegistrations(): void {
-		this.registrations.clear();
-		this.multiRegistrations.clear();
-		this.registrationOrder.length = 0;
-	}
-
 	private ensureNotDisposed(): void {
 		if (this._disposed) {
 			throw new ContainerDisposedError();
@@ -488,22 +442,26 @@ export class Container<TRegistry extends ServiceRegistry>
 				resolvers.map((resolver) => resolver.resolve(this)),
 			);
 		} catch (error) {
-			if (this.passesThrough(error)) {
-				throw error;
-			}
-			throw new ServiceResolutionError(typeName, error, "multi");
+			throw this.resolutionFailure(typeName, error, "multi");
 		}
 	}
 
 	/**
-	 * A cycle error keeps its chain unwrapped. A disposal error stays unwrapped
-	 * only when this container itself is disposed; otherwise the caller needs
-	 * the key of the service that met another disposed container.
+	 * Returns the error to throw for a failed resolution of a key. A cycle error
+	 * keeps its chain unwrapped. A disposal error stays unwrapped only when this
+	 * container itself is disposed; otherwise the caller needs the key of the
+	 * service that met another disposed container.
 	 */
-	private passesThrough(error: unknown): boolean {
-		return (
+	private resolutionFailure(
+		key: string,
+		error: unknown,
+		registrationKind: RegistrationKind = "single",
+	): unknown {
+		const passesThrough =
 			error instanceof CircularDependencyError ||
-			(error instanceof ContainerDisposedError && this._disposed)
-		);
+			(error instanceof ContainerDisposedError && this._disposed);
+		return passesThrough
+			? error
+			: new ServiceResolutionError(key, error, registrationKind);
 	}
 }

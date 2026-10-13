@@ -123,14 +123,13 @@ export class ServiceWrapper {
 	}
 
 	/**
-	 * Creates a new scope for scoped services.
-	 * @returns A new ServiceWrapper instance for the new scope
+	 * Creates the wrapper of this service for a scope.
+	 * @returns A new ServiceWrapper instance for the scope
+	 * @throws {ContainerDisposedError} If the container of this wrapper is disposed
 	 */
 	createScope(): ServiceWrapper {
 		if (!this._lifecycle) {
-			throw new Error(
-				`Cannot create new scope for disposed service '${this._name}'`,
-			);
+			throw new ContainerDisposedError();
 		}
 
 		const scopedLifecycle = this._lifecycle.createScope();

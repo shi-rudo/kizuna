@@ -46,7 +46,9 @@ Services are plain classes, without decorators or base classes. The
    `ContainerValidationError` for missing, circular, and captive dependencies.
 3. Resolve with `get()`, or with `getAll()` for a multi-registration key.
 4. Start a scope for each request or unit of work, and dispose it at the end.
-5. At shutdown, dispose the scopes and borrowers first, then the root container.
+5. At shutdown, stop accepting requests and let the running requests dispose
+   their scopes. Dispose borrowers next, then the root container. Once the
+   root starts its disposal, a scope cannot create new services.
 
 ```typescript
 import { ContainerBuilder } from '@shirudo/kizuna';

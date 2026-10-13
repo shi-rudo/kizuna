@@ -36,6 +36,16 @@ export const benchmarkScenarios = Object.freeze({
 		benchmarkCase(100, 100),
 		benchmarkCase(1_000, 10),
 	]),
+	"scope-request": Object.freeze([
+		benchmarkCase(10, 200),
+		benchmarkCase(100, 20),
+		benchmarkCase(1_000, 4),
+	]),
+	"scope-request-async": Object.freeze([
+		benchmarkCase(10, 200),
+		benchmarkCase(100, 20),
+		benchmarkCase(1_000, 2),
+	]),
 	"get-all": Object.freeze([
 		benchmarkCase(10, 10_000),
 		benchmarkCase(100, 1_500),

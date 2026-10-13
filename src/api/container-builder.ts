@@ -5,6 +5,7 @@ import { BorrowedSingletonLifecycle } from "../core/scopes/borrowed-singleton.js
 import { ScopedLifecycle } from "../core/scopes/scoped.js";
 import { SingletonLifecycle } from "../core/scopes/singleton.js";
 import { TransientLifecycle } from "../core/scopes/transient.js";
+import { ServiceCatalog } from "../core/services/service-catalog.js";
 import { ServiceWrapper } from "../core/services/service-wrapper.js";
 import { BaseContainerBuilder } from "./base-container-builder.js";
 import {
@@ -729,11 +730,13 @@ export class ContainerBuilder<
 			this.registrationCount,
 			validation,
 		);
-		return new Container<TRegistry>(
-			this.registrations,
-			this.multiRegistrations,
-			this.registrationOrder,
-			{ kind: "root", diagnostics },
+		return Container.createRoot<TRegistry>(
+			new ServiceCatalog(
+				this.registrations,
+				this.multiRegistrations,
+				this.registrationOrder,
+			),
+			diagnostics,
 		) as unknown as RootServiceContainer<TRegistry>;
 	}
 
