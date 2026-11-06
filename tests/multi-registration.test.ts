@@ -423,6 +423,25 @@ describe("Multi-Registration", () => {
 		});
 	});
 
+	describe("getAll() result array", () => {
+		it("returns a new array on each call that the caller can change", () => {
+			const container = new ContainerBuilder()
+				.addSingleton("handlers", HandlerA)
+				.addSingleton("handlers", HandlerB)
+				.build();
+			const first = container.getAll("handlers");
+			first.pop();
+
+			const second = container.getAll("handlers");
+
+			expect(second).not.toBe(first);
+			expect(second.map((handler) => handler.constructor)).toEqual([
+				HandlerA,
+				HandlerB,
+			]);
+		});
+	});
+
 	describe("getAll() on multi-key verifies instances", () => {
 		it("should return correct instance types via getAll()", () => {
 			const container = new ContainerBuilder()
