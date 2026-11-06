@@ -60,6 +60,14 @@ The rules:
   own a transient value and clean it up with `using`. A root container and its
   scopes report each key once, so a transient that every request creates
   produces one event.
+- `DISPOSABLE_TRANSIENT` does not inspect a Promise value. Kizuna returns a
+  transient value unchanged, so it cannot hand out an observer Promise as the
+  singleton and scoped lifecycles do. A handler for both outcomes on the
+  factory Promise would hide a rejection that the caller ignores. A handler
+  for fulfillment only would report a rejection that the caller handles as
+  unhandled. Calling `then()` can also start the work of a lazy thenable. An
+  `async` resource that needs cleanup belongs in a scoped or singleton
+  registration, whose `disposeAsync()` waits for the Promise.
 - `warn` is the default. Kizuna never writes to the console, so a listener is
   the only channel for a warning, and a listener that needs a level option
   first would rarely receive one. Each key warns once, so the default stays

@@ -1091,8 +1091,11 @@ its code. The event object itself carries the structured fields.
   that hook. A root container and its scopes report each key once, for the
   first such value. `container` and `path` describe that first resolution.
   Kizuna does not wait for a Promise value, so a transient `async` factory
-  produces no event. A factory that returns a shared value, for example a
-  singleton, also produces the event. The owner of that value still cleans it
+  produces no event. Kizuna returns that Promise unchanged, and a handler on
+  it would hide a rejection that the caller ignores. Register an `async`
+  resource that needs cleanup as scoped or singleton. `disposeAsync()` then
+  waits for the Promise and cleans up its value. A factory that returns a
+  shared value, for example a singleton, also produces the event. The owner of that value still cleans it
   up.
 - `SERVICE_CREATED` reports each value that a lifecycle created. A cache hit
   reports nothing. `path` is the resolution chain, for example

@@ -70,8 +70,8 @@ The values were measured on 2026-11-06:
 
 - Root entry, minified ESM, gzip: 9.2 KiB, budget 9.5 KiB
 - Shipped `dist/index.mjs`, gzip: 20.6 KiB, budget 22 KiB
-- Packed tarball: 197.0 KiB, budget 200 KiB
-- Unpacked package: 903.2 KiB, budget 950 KiB
+- Packed tarball: 197.2 KiB, budget 200 KiB
+- Unpacked package: 903.8 KiB, budget 950 KiB
 
 The minified value comes from an esbuild build of the root entry with all
 exports. A consumer bundle that uses fewer exports can be smaller. The unpacked

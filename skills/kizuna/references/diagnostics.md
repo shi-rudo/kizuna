@@ -62,9 +62,17 @@ with `[Symbol.asyncDispose]`, `[Symbol.dispose]`, or `dispose()`. Kizuna does
 not track transient values, so it never invokes that hook. A root container
 and its scopes report each key once. Register the service as singleton or
 scoped if the container must clean it up. Ignore the event for a key whose
-callers clean up the value themselves, for example with `using`. Kizuna does
-not wait for a Promise value, so a transient `async` factory produces no
-event.
+callers clean up the value themselves, for example with `using`.
+
+Kizuna does not wait for a Promise value, so a transient `async` factory
+produces no event. Kizuna returns that Promise unchanged, and a handler on it
+would hide a rejection that the caller ignores. Register an `async` resource
+that needs cleanup as scoped, so that `disposeAsync()` waits for the Promise
+and cleans up its value:
+
+```typescript
+.registerScopedFactory('connection', async () => pool.connect())
+```
 
 ## React to one event
 
