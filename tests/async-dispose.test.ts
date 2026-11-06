@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ContainerBuilder } from "../src/api/container-builder";
+import { DisposalError } from "../src/core/errors";
 
 class AsyncDisposableService {
 	disposed = false;
@@ -172,6 +173,104 @@ describe("disposeAsync()", () => {
 		for (const svc of instances) {
 			expect(svc.disposed).toBe(true);
 		}
+	});
+});
+
+/** A service whose async cleanup ends only when the test finishes or fails it. */
+class GatedCleanup {
+	finished = false;
+	private settle: { finish(): void; fail(error: Error): void } | undefined;
+
+	async [Symbol.asyncDispose](): Promise<void> {
+		await new Promise<void>((resolve, reject) => {
+			this.settle = { finish: resolve, fail: reject };
+		});
+		this.finished = true;
+	}
+
+	finish(): void {
+		this.settle?.finish();
+	}
+
+	fail(error: Error): void {
+		this.settle?.fail(error);
+	}
+}
+
+const outcome = (promise: Promise<void>): Promise<unknown> =>
+	promise.then(
+		() => "resolved",
+		(error: unknown) => error,
+	);
+
+const flushMicrotasks = async (): Promise<void> => {
+	for (let round = 0; round < 10; round++) {
+		await Promise.resolve();
+	}
+};
+
+describe("concurrent disposeAsync() calls", () => {
+	it("does not settle a second call before the running cleanup finishes", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const first = container.disposeAsync();
+		let secondSettled = false;
+		const second = container.disposeAsync().then(() => {
+			secondSettled = true;
+		});
+
+		await flushMicrotasks();
+
+		expect(secondSettled).toBe(false);
+		resource.finish();
+		await Promise.all([first, second]);
+	});
+
+	it("settles every concurrent call once the cleanup finishes", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const calls = [container.disposeAsync(), container.disposeAsync()];
+		await flushMicrotasks();
+
+		resource.finish();
+
+		await expect(Promise.all(calls)).resolves.toEqual([undefined, undefined]);
+		expect(resource.finished).toBe(true);
+	});
+
+	it("rejects every concurrent call with the same DisposalError", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const first = outcome(container.disposeAsync());
+		const second = outcome(container.disposeAsync());
+		await flushMicrotasks();
+
+		resource.fail(new Error("close failed"));
+
+		const [firstError, secondError] = await Promise.all([first, second]);
+		expect(firstError).toBeInstanceOf(DisposalError);
+		expect(secondError).toBe(firstError);
+	});
+
+	it("resolves a call after a failed disposal without running cleanup again", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const failed = outcome(container.disposeAsync());
+		await flushMicrotasks();
+		resource.fail(new Error("close failed"));
+		await failed;
+
+		const later = container.disposeAsync();
+
+		await expect(later).resolves.toBeUndefined();
 	});
 });
 

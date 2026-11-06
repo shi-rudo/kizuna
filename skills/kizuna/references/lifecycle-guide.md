@@ -148,7 +148,9 @@ The `dispose()` method is suitable only when every owned value has synchronous
 cleanup. It cannot wait for a Promise.
 
 Call only one disposal API on a container. The first call marks the container
-as disposed. Later disposal calls are no-ops.
+as disposed. A `disposeAsync()` call while the cleanup runs waits for it and
+receives the same result or `DisposalError`. Disposal calls after the cleanup
+has finished are no-ops.
 
 ### Hook selection
 

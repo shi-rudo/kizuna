@@ -581,8 +581,11 @@ failed.
 multiple cleanup errors and does not represent a domain aggregate.
 
 The container clears its internal state before it reports errors. Later calls
-to `get()`, `getAll()`, or `startScope()` fail. A second disposal call is a
-no-op.
+to `get()`, `getAll()`, or `startScope()` fail. A `disposeAsync()` call while
+the cleanup still runs waits for it and receives the same result: it resolves,
+or it rejects with the same `DisposalError`. A disposal call after the cleanup
+has finished is a no-op. A cleanup hook must not wait for `disposeAsync()` of
+its own container or scope, because it would wait for itself.
 
 ## 🏗️ Advanced Patterns
 

@@ -40,8 +40,10 @@ containers. The Promise has started, but the sync API does not wait for it. A
 later rejection reaches a diagnostics listener as described in
 [ADR-013](./013-diagnostic-events.md).
 
-The container clears its state before it reports the `DisposalError`. A second
-disposal call is a no-op, even if the first call reported errors.
+The container clears its state before it reports the `DisposalError`. A
+`disposeAsync()` call while the asynchronous cleanup runs waits for that
+cleanup and rejects with the same `DisposalError`. A disposal call after the
+cleanup has finished is a no-op, even if the first call reported errors.
 
 The TC39 resource-management symbols use the same behavior as the matching
 methods.

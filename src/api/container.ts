@@ -123,6 +123,12 @@ export class Container<TRegistry extends ServiceRegistry>
 	private readonly kind: DiagnosticContainerKind;
 	private readonly diagnostics: DiagnosticsReporter;
 	private _disposed = false;
+	/**
+	 * The running `disposeAsync()` cleanup. A concurrent call waits for it and
+	 * observes the same result. It is cleared once the cleanup settles, so a
+	 * later call is a no-op.
+	 */
+	private _asyncDisposal: Promise<void> | undefined;
 
 	get [Symbol.toStringTag]():
 		| "KizunaRootServiceContainer"
@@ -381,14 +387,31 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * Independent dispose handlers run in parallel. A dependency starts only
 	 * after all of its consumer groups settle. Rejections do not stop other
 	 * cleanup. After all cleanup settles, this method throws one
-	 * `DisposalError` with the original failures. Idempotent — safe to call
-	 * multiple times.
+	 * `DisposalError` with the original failures.
+	 *
+	 * A call while the cleanup runs waits for it and observes the same success
+	 * or `DisposalError`. A call after the cleanup settled is a no-op. A
+	 * cleanup hook must not wait for `disposeAsync()` of its own container:
+	 * it would wait for itself.
 	 */
 	async disposeAsync(): Promise<void> {
+		if (this._asyncDisposal) {
+			return this._asyncDisposal;
+		}
 		if (this._disposed) {
 			return;
 		}
 		this._disposed = true;
+		this._asyncDisposal = this.disposeOwnedServicesAsync();
+		try {
+			await this._asyncDisposal;
+		} finally {
+			this._asyncDisposal = undefined;
+		}
+	}
+
+	/** Closes the owned lifecycles, then awaits their asynchronous cleanup. */
+	private async disposeOwnedServicesAsync(): Promise<void> {
 		this.closeOwnedLifecycles("async");
 
 		let failures: readonly DisposalFailure[] = [];
