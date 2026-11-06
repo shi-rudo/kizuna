@@ -36,20 +36,22 @@ export const benchmarkScenarios = Object.freeze({
 		benchmarkCase(100, 100),
 		benchmarkCase(400, 10),
 	]),
+	// A scope creates its services on first use, so its cost does not grow with
+	// the registrations. Each size keeps the same number of operations.
 	"start-scope": Object.freeze([
-		benchmarkCase(10, 1_000),
-		benchmarkCase(100, 100),
-		benchmarkCase(1_000, 10),
+		benchmarkCase(10, 20_000),
+		benchmarkCase(100, 20_000),
+		benchmarkCase(1_000, 20_000),
 	]),
 	"scope-request": Object.freeze([
-		benchmarkCase(10, 200),
-		benchmarkCase(100, 20),
-		benchmarkCase(1_000, 4),
+		benchmarkCase(10, 1_000),
+		benchmarkCase(100, 1_000),
+		benchmarkCase(1_000, 1_000),
 	]),
 	"scope-request-async": Object.freeze([
-		benchmarkCase(10, 200),
-		benchmarkCase(100, 20),
-		benchmarkCase(1_000, 2),
+		benchmarkCase(10, 400),
+		benchmarkCase(100, 400),
+		benchmarkCase(1_000, 400),
 	]),
 	"get-all": Object.freeze([
 		benchmarkCase(10, 10_000),

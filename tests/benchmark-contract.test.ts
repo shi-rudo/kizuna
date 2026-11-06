@@ -23,6 +23,9 @@ const requiredScenarios = [
 	"graph-independent-cycles",
 ] as const;
 
+/** A shorter batch is dominated by timer and call overhead. */
+const minimumBaselineBatchMs = 0.1;
+
 const requiredBenchmarkFiles = [
 	"container-build.bench.ts",
 	"disposal.bench.ts",
@@ -126,6 +129,19 @@ describe("benchmark contract", () => {
 			.sort();
 
 		expect(actualRows).toEqual(expectedRows);
+	});
+
+	it("keeps every baseline batch long enough to compare", () => {
+		const baseline = readFileSync(join(benchmarkRoot, "BASELINE.md"), "utf8");
+		const shortRows = [
+			...baseline.matchAll(
+				/^\| ([a-z][a-z-]+) \| (\d+) \| (\d+) \| ([0-9]+(?:\.[0-9]+)?) \|$/gm,
+			),
+		]
+			.filter((match) => Number(match[4]) < minimumBaselineBatchMs)
+			.map((match) => `${match[1]}:${match[2]}:${match[4]}`);
+
+		expect(shortRows).toEqual([]);
 	});
 
 	it("documents the measurement method and every public operation", () => {
