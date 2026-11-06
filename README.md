@@ -546,6 +546,12 @@ The async API runs independent graph branches in parallel. Their relative
 completion order is not defined. All services under a multi-registration key
 are part of the graph.
 
+At most 16 asynchronous cleanup hooks run at once, also in scopes. The other
+hooks wait in the order in which their services become ready for cleanup. Set
+the limit with `build({ maxAsyncDisposalConcurrency: 4 })`, for example to stay
+below the connection limit of a database. The value must be a positive integer.
+A dependency still starts its cleanup only after its consumers.
+
 Factory registrations can declare dependency keys after the factory. These
 keys define validation edges and cleanup order.
 
@@ -902,7 +908,7 @@ Scopes and borrowers cannot lend a registration.
 #### Container Management
 
 ```typescript
-.build(options?: ContainerBuildOptions): RootServiceContainer<TRegistry> // { validation?, diagnostics? }
+.build(options?: ContainerBuildOptions): RootServiceContainer<TRegistry> // { validation?, diagnostics?, maxAsyncDisposalConcurrency? }
 .validate(): readonly ValidationIssue[]                // Validate the dependency graph
 .keyCount: number                                      // Number of registered keys (a multi-registration key counts once)
 .registrationCount: number                             // Number of registrations (each add*() call counts)

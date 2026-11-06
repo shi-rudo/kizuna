@@ -387,6 +387,26 @@ describe("build option error contracts", () => {
 		});
 	});
 
+	it.each([
+		0,
+		-1,
+		1.5,
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		"16",
+		null,
+	])("reports the async disposal limit %s with INVALID_BUILD_OPTIONS", (value) => {
+		const error = captureError(() =>
+			buildWith({ maxAsyncDisposalConcurrency: value }),
+		);
+
+		expect(error).toMatchObject({
+			code: "INVALID_BUILD_OPTIONS",
+			option: "maxAsyncDisposalConcurrency",
+			value,
+		});
+	});
+
 	it("reports a null diagnostics level with INVALID_BUILD_OPTIONS", () => {
 		const error = captureError(() =>
 			buildWith({ diagnostics: { listener: () => undefined, level: null } }),

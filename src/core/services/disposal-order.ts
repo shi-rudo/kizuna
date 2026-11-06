@@ -1,3 +1,4 @@
+import { createAsyncTaskRunner } from "./async-task-runner.js";
 import { findStronglyConnectedComponents } from "./strongly-connected-components.js";
 
 /** The facts of one registration that decide its place in the disposal order. */
@@ -272,20 +273,23 @@ export function disposeInSequence<TService extends { dispose(): void }>(
  * Disposes the owned services along the plan. Root groups start in parallel.
  * A group starts after all of its consumer groups settle. A group without
  * owned services settles at once, so it passes the order on without waiting.
- * A rejection does not stop other cleanup. The failures follow registration
- * order.
+ * At most `maxConcurrency` cleanups run at once; the others wait in the order
+ * in which their groups became ready. A rejection does not stop other
+ * cleanup. The failures follow registration order.
  */
 export async function disposeByPlan<
 	TService extends { disposeAsync(): Promise<void> },
 >(
 	plan: DisposalPlan,
 	owner: DisposalOwner<TService>,
+	maxConcurrency: number,
 ): Promise<readonly DisposalAttempt<TService>[]> {
 	if (plan.groups.length === 0) {
 		return [];
 	}
 
 	const failures: DisposalAttempt<TService>[] = [];
+	const runCleanup = createAsyncTaskRunner(maxConcurrency);
 	const remainingConsumerGroups = plan.groups.map(
 		(group) => group.consumerGroupCount,
 	);
@@ -313,7 +317,7 @@ export async function disposeByPlan<
 				for (const index of plan.groups[groupIndex].members) {
 					const service = owner.ownedAt(index);
 					if (service !== undefined) {
-						tasks.push(disposeOne(index, service, failures));
+						tasks.push(runCleanup(() => disposeOne(index, service, failures)));
 					}
 				}
 				if (tasks.length === 0) {
