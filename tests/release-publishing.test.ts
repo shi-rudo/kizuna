@@ -12,6 +12,114 @@ import {
 } from "../scripts/release-state.mjs";
 import { runVerifyCommand } from "../scripts/verify-release.mjs";
 
+/**
+ * A registry that shows a published version only after `visibleAfterMs` of
+ * waiting. The waits advance a virtual clock instead of sleeping.
+ */
+const delayedRegistry = (version: string, visibleAfterMs: number) => {
+	let elapsedMs = 0;
+	return {
+		get elapsedMs() {
+			return elapsedMs;
+		},
+		waitForRetry: async (milliseconds: number) => {
+			elapsedMs += milliseconds;
+		},
+		execute: async (_command: string, args: string[]) => {
+			if (elapsedMs < visibleAfterMs) {
+				throw Object.assign(new Error("Command failed: npm view"), {
+					stderr: "npm error code E404",
+				});
+			}
+			return {
+				stdout:
+					args[2] === "dist-tags"
+						? JSON.stringify({ latest: "0.0.15", rc: version })
+						: JSON.stringify(version),
+				stderr: "",
+			};
+		},
+	};
+};
+
+const withReleaseRoot = async (
+	version: string,
+	action: (root: string) => Promise<void>,
+): Promise<void> => {
+	const root = mkdtempSync(join(tmpdir(), "kizuna-verify-delay-"));
+	try {
+		for (const file of ["package.json", "jsr.json"]) {
+			writeFileSync(
+				join(root, file),
+				JSON.stringify({ name: "@shirudo/kizuna", version }),
+			);
+		}
+		await action(root);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+};
+
+const publishedOutputs = (version: string) => ({
+	published: "true",
+	publishedPackages: JSON.stringify([{ name: "@shirudo/kizuna", version }]),
+});
+
+describe("Release verification after a publication", () => {
+	it("waits until npm shows a version that appears after 77 seconds", async () => {
+		await withReleaseRoot("1.0.0-rc.10", async (root) => {
+			const registry = delayedRegistry("1.0.0-rc.10", 77_000);
+
+			const verification = runVerifyCommand({
+				root,
+				...publishedOutputs("1.0.0-rc.10"),
+				execute: registry.execute,
+				waitForRetry: registry.waitForRetry,
+				log: () => undefined,
+			});
+
+			await expect(verification).resolves.toBeUndefined();
+		});
+	});
+
+	it("gives up after five minutes when npm never shows the version", async () => {
+		await withReleaseRoot("1.0.0-rc.10", async (root) => {
+			const registry = delayedRegistry("1.0.0-rc.10", Number.POSITIVE_INFINITY);
+
+			const verification = runVerifyCommand({
+				root,
+				...publishedOutputs("1.0.0-rc.10"),
+				execute: registry.execute,
+				waitForRetry: registry.waitForRetry,
+				log: () => undefined,
+			});
+
+			await expect(verification).rejects.toThrow(
+				"Could not verify @shirudo/kizuna@1.0.0-rc.10 on npm",
+			);
+			expect(registry.elapsedMs).toBe(300_000);
+		});
+	});
+
+	it("does not wait when the workflow published nothing", async () => {
+		await withReleaseRoot("1.0.0-rc.10", async (root) => {
+			const registry = delayedRegistry("1.0.0-rc.10", Number.POSITIVE_INFINITY);
+
+			const verification = runVerifyCommand({
+				root,
+				published: "false",
+				publishedPackages: "[]",
+				execute: registry.execute,
+				waitForRetry: registry.waitForRetry,
+				log: () => undefined,
+			});
+
+			await expect(verification).rejects.toThrow();
+			expect(registry.elapsedMs).toBe(0);
+		});
+	});
+});
+
 describe("Release publishing", () => {
 	it("maps supported versions to explicit npm dist-tags", () => {
 		expect(getTargetDistTag("1.0.0-rc.8")).toBe("rc");

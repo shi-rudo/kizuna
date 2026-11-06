@@ -20,7 +20,9 @@ After the release step, the workflow compares these values:
 - the expected npm dist-tag;
 - the publication result from the Changesets action.
 
-The workflow fails if these values do not agree.
+The workflow fails if these values do not agree. npm can take more than a
+minute to show a new version. After a publication, the check therefore reads
+npm again with growing waits, for up to five minutes, before it fails.
 
 ## Configure npm trusted publishing
 

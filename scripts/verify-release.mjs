@@ -12,6 +12,16 @@ const wait = (milliseconds) =>
 
 const readJson = async (path) => JSON.parse(await readFile(path, "utf8"));
 
+/**
+ * The waits between npm reads after a publication. npm can take more than a
+ * minute to show a new version; for 1.0.0-rc.10 it took about 77 seconds. The
+ * waits grow and add up to five minutes.
+ */
+export const publicationRetryDelaysMs = Object.freeze([
+	5_000, 10_000, 15_000, 30_000, 30_000, 30_000, 30_000, 30_000, 30_000, 30_000,
+	30_000, 30_000,
+]);
+
 export const runVerifyCommand = async ({
 	root = process.cwd(),
 	published = process.env.PUBLISHED ?? "false",
@@ -19,7 +29,7 @@ export const runVerifyCommand = async ({
 	execute = executeFile,
 	log = console.log,
 	waitForRetry = wait,
-	maxAttempts = 6,
+	retryDelaysMs = publicationRetryDelaysMs,
 } = {}) => {
 	const [packageJson, jsrJson] = await Promise.all([
 		readJson(resolve(root, "package.json")),
@@ -42,7 +52,7 @@ export const runVerifyCommand = async ({
 		throw new Error("PUBLISHED_PACKAGES must contain a JSON array.");
 	}
 
-	const attempts = workflowPublished ? maxAttempts : 1;
+	const attempts = workflowPublished ? retryDelaysMs.length + 1 : 1;
 	let lastError;
 
 	for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -78,7 +88,11 @@ export const runVerifyCommand = async ({
 			lastError = error;
 
 			if (attempt < attempts) {
-				await waitForRetry(5_000);
+				const delayMs = retryDelaysMs[attempt - 1];
+				log(
+					`npm does not show ${packageName}@${packageVersion} with its dist-tag yet. Checking again in ${delayMs / 1000} s.`,
+				);
+				await waitForRetry(delayMs);
 			}
 		}
 	}
