@@ -715,7 +715,8 @@ export class ContainerBuilder<
 	build(options: ContainerBuildOptions = {}): RootServiceContainer<TRegistry> {
 		this.ensureNotBuilt();
 
-		const { validation, diagnostics } = resolveBuildOptions(options);
+		const { validation, diagnostics, maxAsyncDisposalConcurrency } =
+			resolveBuildOptions(options);
 		if (validation === "eager") {
 			const issues = this.validate();
 			if (issues.length > 0) {
@@ -736,7 +737,7 @@ export class ContainerBuilder<
 				this.multiRegistrations,
 				this.registrationOrder,
 			),
-			diagnostics,
+			{ diagnostics, maxAsyncDisposalConcurrency },
 		) as unknown as RootServiceContainer<TRegistry>;
 	}
 

@@ -25,6 +25,9 @@ export interface DiagnosticsOptions {
 	readonly level?: DiagnosticLevel;
 }
 
+/** The number of async cleanups that `disposeAsync()` runs at once by default. */
+export const defaultMaxAsyncDisposalConcurrency = 16;
+
 /** Options for `ContainerBuilder.build()`. */
 export interface ContainerBuildOptions {
 	/**
@@ -34,12 +37,19 @@ export interface ContainerBuildOptions {
 	readonly validation?: ValidationMode;
 	/** Reports diagnostic events to a listener. Without it, Kizuna reports nothing. */
 	readonly diagnostics?: DiagnosticsOptions;
+	/**
+	 * The most async cleanups that `disposeAsync()` runs at once, also in the
+	 * scopes of this container. A positive integer; the default is 16. A
+	 * dependency still starts its cleanup only after its consumers.
+	 */
+	readonly maxAsyncDisposalConcurrency?: number;
 }
 
 /** The checked build options with their defaults applied. @internal */
 export interface ResolvedBuildOptions {
 	readonly validation: ValidationMode;
 	readonly diagnostics: DiagnosticsReporter;
+	readonly maxAsyncDisposalConcurrency: number;
 }
 
 /**
@@ -72,9 +82,22 @@ export function resolveBuildOptions(
 		);
 	}
 
+	const maxAsyncDisposalConcurrency =
+		received.maxAsyncDisposalConcurrency === undefined
+			? defaultMaxAsyncDisposalConcurrency
+			: received.maxAsyncDisposalConcurrency;
+	if (!isPositiveInteger(maxAsyncDisposalConcurrency)) {
+		throw new InvalidBuildOptionsError(
+			"maxAsyncDisposalConcurrency",
+			received.maxAsyncDisposalConcurrency,
+			"Build option 'maxAsyncDisposalConcurrency' must be a positive integer.",
+		);
+	}
+
 	return {
 		validation,
 		diagnostics: diagnosticsReporterFor(received.diagnostics),
+		maxAsyncDisposalConcurrency,
 	};
 }
 
@@ -115,6 +138,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isOneOf<T>(values: readonly T[], value: unknown): value is T {
 	return (values as readonly unknown[]).includes(value);
+}
+
+function isPositiveInteger(value: unknown): value is number {
+	return Number.isSafeInteger(value) && (value as number) > 0;
 }
 
 function isListener(value: unknown): value is DiagnosticListener {

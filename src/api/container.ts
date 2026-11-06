@@ -88,13 +88,15 @@ const resolveGroup = (
 };
 
 /**
- * How a container relates to its root, and where it reports diagnostic events.
- * Scopes inherit the reporter of their root.
+ * How a container relates to its root, where it reports diagnostic events,
+ * and how many async cleanups it runs at once. Scopes inherit the reporter
+ * and the limit of their root.
  * @internal
  */
 export interface ContainerContext {
 	readonly kind: DiagnosticContainerKind;
 	readonly diagnostics: DiagnosticsReporter;
+	readonly maxAsyncDisposalConcurrency: number;
 }
 
 /**
@@ -122,7 +124,14 @@ export class Container<TRegistry extends ServiceRegistry>
 	private readonly groups: ReadonlyMap<string, readonly ServiceWrapper[]>;
 	private readonly kind: DiagnosticContainerKind;
 	private readonly diagnostics: DiagnosticsReporter;
+	private readonly maxAsyncDisposalConcurrency: number;
 	private _disposed = false;
+	/**
+	 * The running `disposeAsync()` cleanup. A concurrent call waits for it and
+	 * observes the same result. It is cleared once the cleanup settles, so a
+	 * later call is a no-op.
+	 */
+	private _asyncDisposal: Promise<void> | undefined;
 
 	get [Symbol.toStringTag]():
 		| "KizunaRootServiceContainer"
@@ -150,16 +159,17 @@ export class Container<TRegistry extends ServiceRegistry>
 		this.groups = ownership.groups;
 		this.kind = context.kind;
 		this.diagnostics = context.diagnostics;
+		this.maxAsyncDisposalConcurrency = context.maxAsyncDisposalConcurrency;
 	}
 
 	/** Creates the root container of a catalog. */
 	static createRoot<TRootRegistry extends ServiceRegistry>(
 		catalog: ServiceCatalog,
-		diagnostics: DiagnosticsReporter,
+		context: Omit<ContainerContext, "kind">,
 	): Container<TRootRegistry> {
 		return new Container<TRootRegistry>(catalog, new RootOwnership(catalog), {
+			...context,
 			kind: "root",
-			diagnostics,
 		});
 	}
 
@@ -288,7 +298,11 @@ export class Container<TRegistry extends ServiceRegistry>
 		const scope = new Container<TRegistry>(
 			this.catalog,
 			this.ownership.forNewScope(),
-			{ kind: "scope", diagnostics: this.diagnostics },
+			{
+				kind: "scope",
+				diagnostics: this.diagnostics,
+				maxAsyncDisposalConcurrency: this.maxAsyncDisposalConcurrency,
+			},
 		);
 		this.diagnostics.scopeStarted();
 		return scope;
@@ -378,23 +392,45 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * cleanup. This includes resolved values from singleton and scoped Promise
 	 * factories.
 	 *
-	 * Independent dispose handlers run in parallel. A dependency starts only
-	 * after all of its consumer groups settle. Rejections do not stop other
+	 * Independent dispose handlers run in parallel, at most
+	 * `maxAsyncDisposalConcurrency` at once (16 by default). A dependency
+	 * starts only after all of its consumer groups settle. Rejections do not stop other
 	 * cleanup. After all cleanup settles, this method throws one
-	 * `DisposalError` with the original failures. Idempotent — safe to call
-	 * multiple times.
+	 * `DisposalError` with the original failures.
+	 *
+	 * A call while the cleanup runs waits for it and observes the same success
+	 * or `DisposalError`. A call after the cleanup settled is a no-op. A
+	 * cleanup hook must not wait for `disposeAsync()` of its own container:
+	 * it would wait for itself.
 	 */
 	async disposeAsync(): Promise<void> {
+		if (this._asyncDisposal) {
+			return this._asyncDisposal;
+		}
 		if (this._disposed) {
 			return;
 		}
 		this._disposed = true;
+		this._asyncDisposal = this.disposeOwnedServicesAsync();
+		try {
+			await this._asyncDisposal;
+		} finally {
+			this._asyncDisposal = undefined;
+		}
+	}
+
+	/** Closes the owned lifecycles, then awaits their asynchronous cleanup. */
+	private async disposeOwnedServicesAsync(): Promise<void> {
 		this.closeOwnedLifecycles("async");
 
 		let failures: readonly DisposalFailure[] = [];
 		try {
 			failures = this.toDisposalFailures(
-				await disposeByPlan(this.ownership.disposalPlan(), this.ownership),
+				await disposeByPlan(
+					this.ownership.disposalPlan(),
+					this.ownership,
+					this.maxAsyncDisposalConcurrency,
+				),
 				"disposeAsync",
 			);
 		} finally {
