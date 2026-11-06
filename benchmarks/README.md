@@ -32,6 +32,10 @@ Vitest runs the benchmark files in sequence. Tinybench warms each task before it
 records samples. One sample contains enough operations for a measurable time.
 This batching decreases timer noise for fast operations.
 
+Each batch in the baseline takes at least 0.1 ms. A shorter batch measures
+mostly timer and call overhead. When a change makes a batch shorter, raise the
+operations per sample of its scenario and record its rows again.
+
 The container-build, cold-resolution, and disposal tasks use 50 recorded
 samples. Their setup prepares a separate input for every operation. The setup
 and cleanup times are outside the reported time.
