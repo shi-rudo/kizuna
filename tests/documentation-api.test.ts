@@ -10,6 +10,7 @@ import {
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import vitestConfig from "../vitest.config";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 
@@ -576,6 +577,39 @@ ${example}
 });
 
 describe("published feature evidence", () => {
+	it("documents the coverage thresholds that CI enforces", () => {
+		const evidence = readFileSync(
+			join(repositoryRoot, "docs", "feature-evidence.md"),
+			"utf8",
+		);
+		const ci = readFileSync(
+			join(repositoryRoot, ".github", "workflows", "ci.yml"),
+			"utf8",
+		);
+		const thresholds = (vitestConfig.test?.coverage?.thresholds ??
+			{}) as Record<string, unknown>;
+		const metrics = ["statements", "branches", "functions", "lines"];
+		const row = (label: string, values: Record<string, unknown>): string => {
+			const parts = metrics.flatMap((metric) => {
+				const value = values[100] === true ? 100 : values[metric];
+				return typeof value === "number" ? [`${value} % ${metric}`] : [];
+			});
+			return `- ${label}: ${parts.join(", ")}`;
+		};
+		const globs = Object.entries(thresholds).filter(
+			(entry): entry is [string, Record<string, unknown>] =>
+				typeof entry[1] === "object" && entry[1] !== null,
+		);
+
+		expect(globs.length).toBeGreaterThan(0);
+		expect(ci).toContain("run: pnpm coverage");
+		expect(evidence).toContain("`pnpm coverage`");
+		expect(evidence).toContain(row("All runtime code", thresholds));
+		for (const [glob, values] of globs) {
+			expect(evidence).toContain(row(`\`${glob}\``, values));
+		}
+	});
+
 	it("documents every stable public export", () => {
 		const documents = [
 			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
@@ -796,6 +830,10 @@ describe("published feature evidence", () => {
 		expect(e2e).toContain("node check-tree-shaking.mjs");
 		expect(packedValidation).toContain(
 			"error instanceof ContainerValidationError",
+		);
+		expect(packedValidation).toContain('"CIRCULAR_DEPENDENCY"');
+		expect(packedValidation).toContain(
+			"error instanceof CircularDependencyError",
 		);
 		expect(evidence).toContain(
 			"These quality gates do not certify an application for production use.",

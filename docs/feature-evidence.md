@@ -44,6 +44,10 @@ both in sync:
 - `pnpm test:types`
 - `pnpm test:examples`
 
+On Node.js `24.x`, the test step runs `pnpm coverage` instead of `pnpm test`.
+It runs the same suite and fails when the coverage of `src` falls below a
+[coverage threshold](#coverage-thresholds).
+
 A separate CI job runs `pnpm check` once on Node.js `24.x`. It fails when
 formatting, import order, or lint rules report an error. Unused imports and
 shadowed variables count as errors.
@@ -51,15 +55,42 @@ shadowed variables count as errors.
 The [package E2E workflow](../.github/workflows/e2e.yml) creates the package
 tarball. It installs that tarball in a Vite React TypeScript project.
 
-The package gate checks runtime exports, structured validation errors, ESM and
-CommonJS interoperability, NodeNext declarations, the Vite consumer build, and
-tree shaking of a consumer that imports only `interfaceToken`.
+The package gate checks runtime exports, structured validation errors,
+dependency cycles in `build()` and during resolution, ESM and CommonJS
+interoperability, NodeNext declarations, the Vite consumer build, and tree
+shaking of a consumer that imports only `interfaceToken`.
 
 The runtime suite includes the [workerd compatibility tests](../tests/edge-compat.test.ts).
 These tests run the built ESM bundle through Miniflare without `nodejs_compat`.
 
 These quality gates do not certify an application for production use. A team
 must evaluate Kizuna against its runtime, load, security, and support needs.
+
+### Coverage thresholds
+
+The thresholds in [`vitest.config.ts`](../vitest.config.ts) follow the risk of
+each part of the runtime code. Files that contain only types are excluded.
+
+- All runtime code: 96 % statements, 90 % branches, 99 % functions, 96 % lines
+- `src/core/scopes/**`: 100 % statements, 100 % branches, 100 % functions, 100 % lines
+- `src/core/services/**`: 95 % statements, 85 % branches, 95 % lines
+
+The reasons:
+
+- `src/core/scopes/**` holds the lifecycles. They decide when a value is
+  created, cached, closed, and disposed, so each line and branch stays covered.
+- `src/core/services/**` holds the disposal order, the service ownership, and
+  the cleanup hooks. Its thresholds keep the measured level. The function
+  threshold for all runtime code applies to it too.
+- The thresholds of a pattern apply to all files of the pattern together.
+
+The values were measured on 2026-11-06:
+
+- All runtime code: 96.9 % statements, 91.1 % branches, 99.7 % functions,
+  96.9 % lines
+- `src/core/scopes/**`: 100 % for each measure
+- `src/core/services/**`: 95.8 % statements, 85.8 % branches, 99.1 %
+  functions, 95.9 % lines
 
 ## Package size
 
