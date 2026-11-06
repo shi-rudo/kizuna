@@ -1,7 +1,7 @@
 import type {
 	ConfigurableServiceLifecycle,
 	DisposalMode,
-	InstanceRequest,
+	InstanceSource,
 } from "../contracts.js";
 import { LifecycleFactory, type ValueFactory } from "./lifecycle-factory.js";
 
@@ -90,7 +90,8 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * or reuse instances. Each call results in a completely new instance.
 	 *
 	 * @template T - The type of the service instance
-	 * @param request - Resolves the factory arguments for this call and receives the created value
+	 * @param source - Resolves the factory arguments for this call and receives the created value
+	 * @param resolver - Passed to `source` unchanged
 	 * @returns {T} A new instance of the service
 	 * @throws {Error} If no factory has been registered
 	 * @throws {Error} If the factory function throws an error during instance creation
@@ -109,14 +110,17 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 	 * console.log(logger1.timestamp !== logger2.timestamp); // true - different timestamps
 	 * ```
 	 */
-	public getInstance<T>(request: InstanceRequest): T {
+	public getInstance<T, TResolver>(
+		source: InstanceSource<TResolver>,
+		resolver: TResolver,
+	): T {
 		this._factory.assertOpen();
-		const args = request.factoryArguments();
+		const args = source.factoryArguments(resolver);
 		// Resolving the arguments can close this lifecycle.
 		const factory = this._factory.require();
 		// A factory error propagates unchanged. The container wraps it once.
 		const value = factory(...args) as T;
-		request.valueCreated(value);
+		source.valueCreated(resolver, value);
 		return value;
 	}
 

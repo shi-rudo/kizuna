@@ -64,6 +64,18 @@ export const ServiceContainerToken: unique symbol = Symbol("ServiceContainer");
 export const ServiceProviderToken: typeof ServiceContainerToken =
 	ServiceContainerToken;
 
+/** Resolves one service through a container. Created once, so a step allocates no closure. */
+const resolveService = (
+	service: ServiceWrapper,
+	container: Container<ServiceRegistry>,
+): unknown => service.resolve(container);
+
+/** Resolves the services of one multi-registration key through a container. */
+const resolveGroup = (
+	group: readonly ServiceWrapper[],
+	container: Container<ServiceRegistry>,
+): unknown[] => group.map((service) => service.resolve(container));
+
 /**
  * How a container relates to its root, and where it reports diagnostic events.
  * Scopes inherit the reporter of their root.
@@ -221,7 +233,7 @@ export class Container<TRegistry extends ServiceRegistry>
 	/** Resolves a key with one registration and wraps resolution failures. */
 	private resolveSingle(key: string, service: ServiceWrapper): unknown {
 		try {
-			return this._resolution.track(key, () => service.resolve(this));
+			return this._resolution.track(key, resolveService, service, this);
 		} catch (error) {
 			throw this.resolutionFailure(key, error);
 		}
@@ -443,9 +455,7 @@ export class Container<TRegistry extends ServiceRegistry>
 		resolvers: readonly ServiceWrapper[],
 	): any[] {
 		try {
-			return this._resolution.track(typeName, () =>
-				resolvers.map((resolver) => resolver.resolve(this)),
-			);
+			return this._resolution.track(typeName, resolveGroup, resolvers, this);
 		} catch (error) {
 			throw this.resolutionFailure(typeName, error, "multi");
 		}

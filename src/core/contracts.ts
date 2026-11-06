@@ -22,20 +22,25 @@ export const validationModes = ["eager", "deferred"] as const;
 export type ValidationMode = (typeof validationModes)[number];
 
 /**
- * One request for a service value. A lifecycle resolves the factory arguments
- * only when it creates a value, so a cached value does not resolve its
- * dependencies again. It reports each value that it created.
+ * Creates the factory arguments of one service and receives each value that
+ * its lifecycle created. A lifecycle asks for the arguments only when it
+ * creates a value, so a cached value does not resolve its dependencies again.
+ * The lifecycle passes the resolver through unchanged, so a resolution needs
+ * no request object.
  */
-export interface InstanceRequest {
-	factoryArguments(): readonly unknown[];
-	valueCreated(value: unknown): void;
+export interface InstanceSource<TResolver> {
+	factoryArguments(resolver: TResolver): readonly unknown[];
+	valueCreated(resolver: TResolver, value: unknown): void;
 }
 
 /** Internal runtime contract for service lifecycles. */
 export interface ServiceLifecycle {
 	readonly lifetime: ServiceLifetime;
 	readonly valueOwnership: ServiceValueOwnership;
-	getInstance<T>(request: InstanceRequest): T;
+	getInstance<T, TResolver>(
+		source: InstanceSource<TResolver>,
+		resolver: TResolver,
+	): T;
 	createScope(): ServiceLifecycle;
 	/**
 	 * Stops new resolutions before the owning container starts its cleanup.

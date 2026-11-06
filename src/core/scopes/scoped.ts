@@ -1,7 +1,7 @@
 import type {
 	ConfigurableServiceLifecycle,
 	DisposalMode,
-	InstanceRequest,
+	InstanceSource,
 } from "../contracts.js";
 import type { UnawaitedFailureSink } from "../services/async-dispose.js";
 import { CachedInstance } from "./cached-instance.js";
@@ -94,7 +94,8 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * different instances even if they use the same factory.
 	 *
 	 * @template T - The type of the service instance
-	 * @param request - Resolves the factory arguments (only on creation within this scope) and receives each created value
+	 * @param source - Resolves the factory arguments (only on creation within this scope) and receives each created value
+	 * @param resolver - Passed to `source` unchanged
 	 * @returns {T} The scoped instance
 	 * @throws {Error} If no factory has been registered
 	 * @throws {Error} If the factory function throws an error during instance creation
@@ -117,8 +118,11 @@ export class ScopedLifecycle implements ConfigurableServiceLifecycle {
 	 * console.log(ctx1 === ctx3); // false
 	 * ```
 	 */
-	public getInstance<T>(request: InstanceRequest): T {
-		return this._cache.getInstance<T>(request);
+	public getInstance<T, TResolver>(
+		source: InstanceSource<TResolver>,
+		resolver: TResolver,
+	): T {
+		return this._cache.getInstance<T, TResolver>(source, resolver);
 	}
 
 	/**
