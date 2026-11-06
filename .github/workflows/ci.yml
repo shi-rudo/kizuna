@@ -59,7 +59,14 @@ jobs:
         run: pnpm build
 
       - name: Run tests
+        if: matrix.node-version != '24.x'
         run: pnpm test
+
+      - name: Run tests with coverage thresholds
+        # One Node.js version enforces the thresholds in vitest.config.ts, so
+        # the suite still runs once per version.
+        if: matrix.node-version == '24.x'
+        run: pnpm coverage
 
       - name: Check public types
         run: pnpm test:types
