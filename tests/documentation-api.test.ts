@@ -831,6 +831,10 @@ describe("published feature evidence", () => {
 		expect(packedValidation).toContain(
 			"error instanceof ContainerValidationError",
 		);
+		expect(packedValidation).toContain('"CIRCULAR_DEPENDENCY"');
+		expect(packedValidation).toContain(
+			"error instanceof CircularDependencyError",
+		);
 		expect(evidence).toContain(
 			"These quality gates do not certify an application for production use.",
 		);

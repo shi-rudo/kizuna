@@ -55,9 +55,10 @@ shadowed variables count as errors.
 The [package E2E workflow](../.github/workflows/e2e.yml) creates the package
 tarball. It installs that tarball in a Vite React TypeScript project.
 
-The package gate checks runtime exports, structured validation errors, ESM and
-CommonJS interoperability, NodeNext declarations, the Vite consumer build, and
-tree shaking of a consumer that imports only `interfaceToken`.
+The package gate checks runtime exports, structured validation errors,
+dependency cycles in `build()` and during resolution, ESM and CommonJS
+interoperability, NodeNext declarations, the Vite consumer build, and tree
+shaking of a consumer that imports only `interfaceToken`.
 
 The runtime suite includes the [workerd compatibility tests](../tests/edge-compat.test.ts).
 These tests run the built ESM bundle through Miniflare without `nodejs_compat`.
