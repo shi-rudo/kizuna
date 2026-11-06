@@ -275,6 +275,7 @@ const validators = container.getAll('validators'); // New instances each time
 **Key rules:**
 - `add*()` and `register*()` cannot be mixed for the same key — each key is either single or multi
 - `getAll()` resolves only keys from `add*()`. It returns the services in registration order.
+- Each `getAll()` call returns a new array. The caller can change it without an effect on later calls.
 - If one entry fails, `getAll()` throws and returns no services. It does not clean up the transient values of the earlier entries (see Disposal).
 - `get()` resolves only keys from `register*()` and interface tokens. It rejects a multi-registration key at compile time and at runtime, and names `getAll()` in the error.
 - `getAll()` rejects a single registration in the same way and names `get()`.

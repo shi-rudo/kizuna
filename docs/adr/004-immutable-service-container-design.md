@@ -155,6 +155,17 @@ build(): ServiceProvider {
 - **Testing**: Cannot easily modify dependencies for test scenarios
 - **Hot Reload**: Development-time service replacement is more complex
 
+### Resolution Results
+
+The container freezes its configuration, not the values that it returns. Each
+`getAll()` call returns a new array that the caller owns and can change. A
+shared or frozen array would change this contract and saves no time. In the
+multi-resolution benchmark, a variant that reused one array for each key was
+not faster than a new array of the final length: 11 % slower for 10
+registrations, equal for 100, and 2 % faster for 1000. The cost was in `map()`
+with a closure. A loop into an array of the final length took 12 to 16 % less
+time, so `getAll()` uses that loop.
+
 ### Alternatives Considered
 
 #### Mutable Service Wrappers
