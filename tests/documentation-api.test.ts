@@ -587,6 +587,7 @@ describe("published feature evidence", () => {
 			"ScopeStartedEvent",
 			"ContainerDisposedEvent",
 			"ServiceCreatedEvent",
+			"DisposableTransientEvent",
 			"ValidationIssue",
 			"ValidationIssueCode",
 			"ValidationPathSegment",

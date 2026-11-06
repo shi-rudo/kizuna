@@ -28,7 +28,7 @@ export const reportValueCreated: unique symbol = Symbol(
 /** The container that resolves a service: its dependencies and its creations. */
 interface ServiceResolver {
 	[resolveDependency](key: string): unknown;
-	[reportValueCreated](service: ServiceWrapper): void;
+	[reportValueCreated](service: ServiceWrapper, value: unknown): void;
 }
 
 /**
@@ -55,8 +55,8 @@ class ResolutionRequest implements InstanceRequest {
 			.map((dependency) => this.container[resolveDependency](dependency));
 	}
 
-	valueCreated(): void {
-		this.container[reportValueCreated](this.service);
+	valueCreated(value: unknown): void {
+		this.container[reportValueCreated](this.service, value);
 	}
 }
 

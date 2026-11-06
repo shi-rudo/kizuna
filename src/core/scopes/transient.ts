@@ -116,7 +116,7 @@ export class TransientLifecycle implements ConfigurableServiceLifecycle {
 		const factory = this._factory.require();
 		// A factory error propagates unchanged. The container wraps it once.
 		const value = factory(...args) as T;
-		request.valueCreated();
+		request.valueCreated(value);
 		return value;
 	}
 

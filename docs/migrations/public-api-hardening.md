@@ -46,6 +46,7 @@ It also exports these public types:
 - `ScopeStartedEvent`
 - `ContainerDisposedEvent`
 - `ServiceCreatedEvent`
+- `DisposableTransientEvent`
 - `ValidationIssue`
 - `ValidationIssueCode`
 - `ValidationPathSegment`

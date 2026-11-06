@@ -5,12 +5,13 @@ import type {
 } from "./contracts.js";
 import type { DisposalOperation } from "./errors.js";
 import {
+	hasCleanupHook,
 	ignoreUnawaitedFailure,
 	type UnawaitedFailureSink,
 } from "./services/async-dispose.js";
 
 /** The diagnostic levels, from the most to the least severe. */
-export const diagnosticLevels = ["error", "debug"] as const;
+export const diagnosticLevels = ["error", "warn", "debug"] as const;
 
 /**
  * Severity of a diagnostic event. The names match common logger methods, so a
@@ -74,6 +75,20 @@ export interface ServiceCreatedEvent
 }
 
 /**
+ * A transient registration created a value with a cleanup hook. Kizuna does
+ * not track transient values, so it never invokes that hook. A root container
+ * and its scopes report each key once.
+ */
+export interface DisposableTransientEvent
+	extends DiagnosticEventBase<"DISPOSABLE_TRANSIENT", "warn"> {
+	readonly serviceKey: string;
+	/** The container that resolved the first such value. */
+	readonly container: DiagnosticContainerKind;
+	/** The resolution chain of the container that resolved the first such value. */
+	readonly path: readonly string[];
+}
+
+/**
  * An event that Kizuna reports to a diagnostics listener. The union is open:
  * later versions can add codes, so a listener ignores codes it does not know.
  */
@@ -82,7 +97,8 @@ export type DiagnosticEvent =
 	| ContainerBuiltEvent
 	| ScopeStartedEvent
 	| ContainerDisposedEvent
-	| ServiceCreatedEvent;
+	| ServiceCreatedEvent
+	| DisposableTransientEvent;
 
 /** Receives diagnostic events. Kizuna never writes events to the console. */
 export type DiagnosticListener = (event: DiagnosticEvent) => void;
@@ -115,6 +131,7 @@ export interface DiagnosticsReporter {
 		service: DiagnosticSubject,
 		container: DiagnosticContainerKind,
 		resolutionStack: readonly string[],
+		value: unknown,
 	): void;
 	/**
 	 * Returns the sink for cleanup failures of `service` that no caller waits
@@ -151,7 +168,10 @@ export function createDiagnosticsReporter(
 	listener: DiagnosticListener,
 	level: DiagnosticLevel,
 ): DiagnosticsReporter {
+	const warnEnabled = level !== "error";
 	const debugEnabled = level === "debug";
+	/** Keys that already reported DISPOSABLE_TRANSIENT. Scopes share them. */
+	const disposableTransientKeys = new Set<string>();
 	const deliver = (event: DiagnosticEvent): void => {
 		try {
 			listener(event);
@@ -160,6 +180,26 @@ export function createDiagnosticsReporter(
 				throw error;
 			});
 		}
+	};
+	/** Reports the first transient value of a key that has a cleanup hook. */
+	const reportDisposableTransient = (
+		serviceKey: string,
+		container: DiagnosticContainerKind,
+		resolutionStack: readonly string[],
+		value: unknown,
+	): void => {
+		if (disposableTransientKeys.has(serviceKey) || !hasCleanupHook(value)) {
+			return;
+		}
+		disposableTransientKeys.add(serviceKey);
+		deliver({
+			code: "DISPOSABLE_TRANSIENT",
+			level: "warn",
+			message: `Transient '${serviceKey}' created a value with a cleanup hook that Kizuna never invokes`,
+			serviceKey,
+			container,
+			path: Object.freeze([...resolutionStack]),
+		});
 	};
 
 	const reporter: DiagnosticsReporter = {
@@ -196,7 +236,7 @@ export function createDiagnosticsReporter(
 				});
 			}
 		},
-		serviceCreated(service, container, resolutionStack) {
+		serviceCreated(service, container, resolutionStack, value) {
 			if (debugEnabled) {
 				const serviceKey = service.getName();
 				deliver({
@@ -208,6 +248,14 @@ export function createDiagnosticsReporter(
 					container,
 					path: Object.freeze([...resolutionStack]),
 				});
+			}
+			if (warnEnabled && service.getLifetime() === "transient") {
+				reportDisposableTransient(
+					service.getName(),
+					container,
+					resolutionStack,
+					value,
+				);
 			}
 		},
 		unawaitedFailureSink(service, operation) {

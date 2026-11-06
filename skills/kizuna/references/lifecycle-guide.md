@@ -129,7 +129,8 @@ A failed resolution does not clean up the transient values that it already
 created, for example the earlier entries of a failed `getAll()` call or the
 transient constructor dependencies of a service that fails. A transient
 factory can return a shared value, so Kizuna does not dispose them. Register a
-service that needs cleanup as singleton or scoped.
+service that needs cleanup as singleton or scoped. A diagnostics listener
+reports transient values with a cleanup hook as `DISPOSABLE_TRANSIENT`.
 
 Kizuna does not track child scopes. Dispose each scope before its root
 container. With borrowed singletons, use this shutdown order:

@@ -462,7 +462,9 @@ already created for it. Examples are the earlier entries of a failed
 fails. No caller receives these values, and Kizuna does not dispose them: a
 transient factory can return a shared value, for example a singleton. Register
 a service that needs cleanup as singleton or scoped. Its container then owns
-the value and cleans it up, also after a failed resolution.
+the value and cleans it up, also after a failed resolution. A
+[diagnostics listener](#diagnostics) reports transient values with a cleanup
+hook as `DISPOSABLE_TRANSIENT`.
 
 Kizuna does not track child scopes. The application must dispose each scope
 before its root container. With borrowed singletons, use this shutdown order:
@@ -824,6 +826,7 @@ It also exports these public types:
 - `ScopeStartedEvent`
 - `ContainerDisposedEvent`
 - `ServiceCreatedEvent`
+- `DisposableTransientEvent`
 - `ValidationIssue`
 - `ValidationIssueCode`
 - `ValidationPathSegment`
@@ -1056,7 +1059,7 @@ const container = builder
   .registerSingletonFactory('logger', () => logger)
   .build({
     diagnostics: {
-      level: 'debug', // optional, the default is 'error'
+      level: 'debug', // optional, the default is 'warn'
       listener: (event) => logger[event.level](event, event.message),
     },
   });
@@ -1073,13 +1076,24 @@ its code. The event object itself carries the structured fields.
 | `SCOPE_STARTED` | `debug` | none |
 | `CONTAINER_DISPOSED` | `debug` | `container`, `mode`, `failureCount` |
 | `SERVICE_CREATED` | `debug` | `serviceKey`, `lifetime`, `container`, `path` |
+| `DISPOSABLE_TRANSIENT` | `warn` | `serviceKey`, `container`, `path` |
 
 - `UNAWAITED_CLEANUP_FAILED` reports a cleanup failure that no caller waits
   for: the Promise value of a factory that disposed its own container with
   `disposeAsync()`, or an asynchronous cleanup that `dispose()` started but
   cannot wait for. No other channel reports these failures.
-- The `level` option is a threshold. The default `error` delivers only
-  `error` events. `debug` delivers all events.
+- The `level` option is a threshold. The default `warn` delivers `error` and
+  `warn` events. `error` delivers only `error` events. `debug` delivers all
+  events.
+- `DISPOSABLE_TRANSIENT` reports a transient registration that created a value
+  with a cleanup hook: `[Symbol.asyncDispose]`, `[Symbol.dispose]`, or
+  `dispose()`. Kizuna does not track transient values, so it never invokes
+  that hook. A root container and its scopes report each key once, for the
+  first such value. `container` and `path` describe that first resolution.
+  Kizuna does not wait for a Promise value, so a transient `async` factory
+  produces no event. A factory that returns a shared value, for example a
+  singleton, also produces the event. The owner of that value still cleans it
+  up.
 - `SERVICE_CREATED` reports each value that a lifecycle created. A cache hit
   reports nothing. `path` is the resolution chain, for example
   `['userService', 'database']`. `container` names the container that

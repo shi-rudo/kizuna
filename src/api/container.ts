@@ -209,8 +209,13 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * container.
 	 * @internal
 	 */
-	[reportValueCreated](service: ServiceWrapper): void {
-		this.diagnostics.serviceCreated(service, this.kind, this._resolution.path);
+	[reportValueCreated](service: ServiceWrapper, value: unknown): void {
+		this.diagnostics.serviceCreated(
+			service,
+			this.kind,
+			this._resolution.path,
+			value,
+		);
 	}
 
 	/** Resolves a key with one registration and wraps resolution failures. */

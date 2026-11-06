@@ -90,7 +90,7 @@ export class CachedInstance {
 			const factory = this._factory.require();
 			if (!this._initialized) {
 				this.create(factory, args);
-				request.valueCreated();
+				request.valueCreated(this._instance);
 			}
 		}
 
