@@ -21,13 +21,13 @@ The runtime suite runs through `pnpm test`. The type suite runs through
 | A dependency key must be a non-empty string. | [Dependency-key validation tests](../tests/dependency-key-validation.test.ts) | TypeScript rejects most invalid keys before runtime. The runtime rule protects JavaScript and unsafe casts. |
 | Validation workspace allocation grows linearly for many singleton roots and independent cycles. | [Graph scale tests](../tests/registration-graph-scale.test.ts) and [graph benchmarks](../benchmarks/registration-graph.bench.ts) | Issue paths and the issue count can still grow with the declared graph. |
 | Child scopes isolate scoped values and share singleton values. | [Scope tests](../tests/container-builder.test.ts) | The root is also a scope, and the root does not track child scopes. |
-| Disposal cleans owned values in dependency-aware order and aggregates errors. | [Disposal order tests](../tests/disposal-order.test.ts) and [disposal error tests](../tests/disposal-errors.test.ts) | Transient values are untracked, and independent async branches have no completion order. |
+| Disposal cleans owned values in dependency-aware order and aggregates errors. | [Disposal order tests](../tests/disposal-order.test.ts), [disposal error tests](../tests/disposal-errors.test.ts), and [failed resolution tests](../tests/failed-resolution.test.ts) | Transient values are untracked, also when a resolution fails, and independent async branches have no completion order. |
 | Singleton and scoped factories can expose stored Promise values. | [Promise factory tests](../tests/async-factory-disposal.test.ts) | Resolution stays synchronous, and the stored observer can have a different identity. |
 | A domain container can borrow selected root-owned singletons without cleanup ownership. | [Borrowing tests](../tests/borrowed-singleton.test.ts) and [domain ownership tests](../tests/example-container-ownership.test.ts) | Kizuna does not enforce domain boundaries or cross-domain communication rules. |
 | Test containers can replace service contracts without `any`. | [Documentation contract test](../tests/documentation-api.test.ts) | This check requires strict TypeScript and cannot protect JavaScript or unsafe casts. |
 | The published package has no runtime dependency entries. | [Package contract test](../tests/documentation-api.test.ts) | The package still has development and peer dependencies. |
 | CI covers Node.js, a packed Vite consumer build, and workerd through Miniflare. | [CI workflow](../.github/workflows/ci.yml), [package E2E workflow](../.github/workflows/e2e.yml), and [workerd tests](../tests/edge-compat.test.ts) | CI does not run a browser, Vercel Edge, Deno, Bun, or Node.js before 22.12. |
-| An optional listener receives typed diagnostic events, including cleanup failures that no caller waits for. | [Diagnostics tests](../tests/diagnostics.test.ts) and [diagnostics type tests](../tests/diagnostics.test-d.ts) | Events carry no durations, a cache hit produces no event, and Kizuna never writes events to the console. |
+| An optional listener receives typed diagnostic events, including cleanup failures that no caller waits for. | [Diagnostics tests](../tests/diagnostics.test.ts) and [diagnostics type tests](../tests/diagnostics.test-d.ts) | Events carry no durations, a cache hit produces no event, `DISPOSABLE_TRANSIENT` does not wait for a Promise value, and Kizuna never writes events to the console. |
 | A consumer bundle that imports only `interfaceToken` keeps none of the container, resolution, diagnostics, validation, or borrowing code. | [Tree-shaking test](../tests/tree-shaking.test.ts), [package E2E workflow](../.github/workflows/e2e.yml), and [tree-shaking check](../tests/fixtures/check-tree-shaking.mjs) | The test uses the Vite version that the repository pins, and the E2E workflow uses the current Vite release. Both build one partial import. Another bundler or another import can keep more code. |
 | The package stays within the [size budgets](#package-size). | [Package contents tests](../tests/package-contents.test.ts) | The budgets measure the Kizuna package. A consumer bundle also contains application code, and the tarball size can vary with the npm version. |
 | Pull-request workflows run the listed gates for release-candidate changes. | [CI workflow](../.github/workflows/ci.yml) and [E2E workflow](../.github/workflows/e2e.yml) | The gates do not prove application fitness, load capacity, security, or production readiness. |
@@ -66,12 +66,12 @@ must evaluate Kizuna against its runtime, load, security, and support needs.
 The [package contents tests](../tests/package-contents.test.ts) measure the
 built package in every CI run. A test fails when a value exceeds its budget.
 
-The values were measured on 2026-10-13:
+The values were measured on 2026-11-06:
 
-- Root entry, minified ESM, gzip: 9.0 KiB, budget 9.5 KiB
-- Shipped `dist/index.mjs`, gzip: 20.4 KiB, budget 22 KiB
-- Packed tarball: 194.1 KiB, budget 200 KiB
-- Unpacked package: 890.1 KiB, budget 900 KiB
+- Root entry, minified ESM, gzip: 9.2 KiB, budget 9.5 KiB
+- Shipped `dist/index.mjs`, gzip: 20.6 KiB, budget 22 KiB
+- Packed tarball: 197.2 KiB, budget 200 KiB
+- Unpacked package: 903.8 KiB, budget 950 KiB
 
 The minified value comes from an esbuild build of the root entry with all
 exports. A consumer bundle that uses fewer exports can be smaller. The unpacked

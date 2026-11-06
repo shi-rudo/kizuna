@@ -166,6 +166,33 @@ export async function invokeAsyncDispose(instance: unknown): Promise<void> {
 }
 
 /**
+ * Returns true for a value with a cleanup hook that a disposal API would
+ * invoke. The check does not wait for a Promise, so a Promise value counts as
+ * a value without a hook. A hook getter that throws counts as no hook, so the
+ * check never throws.
+ *
+ * @internal
+ */
+export function hasCleanupHook(value: unknown): boolean {
+	if (
+		value === null ||
+		(typeof value !== "object" && typeof value !== "function")
+	) {
+		return false;
+	}
+	const obj = value as Record<PropertyKey, unknown>;
+	try {
+		return (
+			typeof obj[Symbol.asyncDispose] === "function" ||
+			typeof obj[Symbol.dispose] === "function" ||
+			typeof obj.dispose === "function"
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Returns true for a value with a callable `then`. A `then` getter that throws
  * makes the value a plain value, as in `observePromiseRejection()`.
  *

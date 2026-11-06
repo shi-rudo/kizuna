@@ -12,19 +12,21 @@ const container = builder
   .registerSingletonFactory('logger', () => logger)
   .build({
     diagnostics: {
-      level: 'debug', // optional, the default is 'error'
+      level: 'debug', // optional, the default is 'warn'
       listener: (event) => logger[event.level](event, event.message),
     },
   });
 ```
 
 Each event has a `code`, a `level`, and a `message`. The level names match
-common logger methods (`error`, `debug`), so this listener needs no code. Pass
+common logger methods (`error`, `warn`, `debug`), so this listener needs no
+code. Pass
 the event itself as the structured log fields.
 
-The `level` option is a threshold. The default `error` delivers only failures
-that no other channel reports. `debug` also delivers build, scope, disposal,
-and creation events. Use `debug` for development and troubleshooting.
+The `level` option is a threshold. `error` delivers only failures that no
+other channel reports. The default `warn` also delivers transient values that
+Kizuna never cleans up. `debug` also delivers build, scope, disposal, and
+creation events. Use `debug` for development and troubleshooting.
 
 ## Events
 
@@ -35,6 +37,7 @@ and creation events. Use `debug` for development and troubleshooting.
 | `SCOPE_STARTED` | `debug` | none | Compare with scope disposals to detect scopes that are never disposed |
 | `CONTAINER_DISPOSED` | `debug` | `container`, `mode`, `failureCount` | Confirm shutdown and match scope disposals |
 | `SERVICE_CREATED` | `debug` | `serviceKey`, `lifetime`, `container`, `path` | Find services that are created more often than expected |
+| `DISPOSABLE_TRANSIENT` | `warn` | `serviceKey`, `container`, `path` | Find transient values whose cleanup hook nobody calls |
 
 `UNAWAITED_CLEANUP_FAILED` covers two cases:
 
@@ -53,6 +56,23 @@ reports `scope` and still belongs to the root container. `lifetime` names the
 owner only for a singleton: the root container. A scoped value belongs to a
 scope that the event does not identify, and Kizuna does not own transient
 values.
+
+`DISPOSABLE_TRANSIENT` reports a transient registration that created a value
+with `[Symbol.asyncDispose]`, `[Symbol.dispose]`, or `dispose()`. Kizuna does
+not track transient values, so it never invokes that hook. A root container
+and its scopes report each key once. Register the service as singleton or
+scoped if the container must clean it up. Ignore the event for a key whose
+callers clean up the value themselves, for example with `using`.
+
+Kizuna does not wait for a Promise value, so a transient `async` factory
+produces no event. Kizuna returns that Promise unchanged, and a handler on it
+would hide a rejection that the caller ignores. Register an `async` resource
+that needs cleanup as scoped, so that `disposeAsync()` waits for the Promise
+and cleans up its value:
+
+```typescript
+.registerScopedFactory('connection', async () => pool.connect())
+```
 
 ## React to one event
 

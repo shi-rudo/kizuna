@@ -28,7 +28,7 @@ export type ValidationMode = (typeof validationModes)[number];
  */
 export interface InstanceRequest {
 	factoryArguments(): readonly unknown[];
-	valueCreated(): void;
+	valueCreated(value: unknown): void;
 }
 
 /** Internal runtime contract for service lifecycles. */

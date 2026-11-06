@@ -444,6 +444,70 @@ ${example}
 		expect(middleware).not.toContain("kizunaContainer.dispose();");
 	});
 
+	it("documents that a failed resolution does not clean up transient values", () => {
+		const readme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+		);
+		const lifecycleGuide = normalizedMarkdown(
+			readFileSync(
+				join(
+					repositoryRoot,
+					"skills",
+					"kizuna",
+					"references",
+					"lifecycle-guide.md",
+				),
+				"utf8",
+			),
+		);
+
+		expect(readme).toContain(
+			"If a resolution fails, Kizuna does not clean up the transient values that it already created for it.",
+		);
+		expect(readme).toContain(
+			"If one entry fails, `getAll()` throws and returns no services.",
+		);
+		expect(lifecycleGuide).toContain(
+			"A failed resolution does not clean up the transient values that it already created",
+		);
+	});
+
+	it("explains why DISPOSABLE_TRANSIENT does not inspect a transient Promise", () => {
+		const readme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+		);
+		const diagnosticsGuide = normalizedMarkdown(
+			readFileSync(
+				join(
+					repositoryRoot,
+					"skills",
+					"kizuna",
+					"references",
+					"diagnostics.md",
+				),
+				"utf8",
+			),
+		);
+		const adr = normalizedMarkdown(
+			readFileSync(
+				join(repositoryRoot, "docs", "adr", "013-diagnostic-events.md"),
+				"utf8",
+			),
+		);
+
+		for (const document of [readme, diagnosticsGuide, adr]) {
+			expect(document).toContain(
+				"would hide a rejection that the caller ignores",
+			);
+		}
+		expect(readme).toContain(
+			"Register an `async` resource that needs cleanup as scoped or singleton.",
+		);
+		expect(diagnosticsGuide).toContain(
+			"registerScopedFactory('connection', async () => pool.connect())",
+		);
+	});
+
 	it("documents the current scope replication contract", () => {
 		const adr = normalizedMarkdown(
 			readFileSync(
@@ -559,6 +623,7 @@ describe("published feature evidence", () => {
 			"ScopeStartedEvent",
 			"ContainerDisposedEvent",
 			"ServiceCreatedEvent",
+			"DisposableTransientEvent",
 			"ValidationIssue",
 			"ValidationIssueCode",
 			"ValidationPathSegment",

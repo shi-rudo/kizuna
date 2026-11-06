@@ -8,6 +8,7 @@ import {
 
 interface AppLogger {
 	error(fields: object, message: string): void;
+	warn(fields: object, message: string): void;
 	debug(fields: object, message: string): void;
 }
 
@@ -34,6 +35,12 @@ const listener = (event: DiagnosticEvent): void => {
 		event.path.push("other");
 		void path;
 	}
+	if (event.code === "DISPOSABLE_TRANSIENT") {
+		const serviceKey: string = event.serviceKey;
+		const container: "root" | "scope" = event.container;
+		const path: readonly string[] = event.path;
+		void [serviceKey, container, path];
+	}
 	if (event.code === "CONTAINER_DISPOSED") {
 		const container: "root" | "scope" = event.container;
 		const failureCount: number = event.failureCount;
@@ -50,8 +57,9 @@ new ContainerBuilder().build({ diagnostics: options });
 
 const level: DiagnosticLevel = "error";
 new ContainerBuilder().build({ diagnostics: { listener, level } });
+new ContainerBuilder().build({ diagnostics: { listener, level: "warn" } });
 
-// @ts-expect-error The level must be error or debug.
+// @ts-expect-error The level must be error, warn, or debug.
 new ContainerBuilder().build({ diagnostics: { listener, level: "info" } });
 
 // @ts-expect-error A diagnostics option needs a listener.

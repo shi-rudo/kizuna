@@ -38,6 +38,14 @@ class Consumer {
 
 class Handler {}
 
+class Connection {
+	[Symbol.dispose](): void {}
+}
+
+class Repository {
+	constructor(readonly connection: Connection) {}
+}
+
 afterEach(() => {
 	vi.restoreAllMocks();
 });
@@ -208,6 +216,201 @@ describe("diagnostic levels", () => {
 
 		container.dispose();
 
+		expect(events).toEqual([]);
+	});
+
+	it("delivers error events and no debug events at the warn level", async () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("queue", () =>
+				failingAsyncCleanup(new Error("flush failed")),
+			)
+			.build({ diagnostics: { listener, level: "warn" } });
+		container.get("queue");
+		captureError(() => container.dispose());
+
+		await settle();
+
+		expect(events).toEqual([
+			expect.objectContaining({ code: "UNAWAITED_CLEANUP_FAILED" }),
+		]);
+	});
+});
+
+describe("DISPOSABLE_TRANSIENT", () => {
+	it("reports a transient value with a cleanup hook and its resolution path", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("connection", Connection)
+			.registerSingleton("repository", Repository, "connection")
+			.build({ diagnostics: { listener, level: "warn" } });
+
+		container.get("repository");
+
+		expect(events).toEqual([
+			{
+				code: "DISPOSABLE_TRANSIENT",
+				level: "warn",
+				message: expect.any(String),
+				serviceKey: "connection",
+				container: "root",
+				path: ["repository", "connection"],
+			},
+		]);
+	});
+
+	it("reports each key once, also across scopes", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("connection", Connection)
+			.build({ diagnostics: { listener, level: "warn" } });
+		container.get("connection");
+		container.startScope().get("connection");
+
+		container.startScope().get("connection");
+
+		expect(events).toHaveLength(1);
+	});
+
+	it("reports the scope that resolved the first value", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("connection", Connection)
+			.build({ diagnostics: { listener, level: "warn" } });
+
+		container.startScope().get("connection");
+
+		expect(events).toEqual([
+			expect.objectContaining({ serviceKey: "connection", container: "scope" }),
+		]);
+	});
+
+	it.each([
+		["[Symbol.dispose]", { [Symbol.dispose]() {} }],
+		["[Symbol.asyncDispose]", { async [Symbol.asyncDispose]() {} }],
+		["dispose()", { dispose() {} }],
+		["dispose() on a function value", Object.assign(() => 0, { dispose() {} })],
+	])("reports a value whose cleanup hook is %s", (_hook, value) => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransientFactory("resource", () => value)
+			.build({ diagnostics: { listener, level: "warn" } });
+
+		container.get("resource");
+
+		expect(events).toEqual([
+			expect.objectContaining({
+				code: "DISPOSABLE_TRANSIENT",
+				serviceKey: "resource",
+			}),
+		]);
+	});
+
+	it("reports the value of an earlier getAll() entry when a later entry fails", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.addTransient("handlers", Connection)
+			.addTransientFactory("handlers", (): Connection => {
+				throw new Error("handler unavailable");
+			})
+			.build({ diagnostics: { listener, level: "warn" } });
+
+		captureError(() => container.getAll("handlers"));
+
+		expect(events).toEqual([
+			expect.objectContaining({
+				code: "DISPOSABLE_TRANSIENT",
+				serviceKey: "handlers",
+			}),
+		]);
+	});
+
+	it("delivers DISPOSABLE_TRANSIENT at the debug level", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("connection", Connection)
+			.build({ diagnostics: { listener, level: "debug" } });
+
+		container.get("connection");
+
+		expect(eventsWithCode(events, "DISPOSABLE_TRANSIENT")).toHaveLength(1);
+	});
+
+	it("does not report a transient value without a cleanup hook", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("handler", Handler)
+			.build({ diagnostics: { listener, level: "warn" } });
+
+		container.get("handler");
+
+		expect(events).toEqual([]);
+	});
+
+	it("does not report singleton and scoped values with a cleanup hook", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerSingleton("pool", Connection)
+			.registerScoped("session", Connection)
+			.build({ diagnostics: { listener, level: "warn" } });
+		container.get("pool");
+
+		container.startScope().get("session");
+
+		expect(events).toEqual([]);
+	});
+
+	it("does not report the value of a transient Promise", async () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransientFactory("connection", async () => new Connection())
+			.build({ diagnostics: { listener, level: "warn" } });
+		await container.get("connection");
+
+		await settle();
+
+		expect(events).toEqual([]);
+	});
+
+	it("delivers DISPOSABLE_TRANSIENT at the default level", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("connection", Connection)
+			.build({ diagnostics: { listener } });
+
+		container.get("connection");
+
+		expect(eventsWithCode(events, "DISPOSABLE_TRANSIENT")).toHaveLength(1);
+	});
+
+	it("delivers no DISPOSABLE_TRANSIENT at the error level", () => {
+		const { events, listener } = recorder();
+		const container = new ContainerBuilder()
+			.registerTransient("connection", Connection)
+			.build({ diagnostics: { listener, level: "error" } });
+
+		container.get("connection");
+
+		expect(events).toEqual([]);
+	});
+
+	it("resolves a value whose cleanup hook lookup throws, without an event", () => {
+		const { events, listener } = recorder();
+		const guarded = new Proxy(
+			{},
+			{
+				get() {
+					throw new Error("access denied");
+				},
+			},
+		);
+		const container = new ContainerBuilder()
+			.registerTransientFactory("guarded", () => guarded)
+			.build({ diagnostics: { listener, level: "warn" } });
+
+		const resolved = container.get("guarded");
+
+		expect(resolved).toBe(guarded);
 		expect(events).toEqual([]);
 	});
 });

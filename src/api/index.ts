@@ -43,6 +43,7 @@ export type {
 	DiagnosticEvent,
 	DiagnosticLevel,
 	DiagnosticListener,
+	DisposableTransientEvent,
 	ScopeStartedEvent,
 	ServiceCreatedEvent,
 	UnawaitedCleanupFailedEvent,

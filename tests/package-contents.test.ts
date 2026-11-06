@@ -19,7 +19,7 @@ const sizeBudgets = {
 	minifiedEsmGzip: 9.5 * KiB,
 	shippedEsmGzip: 22 * KiB,
 	packedTarball: 200 * KiB,
-	unpackedTarball: 900 * KiB,
+	unpackedTarball: 950 * KiB,
 } as const;
 
 interface PackResult {

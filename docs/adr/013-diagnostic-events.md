@@ -43,14 +43,35 @@ Each event has a `code`, a `level`, and a `message`:
 | `SCOPE_STARTED` | `debug` | none |
 | `CONTAINER_DISPOSED` | `debug` | `container`, `mode`, `failureCount` |
 | `SERVICE_CREATED` | `debug` | `serviceKey`, `lifetime`, `container`, `path` |
+| `DISPOSABLE_TRANSIENT` | `warn` | `serviceKey`, `container`, `path` |
 
 The rules:
 
 - The `level` names match common logger methods. A listener can log every
   event with `logger[event.level](event, event.message)` and never inspect
   `code`.
-- The option `level` is a threshold. The default `error` delivers only
-  `error` events. `debug` delivers all events.
+- The option `level` is a threshold. The default `warn` delivers `error` and
+  `warn` events. `error` delivers only `error` events. `debug` delivers all
+  events.
+- `warn` marks a registration that works but probably does not do what its
+  author expects. `DISPOSABLE_TRANSIENT` reports a transient registration whose
+  value has a cleanup hook, because Kizuna does not track transient values and
+  never invokes that hook. The event is not a validation issue: a caller can
+  own a transient value and clean it up with `using`. A root container and its
+  scopes report each key once, so a transient that every request creates
+  produces one event.
+- `DISPOSABLE_TRANSIENT` does not inspect a Promise value. Kizuna returns a
+  transient value unchanged, so it cannot hand out an observer Promise as the
+  singleton and scoped lifecycles do. A handler for both outcomes on the
+  factory Promise would hide a rejection that the caller ignores. A handler
+  for fulfillment only would report a rejection that the caller handles as
+  unhandled. Calling `then()` can also start the work of a lazy thenable. An
+  `async` resource that needs cleanup belongs in a scoped or singleton
+  registration, whose `disposeAsync()` waits for the Promise.
+- `warn` is the default. Kizuna never writes to the console, so a listener is
+  the only channel for a warning, and a listener that needs a level option
+  first would rarely receive one. Each key warns once, so the default stays
+  quiet. `error` keeps only the failures.
 - Codes use the same upper snake case as validation issue codes and error
   codes. Field names match `DisposalFailure`.
 - The event union is open. A later version can add codes. A listener branches
@@ -83,7 +104,8 @@ about events.
 - Hosts can connect Kizuna to any logger, to OpenTelemetry, or to
   `diagnostics_channel` without a dependency in Kizuna.
 - Without the option or below `debug`, the resolution path does not build
-  events.
+  events. At `warn`, the default, it checks each transient value for a
+  cleanup hook until its key has reported one.
 - Each code and field becomes public API. Adding a code is compatible.
   Removing or renaming a code or a field is a breaking change.
 - A listener that switches exhaustively over `code` must handle unknown codes.

@@ -17,9 +17,10 @@ export interface DiagnosticsOptions {
 	 */
 	readonly listener: DiagnosticListener;
 	/**
-	 * `error` (the default) delivers only failures that no other channel
-	 * reports. `debug` also delivers build, scope, disposal, and creation
-	 * events.
+	 * `error` delivers only failures that no other channel reports. `warn`
+	 * (the default) also delivers transient registrations whose values have a
+	 * cleanup hook that Kizuna never invokes. `debug` also delivers build,
+	 * scope, disposal, and creation events.
 	 */
 	readonly level?: DiagnosticLevel;
 }
@@ -96,7 +97,7 @@ function diagnosticsReporterFor(options: unknown): DiagnosticsReporter {
 			"Build option 'diagnostics.listener' must be a function.",
 		);
 	}
-	const level = options.level === undefined ? "error" : options.level;
+	const level = options.level === undefined ? "warn" : options.level;
 	if (!isOneOf(diagnosticLevels, level)) {
 		throw new InvalidBuildOptionsError(
 			"diagnostics.level",
