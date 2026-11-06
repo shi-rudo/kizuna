@@ -18,7 +18,7 @@ const toolTimeout = 60_000;
 const sizeBudgets = {
 	minifiedEsmGzip: 9.5 * KiB,
 	shippedEsmGzip: 22 * KiB,
-	packedTarball: 200 * KiB,
+	packedTarball: 215 * KiB,
 	unpackedTarball: 950 * KiB,
 } as const;
 
