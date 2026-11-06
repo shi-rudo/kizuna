@@ -444,6 +444,34 @@ ${example}
 		expect(middleware).not.toContain("kizunaContainer.dispose();");
 	});
 
+	it("documents that a failed resolution does not clean up transient values", () => {
+		const readme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+		);
+		const lifecycleGuide = normalizedMarkdown(
+			readFileSync(
+				join(
+					repositoryRoot,
+					"skills",
+					"kizuna",
+					"references",
+					"lifecycle-guide.md",
+				),
+				"utf8",
+			),
+		);
+
+		expect(readme).toContain(
+			"If a resolution fails, Kizuna does not clean up the transient values that it already created for it.",
+		);
+		expect(readme).toContain(
+			"If one entry fails, `getAll()` throws and returns no services.",
+		);
+		expect(lifecycleGuide).toContain(
+			"A failed resolution does not clean up the transient values that it already created",
+		);
+	});
+
 	it("documents the current scope replication contract", () => {
 		const adr = normalizedMarkdown(
 			readFileSync(

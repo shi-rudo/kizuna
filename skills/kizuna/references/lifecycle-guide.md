@@ -125,6 +125,12 @@ Kizuna cleans only values that it owns and tracks.
 A child scope does not clean shared singletons. A borrower does not clean
 borrowed values.
 
+A failed resolution does not clean up the transient values that it already
+created, for example the earlier entries of a failed `getAll()` call or the
+transient constructor dependencies of a service that fails. A transient
+factory can return a shared value, so Kizuna does not dispose them. Register a
+service that needs cleanup as singleton or scoped.
+
 Kizuna does not track child scopes. Dispose each scope before its root
 container. With borrowed singletons, use this shutdown order:
 

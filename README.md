@@ -275,6 +275,7 @@ const validators = container.getAll('validators'); // New instances each time
 **Key rules:**
 - `add*()` and `register*()` cannot be mixed for the same key — each key is either single or multi
 - `getAll()` resolves only keys from `add*()`. It returns the services in registration order.
+- If one entry fails, `getAll()` throws and returns no services. It does not clean up the transient values of the earlier entries (see Disposal).
 - `get()` resolves only keys from `register*()` and interface tokens. It rejects a multi-registration key at compile time and at runtime, and names `getAll()` in the error.
 - `getAll()` rejects a single registration in the same way and names `get()`.
 - A constructor dependency on a multi-registration key receives all services as an array. A factory calls `getAll()`.
@@ -454,6 +455,14 @@ await withTransaction(async (txScope) => {
 Kizuna cleans singleton and scoped values that the container owns. It does not
 track transient values. A borrower does not clean a borrowed singleton. The
 source root container cleans that value.
+
+If a resolution fails, Kizuna does not clean up the transient values that it
+already created for it. Examples are the earlier entries of a failed
+`getAll()` call and the transient constructor dependencies of a service that
+fails. No caller receives these values, and Kizuna does not dispose them: a
+transient factory can return a shared value, for example a singleton. Register
+a service that needs cleanup as singleton or scoped. Its container then owns
+the value and cleans it up, also after a failed resolution.
 
 Kizuna does not track child scopes. The application must dispose each scope
 before its root container. With borrowed singletons, use this shutdown order:
