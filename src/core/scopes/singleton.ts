@@ -1,7 +1,7 @@
 import type {
 	ConfigurableServiceLifecycle,
 	DisposalMode,
-	InstanceRequest,
+	InstanceSource,
 } from "../contracts.js";
 import type { UnawaitedFailureSink } from "../services/async-dispose.js";
 import { CachedInstance } from "./cached-instance.js";
@@ -84,7 +84,8 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * subsequent calls return the same instance without resolving arguments.
 	 *
 	 * @template T - The type of the service instance
-	 * @param request - Resolves the factory arguments (only on creation) and receives each created value
+	 * @param source - Resolves the factory arguments (only on creation) and receives each created value
+	 * @param resolver - Passed to `source` unchanged
 	 * @returns {T} The singleton instance
 	 * @throws {Error} If the lifecycle has been disposed
 	 * @throws {Error} If no factory has been registered
@@ -103,8 +104,11 @@ export class SingletonLifecycle implements ConfigurableServiceLifecycle {
 	 * console.log(db1 === db2); // true
 	 * ```
 	 */
-	public getInstance<T>(request: InstanceRequest): T {
-		return this._cache.getInstance<T>(request);
+	public getInstance<T, TResolver>(
+		source: InstanceSource<TResolver>,
+		resolver: TResolver,
+	): T {
+		return this._cache.getInstance<T, TResolver>(source, resolver);
 	}
 
 	/**

@@ -11,6 +11,7 @@ machines.
 | Container build | Build a prepared container with singleton factories. This includes eager graph validation. |
 | Cold resolve | Resolve a new singleton dependency chain for the first time. Pool creation is outside the measurement. |
 | Warm resolve | Get one pre-resolved singleton from a container with other registrations. |
+| Warm constructor resolve | Get one pre-resolved constructor-based singleton with dependencies. The cache hit does not resolve the dependencies again. |
 | Deep resolve | Resolve a transient dependency chain. Every lookup creates the full chain. |
 | Scope creation | Start a scope from a container with singleton, scoped, and transient registrations. |
 | Scope request | Start a scope, get one singleton, one scoped, and one transient service, and dispose the scope. |

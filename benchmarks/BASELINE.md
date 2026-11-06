@@ -22,6 +22,9 @@ three suite runs.
 | warm-resolve | 10 | 25000 | 0.5839 |
 | warm-resolve | 100 | 25000 | 0.6580 |
 | warm-resolve | 1000 | 25000 | 0.6505 |
+| warm-resolve-constructor | 1 | 25000 | 0.4386 |
+| warm-resolve-constructor | 10 | 25000 | 0.4407 |
+| warm-resolve-constructor | 100 | 25000 | 0.4437 |
 | deep-resolve | 10 | 2500 | 1.0470 |
 | deep-resolve | 100 | 100 | 1.5426 |
 | deep-resolve | 400 | 10 | 1.5535 |
@@ -55,3 +58,6 @@ three suite runs.
 The `scope-request` and `scope-request-async` rows came later. They were
 recorded on 2026-10-12 and 2026-10-13 with the same method on commit
 `5f30ecc`, before scopes created their services lazily.
+
+The `warm-resolve-constructor` rows came later too. They were recorded on
+2026-11-06 with the same method on commit `45fc346` and Node.js `v24.21.0`.

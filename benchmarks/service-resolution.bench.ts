@@ -5,6 +5,7 @@ import {
 	consume,
 	createColdResolutionContainer,
 	createDeepResolutionContainer,
+	createWarmConstructorResolutionContainer,
 	createWarmResolutionContainer,
 	preparedSampleCount,
 	scenarioCases,
@@ -60,6 +61,20 @@ describe("warm resolve", () => {
 		const { operationsPerSample, size: registrationCount } = benchmarkCase;
 		const container = createWarmResolutionContainer(registrationCount);
 		bench(benchmarkName(benchmarkCase, "registrations"), () => {
+			let lastResult: unknown;
+			for (let index = 0; index < operationsPerSample; index++) {
+				lastResult = container.get("target");
+			}
+			consume(lastResult);
+		});
+	}
+});
+
+describe("warm constructor resolve", () => {
+	for (const benchmarkCase of scenarioCases("warm-resolve-constructor")) {
+		const { operationsPerSample, size: dependencyCount } = benchmarkCase;
+		const container = createWarmConstructorResolutionContainer(dependencyCount);
+		bench(benchmarkName(benchmarkCase, "constructor dependencies"), () => {
 			let lastResult: unknown;
 			for (let index = 0; index < operationsPerSample; index++) {
 				lastResult = container.get("target");

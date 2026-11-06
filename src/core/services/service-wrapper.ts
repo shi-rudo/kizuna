@@ -1,6 +1,6 @@
 import type {
 	DisposalMode,
-	InstanceRequest,
+	InstanceSource,
 	ServiceLifecycle,
 	ServiceLifetime,
 	ServiceValueOwnership,
@@ -32,38 +32,12 @@ interface ServiceResolver {
 }
 
 /**
- * The request that a service passes to its lifecycle for one resolution. It
- * resolves the factory arguments through the resolving container and reports
- * a created value to it.
- */
-class ResolutionRequest implements InstanceRequest {
-	constructor(
-		private readonly service: ServiceWrapper,
-		private readonly container: ServiceResolver,
-	) {}
-
-	/**
-	 * Returns the container for a factory registration, or the resolved
-	 * dependencies for a constructor.
-	 */
-	factoryArguments(): readonly unknown[] {
-		if (!this.service.isConstructorBased()) {
-			return [this.container];
-		}
-		return this.service
-			.getDependencies()
-			.map((dependency) => this.container[resolveDependency](dependency));
-	}
-
-	valueCreated(value: unknown): void {
-		this.container[reportValueCreated](this.service, value);
-	}
-}
-
-/**
  * Wraps a service with its scope, dependencies, and lifecycle management.
+ *
+ * The wrapper is the instance source of its lifecycle. A resolution passes
+ * the wrapper and the resolving container, so a cache hit allocates nothing.
  */
-export class ServiceWrapper {
+export class ServiceWrapper implements InstanceSource<ServiceResolver> {
 	private readonly _name: string;
 	private _lifecycle: ServiceLifecycle | null;
 	private _dependencies: readonly string[];
@@ -103,7 +77,25 @@ export class ServiceWrapper {
 			);
 		}
 
-		return this._lifecycle.getInstance(new ResolutionRequest(this, container));
+		return this._lifecycle.getInstance(this, container);
+	}
+
+	/**
+	 * Returns the container for a factory registration, or the resolved
+	 * dependencies for a constructor.
+	 */
+	factoryArguments(container: ServiceResolver): readonly unknown[] {
+		if (!this._constructorFn) {
+			return [container];
+		}
+		return this._dependencies.map((dependency) =>
+			container[resolveDependency](dependency),
+		);
+	}
+
+	/** Reports a value that the lifecycle created to the resolving container. */
+	valueCreated(container: ServiceResolver, value: unknown): void {
+		container[reportValueCreated](this, value);
 	}
 
 	/**
@@ -188,14 +180,6 @@ export class ServiceWrapper {
 	 */
 	isDisposed(): boolean {
 		return this._lifecycle === null;
-	}
-
-	/**
-	 * Checks if this is a constructor-based registration.
-	 * @returns true if constructor-based, false otherwise
-	 */
-	isConstructorBased(): boolean {
-		return this._constructorFn !== undefined;
 	}
 
 	/**

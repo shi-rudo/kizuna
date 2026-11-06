@@ -1,4 +1,4 @@
-import type { DisposalMode, InstanceRequest } from "../contracts.js";
+import type { DisposalMode, InstanceSource } from "../contracts.js";
 import type { ContainerDisposedError } from "../errors.js";
 import {
 	ignoreUnawaitedFailure,
@@ -81,16 +81,19 @@ export class CachedInstance {
 	 * Returns the cached value, or creates it on the first request. It resolves
 	 * the factory arguments only when it creates the value.
 	 */
-	public getInstance<T>(request: InstanceRequest): T {
+	public getInstance<T, TResolver>(
+		source: InstanceSource<TResolver>,
+		resolver: TResolver,
+	): T {
 		this._factory.assertOpen();
 		if (!this._initialized) {
-			const args = request.factoryArguments();
+			const args = source.factoryArguments(resolver);
 			// Resolving the arguments can close this lifecycle, or create its value
 			// through another container.
 			const factory = this._factory.require();
 			if (!this._initialized) {
 				this.create(factory, args);
-				request.valueCreated(this._instance);
+				source.valueCreated(resolver, this._instance);
 			}
 		}
 

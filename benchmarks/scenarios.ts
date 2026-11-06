@@ -26,6 +26,11 @@ export const benchmarkScenarios = Object.freeze({
 		benchmarkCase(100, 25_000),
 		benchmarkCase(1_000, 25_000),
 	]),
+	"warm-resolve-constructor": Object.freeze([
+		benchmarkCase(1, 25_000),
+		benchmarkCase(10, 25_000),
+		benchmarkCase(100, 25_000),
+	]),
 	"deep-resolve": Object.freeze([
 		benchmarkCase(10, 2_500),
 		benchmarkCase(100, 100),
@@ -96,7 +101,14 @@ export interface BenchmarkContainer {
 
 type BenchmarkFactory = (container: BenchmarkContainer) => unknown;
 
+type BenchmarkConstructor = new (...dependencies: never[]) => unknown;
+
 export interface BenchmarkBuilder {
+	registerSingleton(
+		key: string,
+		serviceType: BenchmarkConstructor,
+		...dependencies: string[]
+	): BenchmarkBuilder;
 	registerSingletonFactory(
 		key: string,
 		factory: BenchmarkFactory,
@@ -122,6 +134,7 @@ export interface BenchmarkBuilder {
 }
 
 const requiredBuilderMethods = [
+	"registerSingleton",
 	"registerSingletonFactory",
 	"registerScopedFactory",
 	"registerTransientFactory",
@@ -172,6 +185,34 @@ export const createWarmResolutionContainer = (
 	for (let index = 1; index < registrationCount; index++) {
 		builder.registerSingletonFactory(`background-${index}`, () => staticValue);
 	}
+	const container = builder.build();
+	container.get("target");
+	return container;
+};
+
+class DependentService {
+	readonly dependencies: readonly unknown[];
+
+	constructor(...dependencies: unknown[]) {
+		this.dependencies = dependencies;
+	}
+}
+
+/**
+ * Create a container with one pre-resolved constructor-based singleton. Its
+ * cache hit does not resolve the dependencies again.
+ */
+export const createWarmConstructorResolutionContainer = (
+	dependencyCount: number,
+): BenchmarkContainer => {
+	const builder = createBenchmarkBuilder();
+	const dependencies: string[] = [];
+	for (let index = 0; index < dependencyCount; index++) {
+		const key = `dependency-${index}`;
+		builder.registerSingletonFactory(key, () => staticValue);
+		dependencies.push(key);
+	}
+	builder.registerSingleton("target", DependentService, ...dependencies);
 	const container = builder.build();
 	container.get("target");
 	return container;

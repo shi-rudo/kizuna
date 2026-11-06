@@ -38,23 +38,29 @@ export class ResolutionStack {
 	}
 
 	/**
-	 * Runs `resolve` with `key` on the stack and takes the key off again, also
-	 * when `resolve` throws. Resolving the key again while it is on the stack,
-	 * directly or through dependencies and factories, throws a
+	 * Runs `resolve(target, resolver)` with `key` on the stack and takes the key
+	 * off again, also when `resolve` throws. Resolving the key again while it is
+	 * on the stack, directly or through dependencies and factories, throws a
 	 * {@link CircularDependencyError} instead of recursing until the call stack
-	 * overflows.
+	 * overflows. A caller passes a function that it creates once, so a step
+	 * allocates no closure.
 	 */
-	track<T>(key: string, resolve: () => T): T {
+	track<TTarget, TResolver, T>(
+		key: string,
+		resolve: (target: TTarget, resolver: TResolver) => T,
+		target: TTarget,
+		resolver: TResolver,
+	): T {
 		const keys = this.keys;
 		if (keys.length >= indexThreshold) {
-			return this.trackIndexed(key, resolve);
+			return this.trackIndexed(key, resolve, target, resolver);
 		}
 		if (keys.includes(key)) {
 			throw new CircularDependencyError([...keys, key]);
 		}
 		keys.push(key);
 		try {
-			return resolve();
+			return resolve(target, resolver);
 		} finally {
 			keys.pop();
 		}
@@ -65,7 +71,12 @@ export class ResolutionStack {
 	 * check. The first such step builds it, and the step that brings the stack
 	 * back to 16 keys drops it.
 	 */
-	private trackIndexed<T>(key: string, resolve: () => T): T {
+	private trackIndexed<TTarget, TResolver, T>(
+		key: string,
+		resolve: (target: TTarget, resolver: TResolver) => T,
+		target: TTarget,
+		resolver: TResolver,
+	): T {
 		const keys = this.keys;
 		const index = this.index ?? new Set(keys);
 		if (index.has(key)) {
@@ -75,7 +86,7 @@ export class ResolutionStack {
 		index.add(key);
 		this.index = index;
 		try {
-			return resolve();
+			return resolve(target, resolver);
 		} finally {
 			keys.pop();
 			if (keys.length > indexThreshold) {
