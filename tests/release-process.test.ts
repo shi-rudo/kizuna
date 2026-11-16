@@ -151,6 +151,7 @@ describe("Release process", () => {
 			"A pull request that the workflow opens does not start CI.",
 		);
 		expect(guide).toContain("Close the pull request and open it again");
+		expect(guide).toContain("Approve and run");
 	});
 
 	it("binds the npm identity to a protected GitHub environment", () => {

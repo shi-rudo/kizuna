@@ -16,7 +16,6 @@ describe("public package API", () => {
 			"RegistrationKindError",
 			"ServiceContainerToken",
 			"ServiceNotRegisteredError",
-			"ServiceProviderToken",
 			"ServiceResolutionError",
 			"SingletonBorrowError",
 			"interfaceToken",

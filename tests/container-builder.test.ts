@@ -417,6 +417,10 @@ describe("ContainerBuilder - Unified API", () => {
 	});
 
 	describe("Service Management", () => {
+		it("has no count property; keyCount replaces it", () => {
+			expect("count" in builder).toBe(false);
+		});
+
 		it("should track registration count", () => {
 			expect(builder.keyCount).toBe(0);
 

@@ -107,10 +107,3 @@ export interface RootServiceContainer<TRegistry extends Record<string, any>>
 	extends ServiceContainer<TRegistry> {
 	readonly [Symbol.toStringTag]: "KizunaRootServiceContainer";
 }
-
-/**
- * @deprecated Use {@link ServiceContainer}. This alias will be removed in a
- * future major version.
- */
-export type TypeSafeServiceLocator<TRegistry extends Record<string, any>> =
-	ServiceContainer<TRegistry>;

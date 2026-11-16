@@ -48,14 +48,6 @@ export abstract class BaseContainerBuilder {
 	}
 
 	/**
-	 * @deprecated Use {@link keyCount}. This value counts keys, not
-	 * registrations, and will be removed in a future major version.
-	 */
-	get count(): number {
-		return this.keyCount;
-	}
-
-	/**
 	 * Gets all registered service names.
 	 * @returns {string[]} Array of registered service names
 	 */

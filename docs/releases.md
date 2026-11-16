@@ -89,9 +89,15 @@ project leaves prerelease mode.
 Review and merge that pull request when the release is ready.
 
 A pull request that the workflow opens does not start CI. GitHub does not run
-workflows for events that the workflow token causes.
-Close the pull request and open it again before you merge it. That event comes
-from you, so CI runs.
+workflows for events that the workflow token causes. Before you merge the
+release pull request, do these steps:
+
+1. Close the pull request and open it again. That event comes from you, so CI starts.
+2. Find the runs of the pull request that wait for approval. GitHub holds them
+   because the workflow bot wrote the last commit.
+3. Select **Approve and run** for each held run. As an alternative, run
+   `gh api -X POST repos/shi-rudo/kizuna/actions/runs/<run-id>/approve`.
+4. Merge the pull request only after all checks pass.
 
 While changesets remain, the workflow only prepares the pull request. It checks
 npm only after it has tried to publish, that is, when no changeset remains.

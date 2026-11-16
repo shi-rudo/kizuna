@@ -851,7 +851,6 @@ The package root exports these runtime values:
 - `ContainerBuilder`
 - `interfaceToken`
 - `ServiceContainerToken`
-- `ServiceProviderToken` (deprecated alias of `ServiceContainerToken`)
 - `CircularDependencyError`
 - `ContainerValidationError`
 - `DisposalError`
@@ -869,7 +868,6 @@ It also exports these public types:
 
 - `RootServiceContainer`
 - `ServiceContainer`
-- `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
 - `MultiRegistration`
 - `RegistrationKind`
 - `SingletonBorrowFailureReason`
@@ -963,7 +961,6 @@ Scopes and borrowers cannot lend a registration.
 .validate(): readonly ValidationIssue[]                // Validate the dependency graph
 .keyCount: number                                      // Number of registered keys (a multi-registration key counts once)
 .registrationCount: number                             // Number of registrations (each add*() call counts)
-.count: number                                         // Deprecated alias of keyCount
 .isRegistered(key: string): boolean                    // Check if service is registered
 .getRegisteredServiceNames(): string[]                 // List all registered keys
 ```
@@ -1002,10 +999,6 @@ scope. This symbol token is separate from string keys such as
 `"ServiceContainer"` or `"ServiceProvider"`. Those strings remain available for
 normal user registrations. Other constructors are not resolution keys. Resolve
 registered services through their string keys.
-
-`ServiceProviderToken` and `TypeSafeServiceLocator` are deprecated aliases of
-`ServiceContainerToken` and `ServiceContainer`. They keep existing code working.
-A future major version removes them.
 
 #### Typing helper functions
 

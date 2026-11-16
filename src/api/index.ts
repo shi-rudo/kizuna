@@ -72,13 +72,11 @@ export {
 	CircularDependencyError,
 	DisposalError,
 	ServiceContainerToken,
-	ServiceProviderToken,
 } from "./container.js";
 export { ContainerBuilder } from "./container-builder.js";
 export type {
 	RootServiceContainer,
 	ServiceContainer,
-	TypeSafeServiceLocator,
 } from "./contracts/interfaces.js";
 export type { MultiRegistration } from "./contracts/types.js";
 export type { InterfaceToken } from "./interface-token.js";

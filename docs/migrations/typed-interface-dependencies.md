@@ -8,7 +8,7 @@ This change affects these methods:
 - `registerSingletonInterface`
 - `registerScopedInterface`
 - `registerTransientInterface`
-- `TypeSafeServiceLocator.get`
+- `ServiceContainer.get`
 
 ## Create a token
 
