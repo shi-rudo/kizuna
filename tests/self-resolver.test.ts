@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	ServiceContainerToken,
-	ServiceProviderToken,
-} from "../src/api/container";
+import { ServiceContainerToken } from "../src/api/container";
 import { ContainerBuilder } from "../src/api/container-builder";
 
 class Dummy {}
@@ -99,14 +96,5 @@ describe("container self-resolution", () => {
 			container.dispose();
 			container.dispose();
 		}).not.toThrow();
-	});
-});
-
-describe("deprecated ServiceProviderToken", () => {
-	it("holds the same symbol as ServiceContainerToken", () => {
-		const container = new ContainerBuilder().build();
-
-		expect(ServiceProviderToken).toBe(ServiceContainerToken);
-		expect(container.get(ServiceProviderToken)).toBe(container);
 	});
 });

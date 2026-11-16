@@ -13,7 +13,7 @@ const borrower = new Kizuna.ContainerBuilder()
 container.get("Logger");
 container.get(Kizuna.ServiceContainerToken);
 // The deprecated alias still resolves the container.
-container.get(Kizuna.ServiceProviderToken);
+container.get(Kizuna.ServiceContainerToken);
 borrower.get("Logger");
 
 const pathSegment: Kizuna.ValidationPathSegment = { key: "Logger" };

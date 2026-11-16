@@ -58,13 +58,6 @@ export { CircularDependencyError, DisposalError } from "../core/errors.js";
 /** Stable identity token that resolves the current container or scope. */
 export const ServiceContainerToken: unique symbol = Symbol("ServiceContainer");
 
-/**
- * @deprecated Use {@link ServiceContainerToken}. This alias holds the same
- * symbol and will be removed in a future major version.
- */
-export const ServiceProviderToken: typeof ServiceContainerToken =
-	ServiceContainerToken;
-
 /** Resolves one service through a container. Created once, so a step allocates no closure. */
 const resolveService = (
 	service: ServiceWrapper,

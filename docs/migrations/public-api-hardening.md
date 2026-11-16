@@ -10,7 +10,6 @@ The package root now exports these runtime values:
 - `ContainerBuilder`
 - `interfaceToken`
 - `ServiceContainerToken`
-- `ServiceProviderToken` (deprecated alias of `ServiceContainerToken`)
 - `CircularDependencyError`
 - `ContainerValidationError`
 - `DisposalError`
@@ -28,7 +27,6 @@ It also exports these public types:
 
 - `RootServiceContainer`
 - `ServiceContainer`
-- `TypeSafeServiceLocator` (deprecated alias of `ServiceContainer`)
 - `MultiRegistration`
 - `RegistrationKind`
 - `SingletonBorrowFailureReason`
@@ -89,9 +87,7 @@ root container comes from `build()`. A scope comes from `startScope()`.
 | `TypeSafeServiceLocator` | `ServiceContainer` |
 | `ServiceProviderToken` | `ServiceContainerToken` |
 
-The previous names remain as deprecated aliases. `ServiceProviderToken` holds
-the same symbol as `ServiceContainerToken`. A future major version removes the
-aliases. Replace them when you update:
+Release `1.0.0-rc.12` removes the previous names. Replace them:
 
 ```typescript
 // Before
@@ -152,8 +148,8 @@ function useLogger(container: ServiceContainer<{ logger: Logger }>) {
 }
 ```
 
-The builder property `count` counted keys, not registrations. Use `keyCount` or
-`registrationCount`. `count` remains as a deprecated alias of `keyCount`.
+The builder property `count` counted keys, not registrations. Release
+`1.0.0-rc.12` removes it. Use `keyCount` or `registrationCount`.
 
 ## Typed Errors
 

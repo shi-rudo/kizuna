@@ -6,7 +6,7 @@ Superseded by the string-key resolution model and ADR-008 (2026-08-04).
 
 This document records the previous design. Its constructor-key examples do not
 describe the current public API. Services now use string registry keys, while
-`ServiceProviderToken` is the only non-string resolution token.
+`ServiceContainerToken` is the only non-string resolution token.
 
 ## Context
 

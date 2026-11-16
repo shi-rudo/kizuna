@@ -1,10 +1,6 @@
 import { expectTypeOf, test } from "vitest";
-import type { ServiceContainer, TypeSafeServiceLocator } from "../src";
-import {
-	Container,
-	ServiceContainerToken,
-	ServiceProviderToken,
-} from "../src/api/container";
+import type * as Kizuna from "../src";
+import { Container, ServiceContainerToken } from "../src/api/container";
 import { ContainerBuilder } from "../src/api/container-builder";
 
 class DiagnosticService {}
@@ -33,16 +29,15 @@ test("self-resolution is available without weakening the public types", () => {
 	container.get(DerivedContainer);
 });
 
-test("deprecated names stay compatible with the new names", () => {
-	expectTypeOf<TypeSafeServiceLocator<{ answer: number }>>().toEqualTypeOf<
-		ServiceContainer<{ answer: number }>
-	>();
+test("the removed aliases are not part of the public API", () => {
+	// @ts-expect-error TypeSafeServiceLocator was removed. Use ServiceContainer.
+	type Locator = Kizuna.TypeSafeServiceLocator<{ answer: number }>;
+	expectTypeOf<Locator>().not.toBeNever();
 
-	const container = new ContainerBuilder()
-		.registerSingletonFactory("answer", () => 42)
-		.build();
+	// @ts-expect-error ServiceProviderToken was removed. Use ServiceContainerToken.
+	type ProviderToken = typeof Kizuna.ServiceProviderToken;
+	expectTypeOf<ProviderToken>().not.toBeNever();
 
-	expectTypeOf(container.get(ServiceProviderToken)).toEqualTypeOf<
-		ServiceContainer<{ answer: number }>
-	>();
+	// @ts-expect-error count was removed. Use keyCount.
+	void new ContainerBuilder().count;
 });

@@ -473,6 +473,18 @@ ${example}
 		);
 	});
 
+	it("names no removed alias in the README", () => {
+		const readme = readFileSync(join(repositoryRoot, "README.md"), "utf8");
+
+		for (const removed of [
+			"ServiceProviderToken",
+			"TypeSafeServiceLocator",
+			".count: number",
+		]) {
+			expect(readme).not.toContain(removed);
+		}
+	});
+
 	it("records why Kizuna does not detect a disposal that waits for itself", () => {
 		const readme = normalizedMarkdown(
 			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
@@ -642,7 +654,6 @@ describe("published feature evidence", () => {
 			"ContainerBuilder",
 			"interfaceToken",
 			"ServiceContainerToken",
-			"ServiceProviderToken",
 			"CircularDependencyError",
 			"ContainerValidationError",
 			"DisposalError",
@@ -659,7 +670,6 @@ describe("published feature evidence", () => {
 		const typeExports = [
 			"RootServiceContainer",
 			"ServiceContainer",
-			"TypeSafeServiceLocator",
 			"MultiRegistration",
 			"RegistrationKind",
 			"SingletonBorrowFailureReason",

@@ -123,12 +123,4 @@ describe("builder counts", () => {
 		expect(builder.keyCount).toBe(2);
 		expect(builder.registrationCount).toBe(3);
 	});
-
-	it("keeps the deprecated count as the key count", () => {
-		const builder = new ContainerBuilder()
-			.addSingleton("handlers", HandlerA)
-			.addSingleton("handlers", HandlerB);
-
-		expect(builder.count).toBe(builder.keyCount);
-	});
 });
