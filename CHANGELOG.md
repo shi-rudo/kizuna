@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.0.0-rc.11
+
+### Major Changes
+
+- 19bc765: A cleanup hook that waits for `disposeAsync()` of its own container after an `await` no longer finishes.
+
+  - `disposeAsync()` now waits for a running cleanup. A cleanup hook that awaits something and then awaits `disposeAsync()` of its own container or scope therefore waits for itself, and the disposal never settles. Before, that call returned at once.
+  - Kizuna cannot detect this call without an asynchronous context. Call `disposeAsync()` before the first `await` of the hook, where it resolves at once, or do not call it from a cleanup hook.
+
+### Minor Changes
+
+- 519f44d: Add an optional limit for the async cleanups that run at once.
+
+  - The build option `maxAsyncDisposalConcurrency` makes `disposeAsync()` run at most that many asynchronous cleanup hooks at once, also in scopes. It must be a positive integer; another value throws `InvalidBuildOptionsError`.
+  - Without the option, every independent cleanup hook still starts at once.
+  - A dependency still starts its cleanup only after its consumers.
+
+### Patch Changes
+
+- d2ba89d: Let concurrent `disposeAsync()` calls wait for the running cleanup.
+
+  - A `disposeAsync()` call while the cleanup of the container or scope still runs now waits for it and resolves or rejects with the same `DisposalError`. Before, it returned at once, before the cleanup had finished.
+  - A disposal call after the cleanup has finished is still a no-op.
+  - When a cleanup hook calls `disposeAsync()` of its own container or scope before its first `await`, the call still resolves at once.
+
 ## 1.0.0-rc.10
 
 ### Major Changes
