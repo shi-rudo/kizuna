@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.0-rc.12
+
+### Major Changes
+
+- 7f3c155: Remove the deprecated aliases before 1.0.0.
+
+  - `ServiceProviderToken` is removed. Use `ServiceContainerToken`. It holds the same symbol.
+  - `TypeSafeServiceLocator` is removed. Use `ServiceContainer`.
+  - `ContainerBuilder.count` is removed. Use `keyCount`, or `registrationCount` to count each `add*()` call.
+
+### Patch Changes
+
+- ecd4b82: Document why `disposeAsync()` can wait for itself.
+
+  - The README section "When `disposeAsync()` never settles" shows the two patterns that wait for themselves: an `async` factory or a cleanup hook that awaits `disposeAsync()` of its own container after an `await`. It also shows how to correct them.
+  - ADR-014 records why Kizuna keeps these patterns as usage rules and does not detect them.
+
 ## 1.0.0-rc.11
 
 ### Major Changes
