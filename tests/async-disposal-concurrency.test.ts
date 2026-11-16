@@ -53,7 +53,7 @@ const independentResources = (
 };
 
 describe("async cleanup concurrency", () => {
-	it("starts at most 16 cleanups at once by default", async () => {
+	it("starts every cleanup at once by default", async () => {
 		const probe = cleanupProbe();
 		const container = independentResources(40, probe).build();
 		container.getAll("resources");
@@ -61,14 +61,16 @@ describe("async cleanup concurrency", () => {
 
 		await flushMicrotasks();
 
-		expect(probe.started).toBe(16);
+		expect(probe.started).toBe(40);
 		probe.open();
 		await disposal;
 	});
 
 	it("runs every cleanup beyond the limit", async () => {
 		const probe = cleanupProbe();
-		const container = independentResources(40, probe).build();
+		const container = independentResources(40, probe).build({
+			maxAsyncDisposalConcurrency: 16,
+		});
 		container.getAll("resources");
 		const disposal = container.disposeAsync();
 		await flushMicrotasks();

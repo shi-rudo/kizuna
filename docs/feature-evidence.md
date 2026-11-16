@@ -99,10 +99,10 @@ built package in every CI run. A test fails when a value exceeds its budget.
 
 The values were measured on 2026-11-16, after the bounded async cleanup:
 
-- Root entry, minified ESM, gzip: 9.52 KiB, budget 10 KiB
+- Root entry, minified ESM, gzip: 9.54 KiB, budget 10 KiB
 - Shipped `dist/index.mjs`, gzip: 21.4 KiB, budget 22 KiB
-- Packed tarball: 204.4 KiB, budget 215 KiB
-- Unpacked package: 931.2 KiB, budget 950 KiB
+- Packed tarball: 204.8 KiB, budget 215 KiB
+- Unpacked package: 931.6 KiB, budget 950 KiB
 
 The minified value comes from an esbuild build of the root entry with all
 exports. A consumer bundle that uses fewer exports can be smaller. The unpacked

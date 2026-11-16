@@ -394,8 +394,8 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * factories.
 	 *
 	 * Independent dispose handlers run in parallel, at most
-	 * `maxAsyncDisposalConcurrency` at once (16 by default). A dependency
-	 * starts only after all of its consumer groups settle. Rejections do not stop other
+	 * `maxAsyncDisposalConcurrency` at once if that build option is set. A
+	 * dependency starts only after all of its consumer groups settle. Rejections do not stop other
 	 * cleanup. After all cleanup settles, this method throws one
 	 * `DisposalError` with the original failures.
 	 *

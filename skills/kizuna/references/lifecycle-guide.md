@@ -193,8 +193,9 @@ depend on `DatabasePool`. Kizuna cleans these values in this order:
 
 The async API starts a dependency after all its consumers finish cleanup.
 Independent graph branches run in parallel. Their relative completion order is
-not defined. At most 16 asynchronous cleanup hooks run at once, also in scopes;
-`build({ maxAsyncDisposalConcurrency: n })` sets another positive limit.
+not defined. By default, every independent asynchronous cleanup hook starts at
+once. `build({ maxAsyncDisposalConcurrency: n })` runs at most `n` at once, also
+in scopes.
 
 Sync cleanup keeps registration order inside each disposal layer. All services
 under a multi-registration key are part of the graph.

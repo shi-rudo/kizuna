@@ -546,11 +546,14 @@ The async API runs independent graph branches in parallel. Their relative
 completion order is not defined. All services under a multi-registration key
 are part of the graph.
 
-At most 16 asynchronous cleanup hooks run at once, also in scopes. The other
-hooks wait in the order in which their services become ready for cleanup. Set
-the limit with `build({ maxAsyncDisposalConcurrency: 4 })`, for example to stay
-below the connection limit of a database. The value must be a positive integer.
-A dependency still starts its cleanup only after its consumers.
+By default, every independent asynchronous cleanup hook starts at once. To run
+at most a fixed number at once, also in scopes, set a limit, for example
+`build({ maxAsyncDisposalConcurrency: 4 })` to stay below the connection limit
+of a database. The value must be a positive integer. The other hooks wait in
+the order in which their services become ready for cleanup. A dependency still
+starts its cleanup only after its consumers. A low limit makes shutdown take
+longer when many hooks are slow, so keep it within the time that your platform
+allows for a shutdown.
 
 Factory registrations can declare dependency keys after the factory. These
 keys define validation edges and cleanup order.

@@ -2,8 +2,8 @@
 "@shirudo/kizuna": minor
 ---
 
-Bound the number of async cleanups that run at once.
+Add an optional limit for the async cleanups that run at once.
 
-- `disposeAsync()` runs at most 16 asynchronous cleanup hooks at once, also in scopes. Before, it started every independent hook at the same time.
-- Add the build option `maxAsyncDisposalConcurrency` to set another limit. It must be a positive integer; another value throws `InvalidBuildOptionsError`.
+- The build option `maxAsyncDisposalConcurrency` makes `disposeAsync()` run at most that many asynchronous cleanup hooks at once, also in scopes. It must be a positive integer; another value throws `InvalidBuildOptionsError`.
+- Without the option, every independent cleanup hook still starts at once.
 - A dependency still starts its cleanup only after its consumers.

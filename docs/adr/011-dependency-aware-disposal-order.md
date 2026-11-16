@@ -24,7 +24,9 @@ Sync disposal invokes each layer in registration order. Async disposal starts th
 
 Async disposal starts each dependency group after all its consumer groups settle. Unrelated graph branches do not block one another.
 
-At most `maxAsyncDisposalConcurrency` cleanup hooks run at once, 16 by default. The build option sets the limit for the root container and its scopes. A hook that finds no free slot waits; a released slot goes to the hook that has waited longest. The limit protects shared resources such as connection pools and file handles when a container owns many async resources. It does not change the order: a dependency group still starts only after its consumer groups settle.
+The build option `maxAsyncDisposalConcurrency` limits how many cleanup hooks run at once, for the root container and its scopes. A hook that finds no free slot waits; a released slot goes to the hook that has waited longest. The limit protects shared resources such as connection pools and file handles when a container owns many async resources. It does not change the order: a dependency group still starts only after its consumer groups settle.
+
+Without the option, every ready hook starts at once, as before the option existed. A default limit would make the shutdown of a container with many slow hooks take longer, and platforms such as Kubernetes stop a process after a fixed grace period. An application that owns many async resources chooses its limit against that period.
 
 Sync disposal keeps registration order within each layer. The container keeps one order across single registrations and multi-registrations.
 

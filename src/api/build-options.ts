@@ -25,8 +25,8 @@ export interface DiagnosticsOptions {
 	readonly level?: DiagnosticLevel;
 }
 
-/** The number of async cleanups that `disposeAsync()` runs at once by default. */
-export const defaultMaxAsyncDisposalConcurrency = 16;
+/** Without a limit, `disposeAsync()` starts every async cleanup at once. */
+const unlimitedAsyncDisposalConcurrency = Number.POSITIVE_INFINITY;
 
 /** Options for `ContainerBuilder.build()`. */
 export interface ContainerBuildOptions {
@@ -39,8 +39,9 @@ export interface ContainerBuildOptions {
 	readonly diagnostics?: DiagnosticsOptions;
 	/**
 	 * The most async cleanups that `disposeAsync()` runs at once, also in the
-	 * scopes of this container. A positive integer; the default is 16. A
-	 * dependency still starts its cleanup only after its consumers.
+	 * scopes of this container. A positive integer. Without it, every cleanup
+	 * starts at once. A dependency still starts its cleanup only after its
+	 * consumers.
 	 */
 	readonly maxAsyncDisposalConcurrency?: number;
 }
@@ -82,23 +83,27 @@ export function resolveBuildOptions(
 		);
 	}
 
-	const maxAsyncDisposalConcurrency =
-		received.maxAsyncDisposalConcurrency === undefined
-			? defaultMaxAsyncDisposalConcurrency
-			: received.maxAsyncDisposalConcurrency;
-	if (!isPositiveInteger(maxAsyncDisposalConcurrency)) {
-		throw new InvalidBuildOptionsError(
-			"maxAsyncDisposalConcurrency",
-			received.maxAsyncDisposalConcurrency,
-			"Build option 'maxAsyncDisposalConcurrency' must be a positive integer.",
-		);
-	}
-
 	return {
 		validation,
 		diagnostics: diagnosticsReporterFor(received.diagnostics),
-		maxAsyncDisposalConcurrency,
+		maxAsyncDisposalConcurrency: asyncDisposalLimitFor(
+			received.maxAsyncDisposalConcurrency,
+		),
 	};
+}
+
+function asyncDisposalLimitFor(limit: unknown): number {
+	if (limit === undefined) {
+		return unlimitedAsyncDisposalConcurrency;
+	}
+	if (!isPositiveInteger(limit)) {
+		throw new InvalidBuildOptionsError(
+			"maxAsyncDisposalConcurrency",
+			limit,
+			"Build option 'maxAsyncDisposalConcurrency' must be a positive integer.",
+		);
+	}
+	return limit;
 }
 
 function diagnosticsReporterFor(options: unknown): DiagnosticsReporter {
