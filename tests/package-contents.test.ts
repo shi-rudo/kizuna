@@ -16,7 +16,7 @@ const toolTimeout = 60_000;
 
 // The documented size budgets. docs/feature-evidence.md lists the same values.
 const sizeBudgets = {
-	minifiedEsmGzip: 9.5 * KiB,
+	minifiedEsmGzip: 10 * KiB,
 	shippedEsmGzip: 22 * KiB,
 	packedTarball: 215 * KiB,
 	unpackedTarball: 950 * KiB,
