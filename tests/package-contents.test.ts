@@ -15,11 +15,14 @@ const KiB = 1024;
 const toolTimeout = 60_000;
 
 // The documented size budgets. docs/feature-evidence.md lists the same values.
+// Only minifiedEsmGzip is strict: a raise needs the approval of a maintainer.
+// The other budgets are 25 % above the values of 2026-11-16 and catch only
+// unexpected jumps.
 const sizeBudgets = {
 	minifiedEsmGzip: 10 * KiB,
-	shippedEsmGzip: 22 * KiB,
-	packedTarball: 215 * KiB,
-	unpackedTarball: 950 * KiB,
+	shippedEsmGzip: 27 * KiB,
+	packedTarball: 256 * KiB,
+	unpackedTarball: 1165 * KiB,
 } as const;
 
 interface PackResult {
@@ -193,5 +196,19 @@ describe("packed package", () => {
 			.filter((budget) => !evidence.includes(`budget ${budget}`));
 
 		expect(undocumented).toEqual([]);
+	});
+
+	it("documents that only the minified bundle has a strict budget", () => {
+		const evidence = readFileSync(
+			join(repositoryRoot, "docs", "feature-evidence.md"),
+			"utf8",
+		).replace(/\s+/g, " ");
+
+		expect(evidence).toContain(
+			"Only the minified root entry has a strict budget.",
+		);
+		expect(evidence).toContain(
+			"A raise of this budget needs the approval of a maintainer",
+		);
 	});
 });

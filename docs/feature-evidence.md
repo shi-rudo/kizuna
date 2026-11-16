@@ -100,9 +100,20 @@ built package in every CI run. A test fails when a value exceeds its budget.
 The values were measured on 2026-11-16, after the bounded async cleanup:
 
 - Root entry, minified ESM, gzip: 9.54 KiB, budget 10 KiB
-- Shipped `dist/index.mjs`, gzip: 21.4 KiB, budget 22 KiB
-- Packed tarball: 204.8 KiB, budget 215 KiB
-- Unpacked package: 931.6 KiB, budget 950 KiB
+- Shipped `dist/index.mjs`, gzip: 21.4 KiB, budget 27 KiB
+- Packed tarball: 204.8 KiB, budget 256 KiB
+- Unpacked package: 931.6 KiB, budget 1165 KiB
+
+Only the minified root entry has a strict budget. This value is the code that
+a consumer bundle receives, and it matters most in edge runtimes. A raise of
+this budget needs the approval of a maintainer, in a change of its own. A
+feature change does not raise it.
+
+The other three budgets are 25 % above the values of 2026-11-16. Most of these
+values are source maps, comments, the README, and the agent skill. These
+budgets catch an unexpected jump, for example a file that the package includes
+by mistake. The tests for the published file list also protect against such
+files.
 
 The minified value comes from an esbuild build of the root entry with all
 exports. A consumer bundle that uses fewer exports can be smaller. The unpacked
