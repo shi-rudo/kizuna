@@ -7,6 +7,8 @@
   "changesets": [
     "aggregate-disposal-errors",
     "allocation-free-cache-hit",
+    "bounded-async-disposal",
+    "cleanup-hook-self-wait",
     "compile-published-examples",
     "container-naming",
     "deep-chain-cycle-check",
@@ -28,6 +30,7 @@
     "root-bundle-only",
     "scope-stops-with-root",
     "separate-service-provider-token",
+    "shared-async-disposal",
     "single-interface-key",
     "skill-progressive-disclosure",
     "stable-string-resolution",

@@ -1,6 +1,6 @@
 {
 	"name": "@shirudo/kizuna",
-	"version": "1.0.0-rc.10",
+	"version": "1.0.0-rc.11",
 	"description": "A dependency injection library with typed TypeScript APIs and JavaScript runtime support.",
 	"repository": {
 		"type": "git",
