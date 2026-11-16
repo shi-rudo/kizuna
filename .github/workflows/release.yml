@@ -48,7 +48,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # While changesets remain, the action only prepares the version pull
+      # request and leaves the next, unpublished version in package.json.
       - name: Verify npm release state
+        if: steps.changesets.outputs.hasChangesets == 'false'
         run: node scripts/verify-release.mjs
         env:
           PUBLISHED: ${{ steps.changesets.outputs.published }}

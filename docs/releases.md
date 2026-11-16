@@ -88,6 +88,14 @@ project leaves prerelease mode.
 
 Review and merge that pull request when the release is ready.
 
+A pull request that the workflow opens does not start CI. GitHub does not run
+workflows for events that the workflow token causes.
+Close the pull request and open it again before you merge it. That event comes
+from you, so CI runs.
+
+While changesets remain, the workflow only prepares the pull request. It checks
+npm only after it has tried to publish, that is, when no changeset remains.
+
 ## Publish to npm
 
 When no unconsumed changeset remains, the release workflow builds the package
