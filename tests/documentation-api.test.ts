@@ -473,6 +473,26 @@ ${example}
 		);
 	});
 
+	it("records why Kizuna does not detect a disposal that waits for itself", () => {
+		const readme = normalizedMarkdown(
+			readFileSync(join(repositoryRoot, "README.md"), "utf8"),
+		);
+		const adrPath = join(
+			repositoryRoot,
+			"docs",
+			"adr",
+			"014-self-waiting-disposal.md",
+		);
+
+		expect(existsSync(adrPath)).toBe(true);
+		const adr = normalizedMarkdown(readFileSync(adrPath, "utf8"));
+		expect(adr).toContain("Kizuna keeps both patterns as usage rules.");
+		expect(readme).toContain("#### When `disposeAsync()` never settles");
+		expect(readme).toContain(
+			"[ADR-014](./docs/adr/014-self-waiting-disposal.md)",
+		);
+	});
+
 	it("explains why DISPOSABLE_TRANSIENT does not inspect a transient Promise", () => {
 		const readme = normalizedMarkdown(
 			readFileSync(join(repositoryRoot, "README.md"), "utf8"),

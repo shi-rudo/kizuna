@@ -17,6 +17,7 @@ replaces it. The entries are sorted by impact: CRITICAL first, then HIGH.
 - [HIGH Importing internal factory types](#high-importing-internal-factory-types)
 - [HIGH Using non-existent APIs from examples](#high-using-non-existent-apis-from-examples)
 - [HIGH Using get() instead of getAll() for multi-registration keys](#high-using-get-instead-of-getall-for-multi-registration-keys)
+- [HIGH Waiting for disposeAsync() of the same container](#high-waiting-for-disposeasync-of-the-same-container)
 
 ## CRITICAL Omitting the mandatory string key
 
@@ -334,3 +335,44 @@ const validators = container.getAll('validators');
 `get()` rejects a multi-registration key, and `getAll()` rejects a single registration. Each error names the correct method. A constructor dependency on a multi-registration key still receives the array.
 
 Source: container.ts (`get()` and `getAll()`)
+
+## HIGH Waiting for disposeAsync() of the same container
+
+Wrong:
+
+```typescript
+.registerSingletonFactory('connection', async (container) => {
+  const connection = await connect();
+  if (!connection.ready) {
+    await container.disposeAsync(); // waits for this factory Promise
+  }
+  return connection;
+})
+.registerScopedFactory('session', (container) => ({
+  async [Symbol.asyncDispose]() {
+    await flushSession();
+    await container.disposeAsync(); // waits for this cleanup hook
+  },
+}))
+```
+
+Correct:
+
+```typescript
+.registerSingletonFactory('connection', async () => {
+  const connection = await connect();
+  if (!connection.ready) {
+    throw new Error('The connection is not ready.');
+  }
+  return connection;
+})
+.registerScopedFactory('session', () => ({
+  async [Symbol.asyncDispose]() {
+    await flushSession();
+  },
+}))
+```
+
+`disposeAsync()` waits for the Promise of an `async` factory and for a cleanup that already runs. A factory or cleanup hook that awaits `disposeAsync()` of its own container after an `await` waits for itself. The disposal never finishes, and Kizuna cannot detect this. The caller of `get()` disposes the container. The disposal that runs a hook already disposes its container.
+
+Source: ADR-014 (`docs/adr/014-self-waiting-disposal.md`)

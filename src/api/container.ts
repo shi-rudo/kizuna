@@ -402,8 +402,8 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * A call while the cleanup runs waits for it and observes the same success
 	 * or `DisposalError`. A call after the cleanup settled is a no-op. A call
 	 * that a cleanup hook of this container makes before its first `await`
-	 * resolves at once. After an `await`, a hook must not wait for this call:
-	 * it would wait for itself.
+	 * resolves at once. After an `await`, a hook must not wait for this call.
+	 * Such a hook waits for itself, and the disposal never finishes (ADR-014).
 	 */
 	async disposeAsync(): Promise<void> {
 		if (this._asyncDisposal && !isStartingCleanup(this.ownership)) {
