@@ -132,6 +132,27 @@ describe("Release process", () => {
 		);
 	});
 
+	it("verifies npm only after a publication attempt", () => {
+		const workflow = readText("../.github/workflows/release.yml");
+
+		expect(workflow).toContain(
+			[
+				"      - name: Verify npm release state",
+				"        if: steps.changesets.outputs.hasChangesets == 'false'",
+				"        run: node scripts/verify-release.mjs",
+			].join("\n"),
+		);
+	});
+
+	it("explains how to run CI on a release pull request that the workflow opened", () => {
+		const guide = readText("../docs/releases.md");
+
+		expect(guide).toContain(
+			"A pull request that the workflow opens does not start CI.",
+		);
+		expect(guide).toContain("Close the pull request and open it again");
+	});
+
 	it("binds the npm identity to a protected GitHub environment", () => {
 		const workflow = readText("../.github/workflows/release.yml");
 		const guide = readText("../docs/releases.md");
