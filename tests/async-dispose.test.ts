@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ContainerBuilder } from "../src/api/container-builder";
+import { DisposalError } from "../src/core/errors";
 
 class AsyncDisposableService {
 	disposed = false;
@@ -172,6 +173,209 @@ describe("disposeAsync()", () => {
 		for (const svc of instances) {
 			expect(svc.disposed).toBe(true);
 		}
+	});
+});
+
+/** A service whose async cleanup ends only when the test finishes or fails it. */
+class GatedCleanup {
+	finished = false;
+	private settle: { finish(): void; fail(error: Error): void } | undefined;
+
+	async [Symbol.asyncDispose](): Promise<void> {
+		await new Promise<void>((resolve, reject) => {
+			this.settle = { finish: resolve, fail: reject };
+		});
+		this.finished = true;
+	}
+
+	finish(): void {
+		this.settle?.finish();
+	}
+
+	fail(error: Error): void {
+		this.settle?.fail(error);
+	}
+}
+
+const outcome = (promise: Promise<void>): Promise<unknown> =>
+	promise.then(
+		() => "resolved",
+		(error: unknown) => error,
+	);
+
+const flushMicrotasks = async (): Promise<void> => {
+	for (let round = 0; round < 10; round++) {
+		await Promise.resolve();
+	}
+};
+
+const settledWithin = (
+	promise: Promise<unknown>,
+	milliseconds: number,
+): Promise<"settled" | "pending"> =>
+	Promise.race([
+		promise.then(
+			() => "settled" as const,
+			() => "settled" as const,
+		),
+		new Promise<"pending">((resolve) =>
+			setTimeout(() => resolve("pending"), milliseconds),
+		),
+	]);
+
+/**
+ * A value whose cleanup hook awaits disposeAsync() of its own container, at
+ * once or after another await.
+ */
+const disposesItsContainer = (
+	current: { disposeAsync(): Promise<void> },
+	afterAnAwait = false,
+) => ({
+	async [Symbol.asyncDispose](): Promise<void> {
+		if (afterAnAwait) {
+			await Promise.resolve();
+		}
+		await current.disposeAsync();
+	},
+});
+
+describe("a cleanup hook that calls disposeAsync() of its own container", () => {
+	it("returns at once when the hook starts in a dependency group", async () => {
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("host", (current) =>
+				disposesItsContainer(current),
+			)
+			.registerSingletonFactory(
+				"consumer",
+				(current) => {
+					current.get("host");
+					return { async [Symbol.asyncDispose](): Promise<void> {} };
+				},
+				"host",
+			)
+			.build();
+		container.get("consumer");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("settled");
+	});
+
+	it("returns at once when the hook waited for a free cleanup slot", async () => {
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("first", () => ({
+				async [Symbol.asyncDispose](): Promise<void> {},
+			}))
+			.registerSingletonFactory("host", (current) =>
+				disposesItsContainer(current),
+			)
+			.build({ maxAsyncDisposalConcurrency: 1 });
+		container.get("first");
+		container.get("host");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("settled");
+	});
+
+	it("still waits when the hook calls disposeAsync() of another running container", async () => {
+		const other = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = other.get("resource");
+		const otherDisposal = other.disposeAsync();
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("host", () => ({
+				async [Symbol.asyncDispose](): Promise<void> {
+					await other.disposeAsync();
+				},
+			}))
+			.build();
+		container.get("host");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("pending");
+		resource.finish();
+		await otherDisposal;
+	});
+
+	it("never finishes when the hook calls it after an await", async () => {
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("host", (current) =>
+				disposesItsContainer(current, true),
+			)
+			.build();
+		container.get("host");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("pending");
+	});
+});
+
+describe("concurrent disposeAsync() calls", () => {
+	it("does not settle a second call before the running cleanup finishes", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const first = container.disposeAsync();
+		let secondSettled = false;
+		const second = container.disposeAsync().then(() => {
+			secondSettled = true;
+		});
+
+		await flushMicrotasks();
+
+		expect(secondSettled).toBe(false);
+		resource.finish();
+		await Promise.all([first, second]);
+	});
+
+	it("settles every concurrent call once the cleanup finishes", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const calls = [container.disposeAsync(), container.disposeAsync()];
+		await flushMicrotasks();
+
+		resource.finish();
+
+		await expect(Promise.all(calls)).resolves.toEqual([undefined, undefined]);
+		expect(resource.finished).toBe(true);
+	});
+
+	it("rejects every concurrent call with the same DisposalError", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const first = outcome(container.disposeAsync());
+		const second = outcome(container.disposeAsync());
+		await flushMicrotasks();
+
+		resource.fail(new Error("close failed"));
+
+		const [firstError, secondError] = await Promise.all([first, second]);
+		expect(firstError).toBeInstanceOf(DisposalError);
+		expect(secondError).toBe(firstError);
+	});
+
+	it("resolves a call after a failed disposal without running cleanup again", async () => {
+		const container = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = container.get("resource");
+		const failed = outcome(container.disposeAsync());
+		await flushMicrotasks();
+		resource.fail(new Error("close failed"));
+		await failed;
+
+		const later = container.disposeAsync();
+
+		await expect(later).resolves.toBeUndefined();
 	});
 });
 

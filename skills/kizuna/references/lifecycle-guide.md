@@ -148,7 +148,10 @@ The `dispose()` method is suitable only when every owned value has synchronous
 cleanup. It cannot wait for a Promise.
 
 Call only one disposal API on a container. The first call marks the container
-as disposed. Later disposal calls are no-ops.
+as disposed. A `disposeAsync()` call while the cleanup runs waits for it and
+receives the same result or `DisposalError`. Disposal calls after the cleanup
+has finished are no-ops. A cleanup hook must not wait for `disposeAsync()` of
+its own container after an `await`, because it would wait for itself.
 
 ### Hook selection
 
@@ -190,7 +193,9 @@ depend on `DatabasePool`. Kizuna cleans these values in this order:
 
 The async API starts a dependency after all its consumers finish cleanup.
 Independent graph branches run in parallel. Their relative completion order is
-not defined.
+not defined. By default, every independent asynchronous cleanup hook starts at
+once. `build({ maxAsyncDisposalConcurrency: n })` runs at most `n` at once, also
+in scopes.
 
 Sync cleanup keeps registration order inside each disposal layer. All services
 under a multi-registration key are part of the graph.

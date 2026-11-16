@@ -546,6 +546,15 @@ The async API runs independent graph branches in parallel. Their relative
 completion order is not defined. All services under a multi-registration key
 are part of the graph.
 
+By default, every independent asynchronous cleanup hook starts at once. To run
+at most a fixed number at once, also in scopes, set a limit, for example
+`build({ maxAsyncDisposalConcurrency: 4 })` to stay below the connection limit
+of a database. The value must be a positive integer. The other hooks wait in
+the order in which their services become ready for cleanup. A dependency still
+starts its cleanup only after its consumers. A low limit makes shutdown take
+longer when many hooks are slow, so keep it within the time that your platform
+allows for a shutdown.
+
 Factory registrations can declare dependency keys after the factory. These
 keys define validation edges and cleanup order.
 
@@ -581,8 +590,15 @@ failed.
 multiple cleanup errors and does not represent a domain aggregate.
 
 The container clears its internal state before it reports errors. Later calls
-to `get()`, `getAll()`, or `startScope()` fail. A second disposal call is a
-no-op.
+to `get()`, `getAll()`, or `startScope()` fail. A `disposeAsync()` call while
+the cleanup still runs waits for it and receives the same result: it resolves,
+or it rejects with the same `DisposalError`. A disposal call after the cleanup
+has finished is a no-op.
+
+A cleanup hook can call `disposeAsync()` of its own container or scope before
+its first `await`. That call resolves at once. After an `await`, the hook must
+not wait for `disposeAsync()` of its own container or scope: it would wait for
+itself, and the disposal would never finish.
 
 ## 🏗️ Advanced Patterns
 
@@ -899,7 +915,7 @@ Scopes and borrowers cannot lend a registration.
 #### Container Management
 
 ```typescript
-.build(options?: ContainerBuildOptions): RootServiceContainer<TRegistry> // { validation?, diagnostics? }
+.build(options?: ContainerBuildOptions): RootServiceContainer<TRegistry> // { validation?, diagnostics?, maxAsyncDisposalConcurrency? }
 .validate(): readonly ValidationIssue[]                // Validate the dependency graph
 .keyCount: number                                      // Number of registered keys (a multi-registration key counts once)
 .registrationCount: number                             // Number of registrations (each add*() call counts)

@@ -1,3 +1,4 @@
+import { createAsyncTaskRunner } from "./async-task-runner.js";
 import { findStronglyConnectedComponents } from "./strongly-connected-components.js";
 
 /** The facts of one registration that decide its place in the disposal order. */
@@ -269,23 +270,44 @@ export function disposeInSequence<TService extends { dispose(): void }>(
 }
 
 /**
+ * The owners whose cleanup hook starts right now, the innermost last. A hook
+ * starts synchronously until its first `await`, so the list holds an owner
+ * only while one of its hooks runs that synchronous part.
+ */
+const ownersStartingCleanup: unknown[] = [];
+
+/**
+ * Returns true while a cleanup hook of `owner` runs the synchronous part of
+ * its start. A `disposeAsync()` call from there must not wait for the running
+ * cleanup, because that cleanup waits for the hook.
+ *
+ * @internal
+ */
+export function isStartingCleanup(owner: unknown): boolean {
+	return ownersStartingCleanup.includes(owner);
+}
+
+/**
  * Disposes the owned services along the plan. Root groups start in parallel.
  * A group starts after all of its consumer groups settle. A group without
  * owned services settles at once, so it passes the order on without waiting.
- * A rejection does not stop other cleanup. The failures follow registration
- * order.
+ * At most `maxConcurrency` cleanups run at once; the others wait in the order
+ * in which their groups became ready. A rejection does not stop other
+ * cleanup. The failures follow registration order.
  */
 export async function disposeByPlan<
 	TService extends { disposeAsync(): Promise<void> },
 >(
 	plan: DisposalPlan,
 	owner: DisposalOwner<TService>,
+	maxConcurrency: number,
 ): Promise<readonly DisposalAttempt<TService>[]> {
 	if (plan.groups.length === 0) {
 		return [];
 	}
 
 	const failures: DisposalAttempt<TService>[] = [];
+	const runCleanup = createAsyncTaskRunner(maxConcurrency);
 	const remainingConsumerGroups = plan.groups.map(
 		(group) => group.consumerGroupCount,
 	);
@@ -313,7 +335,9 @@ export async function disposeByPlan<
 				for (const index of plan.groups[groupIndex].members) {
 					const service = owner.ownedAt(index);
 					if (service !== undefined) {
-						tasks.push(disposeOne(index, service, failures));
+						tasks.push(
+							runCleanup(() => disposeOne(owner, index, service, failures)),
+						);
 					}
 				}
 				if (tasks.length === 0) {
@@ -338,12 +362,20 @@ export async function disposeByPlan<
 
 /** Awaits one async cleanup and records its failure. */
 async function disposeOne<TService extends { disposeAsync(): Promise<void> }>(
+	owner: DisposalOwner<TService>,
 	index: number,
 	service: TService,
 	failures: DisposalAttempt<TService>[],
 ): Promise<void> {
+	let cleanup: Promise<void>;
+	ownersStartingCleanup.push(owner);
 	try {
-		await service.disposeAsync();
+		cleanup = service.disposeAsync();
+	} finally {
+		ownersStartingCleanup.pop();
+	}
+	try {
+		await cleanup;
 	} catch (error) {
 		failures.push({ index, service, error });
 	}

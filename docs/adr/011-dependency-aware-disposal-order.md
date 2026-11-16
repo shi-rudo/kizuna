@@ -24,6 +24,10 @@ Sync disposal invokes each layer in registration order. Async disposal starts th
 
 Async disposal starts each dependency group after all its consumer groups settle. Unrelated graph branches do not block one another.
 
+The build option `maxAsyncDisposalConcurrency` limits how many cleanup hooks run at once, for the root container and its scopes. A hook that finds no free slot waits; a released slot goes to the hook that has waited longest. The limit protects shared resources such as connection pools and file handles when a container owns many async resources. It does not change the order: a dependency group still starts only after its consumer groups settle.
+
+Without the option, every ready hook starts at once, as before the option existed. A default limit would make the shutdown of a container with many slow hooks take longer, and platforms such as Kubernetes stop a process after a fixed grace period. An application that owns many async resources chooses its limit against that period.
+
 Sync disposal keeps registration order within each layer. The container keeps one order across single registrations and multi-registrations.
 
 Async order between independent branches depends on completion timing. If cleanup order is required, applications must declare a dependency.
@@ -35,7 +39,7 @@ An undeclared container lookup does not add an edge. Applications must declare f
 ## Consequences
 
 - Consumer cleanup can use a declared dependency until the consumer cleanup completes.
-- Independent cleanup stays parallel in the async path.
+- Independent cleanup stays parallel in the async path, up to the concurrency limit.
 - Multi-registration dependencies use the same order as single registrations.
 - A cycle cannot have a valid internal disposal order. Services in the cycle start in registration order.
 - The graph plan takes `O((V + E) log V)` time and `O(V + E)` memory.

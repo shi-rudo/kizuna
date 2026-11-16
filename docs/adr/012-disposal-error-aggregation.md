@@ -40,8 +40,19 @@ containers. The Promise has started, but the sync API does not wait for it. A
 later rejection reaches a diagnostics listener as described in
 [ADR-013](./013-diagnostic-events.md).
 
-The container clears its state before it reports the `DisposalError`. A second
-disposal call is a no-op, even if the first call reported errors.
+The container clears its state before it reports the `DisposalError`. A
+`disposeAsync()` call while the asynchronous cleanup runs waits for that
+cleanup and rejects with the same `DisposalError`. A disposal call after the
+cleanup has finished is a no-op, even if the first call reported errors.
+
+A cleanup hook that calls `disposeAsync()` of its own container would wait for
+its own cleanup. Kizuna detects this call while it starts the hook, that is,
+before the hook's first `await`, and resolves it at once. It cannot detect the
+call after an `await` without an asynchronous context, which edge runtimes do
+not provide. That call never settles, so it is a usage rule, like the rule for
+an `async` factory that waits for the disposal of its own container. For a
+Promise value, Kizuna starts the hook only after the value settles, so the
+rule applies from the start.
 
 The TC39 resource-management symbols use the same behavior as the matching
 methods.

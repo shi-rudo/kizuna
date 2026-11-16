@@ -25,6 +25,9 @@ export interface DiagnosticsOptions {
 	readonly level?: DiagnosticLevel;
 }
 
+/** Without a limit, `disposeAsync()` starts every async cleanup at once. */
+const unlimitedAsyncDisposalConcurrency = Number.POSITIVE_INFINITY;
+
 /** Options for `ContainerBuilder.build()`. */
 export interface ContainerBuildOptions {
 	/**
@@ -34,12 +37,20 @@ export interface ContainerBuildOptions {
 	readonly validation?: ValidationMode;
 	/** Reports diagnostic events to a listener. Without it, Kizuna reports nothing. */
 	readonly diagnostics?: DiagnosticsOptions;
+	/**
+	 * The most async cleanups that `disposeAsync()` runs at once, also in the
+	 * scopes of this container. A positive integer. Without it, every cleanup
+	 * starts at once. A dependency still starts its cleanup only after its
+	 * consumers.
+	 */
+	readonly maxAsyncDisposalConcurrency?: number;
 }
 
 /** The checked build options with their defaults applied. @internal */
 export interface ResolvedBuildOptions {
 	readonly validation: ValidationMode;
 	readonly diagnostics: DiagnosticsReporter;
+	readonly maxAsyncDisposalConcurrency: number;
 }
 
 /**
@@ -75,7 +86,24 @@ export function resolveBuildOptions(
 	return {
 		validation,
 		diagnostics: diagnosticsReporterFor(received.diagnostics),
+		maxAsyncDisposalConcurrency: asyncDisposalLimitFor(
+			received.maxAsyncDisposalConcurrency,
+		),
 	};
+}
+
+function asyncDisposalLimitFor(limit: unknown): number {
+	if (limit === undefined) {
+		return unlimitedAsyncDisposalConcurrency;
+	}
+	if (!isPositiveInteger(limit)) {
+		throw new InvalidBuildOptionsError(
+			"maxAsyncDisposalConcurrency",
+			limit,
+			"Build option 'maxAsyncDisposalConcurrency' must be a positive integer.",
+		);
+	}
+	return limit;
 }
 
 function diagnosticsReporterFor(options: unknown): DiagnosticsReporter {
@@ -115,6 +143,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isOneOf<T>(values: readonly T[], value: unknown): value is T {
 	return (values as readonly unknown[]).includes(value);
+}
+
+function isPositiveInteger(value: unknown): value is number {
+	return Number.isSafeInteger(value) && (value as number) > 0;
 }
 
 function isListener(value: unknown): value is DiagnosticListener {
