@@ -151,7 +151,8 @@ Call only one disposal API on a container. The first call marks the container
 as disposed. A `disposeAsync()` call while the cleanup runs waits for it and
 receives the same result or `DisposalError`. Disposal calls after the cleanup
 has finished are no-ops. A cleanup hook must not wait for `disposeAsync()` of
-its own container after an `await`, because it would wait for itself.
+its own container after an `await`. Such a hook waits for itself, and the
+disposal never finishes.
 
 ### Hook selection
 

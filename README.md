@@ -597,8 +597,52 @@ has finished is a no-op.
 
 A cleanup hook can call `disposeAsync()` of its own container or scope before
 its first `await`. That call resolves at once. After an `await`, the hook must
-not wait for `disposeAsync()` of its own container or scope: it would wait for
-itself, and the disposal would never finish.
+not wait for `disposeAsync()` of its own container or scope. Such a hook waits
+for itself, and the disposal never finishes.
+
+#### When `disposeAsync()` never settles
+
+`disposeAsync()` waits for the Promise of an `async` factory. It also waits for
+a cleanup that already runs. If the factory or the cleanup hook waits for this
+disposal, no Promise settles. Kizuna cannot detect this after an `await`.
+[ADR-014](./docs/adr/014-self-waiting-disposal.md) gives the reasons.
+
+Look for these two patterns:
+
+1. An `async` factory awaits other work. Then it awaits `disposeAsync()` of its
+   own container or scope.
+2. A cleanup hook awaits other work. Then it awaits `disposeAsync()` of its own
+   container or scope.
+
+```typescript
+// Pattern 1: the factory waits for the disposal,
+// and the disposal waits for the factory Promise.
+.registerSingletonFactory('connection', async (container) => {
+  const connection = await connect();
+  if (!connection.ready) {
+    await container.disposeAsync();
+  }
+  return connection;
+})
+
+// Pattern 2: the hook waits for the disposal,
+// and the disposal waits for the hook.
+.registerScopedFactory('session', (container) => ({
+  async [Symbol.asyncDispose]() {
+    await flushSession();
+    await container.disposeAsync();
+  },
+}))
+```
+
+To correct pattern 1, throw an error from the factory. Then let the caller of
+`get()` dispose the container.
+
+To correct pattern 2, remove the `disposeAsync()` call from the hook. The
+disposal that runs the hook already disposes the container or scope.
+
+If your shutdown needs a time limit, put the limit around your own
+`disposeAsync()` call.
 
 ## 🏗️ Advanced Patterns
 
