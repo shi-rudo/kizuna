@@ -209,6 +209,111 @@ const flushMicrotasks = async (): Promise<void> => {
 	}
 };
 
+const settledWithin = (
+	promise: Promise<unknown>,
+	milliseconds: number,
+): Promise<"settled" | "pending"> =>
+	Promise.race([
+		promise.then(
+			() => "settled" as const,
+			() => "settled" as const,
+		),
+		new Promise<"pending">((resolve) =>
+			setTimeout(() => resolve("pending"), milliseconds),
+		),
+	]);
+
+/**
+ * A value whose cleanup hook awaits disposeAsync() of its own container, at
+ * once or after another await.
+ */
+const disposesItsContainer = (
+	current: { disposeAsync(): Promise<void> },
+	afterAnAwait = false,
+) => ({
+	async [Symbol.asyncDispose](): Promise<void> {
+		if (afterAnAwait) {
+			await Promise.resolve();
+		}
+		await current.disposeAsync();
+	},
+});
+
+describe("a cleanup hook that calls disposeAsync() of its own container", () => {
+	it("returns at once when the hook starts in a dependency group", async () => {
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("host", (current) =>
+				disposesItsContainer(current),
+			)
+			.registerSingletonFactory(
+				"consumer",
+				(current) => {
+					current.get("host");
+					return { async [Symbol.asyncDispose](): Promise<void> {} };
+				},
+				"host",
+			)
+			.build();
+		container.get("consumer");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("settled");
+	});
+
+	it("returns at once when the hook waited for a free cleanup slot", async () => {
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("first", () => ({
+				async [Symbol.asyncDispose](): Promise<void> {},
+			}))
+			.registerSingletonFactory("host", (current) =>
+				disposesItsContainer(current),
+			)
+			.build({ maxAsyncDisposalConcurrency: 1 });
+		container.get("first");
+		container.get("host");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("settled");
+	});
+
+	it("still waits when the hook calls disposeAsync() of another running container", async () => {
+		const other = new ContainerBuilder()
+			.registerSingleton("resource", GatedCleanup)
+			.build();
+		const resource = other.get("resource");
+		const otherDisposal = other.disposeAsync();
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("host", () => ({
+				async [Symbol.asyncDispose](): Promise<void> {
+					await other.disposeAsync();
+				},
+			}))
+			.build();
+		container.get("host");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("pending");
+		resource.finish();
+		await otherDisposal;
+	});
+
+	it("never finishes when the hook calls it after an await", async () => {
+		const container = new ContainerBuilder()
+			.registerSingletonFactory("host", (current) =>
+				disposesItsContainer(current, true),
+			)
+			.build();
+		container.get("host");
+
+		const result = await settledWithin(container.disposeAsync(), 100);
+
+		expect(result).toBe("pending");
+	});
+});
+
 describe("concurrent disposeAsync() calls", () => {
 	it("does not settle a second call before the running cleanup finishes", async () => {
 		const container = new ContainerBuilder()

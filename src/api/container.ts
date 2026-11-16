@@ -20,6 +20,7 @@ import {
 	type DisposalAttempt,
 	disposeByPlan,
 	disposeInSequence,
+	isStartingCleanup,
 } from "../core/services/disposal-order.js";
 import type { ServiceCatalog } from "../core/services/service-catalog.js";
 import {
@@ -399,12 +400,13 @@ export class Container<TRegistry extends ServiceRegistry>
 	 * `DisposalError` with the original failures.
 	 *
 	 * A call while the cleanup runs waits for it and observes the same success
-	 * or `DisposalError`. A call after the cleanup settled is a no-op. A
-	 * cleanup hook must not wait for `disposeAsync()` of its own container:
+	 * or `DisposalError`. A call after the cleanup settled is a no-op. A call
+	 * that a cleanup hook of this container makes before its first `await`
+	 * resolves at once. After an `await`, a hook must not wait for this call:
 	 * it would wait for itself.
 	 */
 	async disposeAsync(): Promise<void> {
-		if (this._asyncDisposal) {
+		if (this._asyncDisposal && !isStartingCleanup(this.ownership)) {
 			return this._asyncDisposal;
 		}
 		if (this._disposed) {
